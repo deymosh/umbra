@@ -2,11 +2,13 @@ package com.umbra.app.domain.usecase
 
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.model.NostrChannels
+import com.umbra.app.domain.repository.EventRepository
 import com.umbra.app.testutil.fakes.FakeContactListRepository
 import com.umbra.app.testutil.fakes.FakeEventRepository
 import com.umbra.app.testutil.fakes.FakeMuteListRepository
 import com.umbra.app.testutil.fakes.FakeNostrSessionController
 import com.umbra.app.testutil.fakes.FakePinListRepository
+import com.umbra.app.testutil.fakes.FakeUmbraLogger
 import com.umbra.app.testutil.fakes.FakeUserPreferences
 import com.umbra.app.testutil.fakes.FakeUserRepository
 import kotlinx.coroutines.runBlocking
@@ -16,6 +18,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -259,7 +262,7 @@ class BackfillDeleteLogoutUseCaseTest {
         val contactListRepo = FakeContactListRepository()
         val muteListRepo = FakeMuteListRepository()
         val pinListRepo = FakePinListRepository()
-        val useCase = LogoutUseCase(repo, userRepo, prefs, contactListRepo, muteListRepo, pinListRepo, FakeNostrSessionController())
+        val useCase = LogoutUseCase(repo, userRepo, prefs, contactListRepo, muteListRepo, pinListRepo, FakeNostrSessionController(), FakeUmbraLogger())
 
         useCase()
 
@@ -279,7 +282,7 @@ class BackfillDeleteLogoutUseCaseTest {
         val contactListRepo = FakeContactListRepository()
         val muteListRepo = FakeMuteListRepository()
         val pinListRepo = FakePinListRepository()
-        val useCase = LogoutUseCase(repo, userRepo, prefs, contactListRepo, muteListRepo, pinListRepo, FakeNostrSessionController())
+        val useCase = LogoutUseCase(repo, userRepo, prefs, contactListRepo, muteListRepo, pinListRepo, FakeNostrSessionController(), FakeUmbraLogger())
 
         useCase()
 
@@ -299,7 +302,7 @@ class BackfillDeleteLogoutUseCaseTest {
         val contactListRepo = FakeContactListRepository()
         val muteListRepo = FakeMuteListRepository()
         val pinListRepo = FakePinListRepository()
-        val useCase = LogoutUseCase(repo, userRepo, prefs, contactListRepo, muteListRepo, pinListRepo, FakeNostrSessionController())
+        val useCase = LogoutUseCase(repo, userRepo, prefs, contactListRepo, muteListRepo, pinListRepo, FakeNostrSessionController(), FakeUmbraLogger())
 
         useCase()
 
@@ -324,7 +327,8 @@ class BackfillDeleteLogoutUseCaseTest {
             FakeContactListRepository(),
             FakeMuteListRepository(),
             FakePinListRepository(),
-            sessionController
+            sessionController,
+            FakeUmbraLogger()
         )
 
         useCase()
@@ -346,7 +350,8 @@ class BackfillDeleteLogoutUseCaseTest {
             FakeContactListRepository(),
             FakeMuteListRepository(),
             FakePinListRepository(),
-            FakeNostrSessionController()
+            FakeNostrSessionController(),
+            FakeUmbraLogger()
         )
 
         useCase()
@@ -354,6 +359,47 @@ class BackfillDeleteLogoutUseCaseTest {
         assertEquals(listOf(pubkey), repo.clearedBackfillAnchorPubkeys)
     }
 
+    @Test
+    fun `given_eventRepositoryClearAllDataThrows_when_logging_then_loggerRecordsErrorWithSameThrowable`() = runBlocking {
+        val thrown = IllegalStateException("clear all data boom")
+        val repo = ThrowingClearAllDataEventRepository(
+            FakeEventRepository(oldestAuthorTimestamp = null),
+            thrown
+        )
+        val userRepo = FakeUserRepository()
+        val prefs = FakeUserPreferences()
+        val logger = FakeUmbraLogger()
+        val useCase = LogoutUseCase(
+            repo,
+            userRepo,
+            prefs,
+            FakeContactListRepository(),
+            FakeMuteListRepository(),
+            FakePinListRepository(),
+            FakeNostrSessionController(),
+            logger
+        )
+
+        useCase()
+
+        assertEquals(1, logger.errorCalls.size)
+        assertSame(thrown, logger.errorCalls.first().throwable)
+    }
+
     private fun parseObject(raw: String): JsonObject =
         kotlinx.serialization.json.Json.parseToJsonElement(raw).jsonObject
+}
+
+/**
+ * Wraps a real fake so `clearAllData()` throws a specific, caller-controlled instance —
+ * [FakeEventRepository]'s own `failClearAllData` flag throws a fresh exception each call, which
+ * can't be asserted against by identity.
+ */
+private class ThrowingClearAllDataEventRepository(
+    delegate: EventRepository,
+    private val thrown: Throwable
+) : EventRepository by delegate {
+    override suspend fun clearAllData() {
+        throw thrown
+    }
 }

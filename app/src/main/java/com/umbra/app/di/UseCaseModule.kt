@@ -288,7 +288,8 @@ object UseCaseModule {
         contactListRepository,
         muteListRepository,
         pinListRepository,
-        nostrSessionController
+        nostrSessionController,
+        UmbraLog.tag("UmbraLogout")
     )
 
     @Provides

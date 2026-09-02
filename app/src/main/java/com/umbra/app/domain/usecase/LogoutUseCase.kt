@@ -1,5 +1,6 @@
 package com.umbra.app.domain.usecase
 
+import com.umbra.app.domain.logging.UmbraLogger
 import com.umbra.app.domain.nostr.NostrSessionController
 import com.umbra.app.domain.preferences.UserPreferences
 import com.umbra.app.domain.repository.ContactListRepository
@@ -17,7 +18,8 @@ class LogoutUseCase(
     private val contactListRepository: ContactListRepository,
     private val muteListRepository: MuteListRepository,
     private val pinListRepository: PinListRepository,
-    private val nostrSessionController: NostrSessionController
+    private val nostrSessionController: NostrSessionController,
+    private val logger: UmbraLogger
 ) {
     suspend operator fun invoke() {
         withContext(Dispatchers.IO) {
@@ -32,10 +34,14 @@ class LogoutUseCase(
                 // auto-disable, Tor recovery) so nothing keeps running post-logout.
                 try {
                     nostrSessionController.stop()
-                } catch (_: Exception) { }
+                } catch (e: Exception) {
+                    logger.e(e) { "nostrSessionController.stop() failed during logout" }
+                }
                 try {
                     eventRepository.clearAllData()
-                } catch (_: Exception) { }
+                } catch (e: Exception) {
+                    logger.e(e) { "eventRepository.clearAllData() failed during logout" }
+                }
 
                 // UserRepositoryImpl's in-memory profiles/relayLists/dmRelayLists caches serve
                 // reads *before* ever touching Room (see getProfile/getRelayList) — without this,
@@ -45,7 +51,9 @@ class LogoutUseCase(
                 // relay state" promise (see logout_privacy_wipe_message).
                 try {
                     userRepository.clearAll()
-                } catch (_: Exception) { }
+                } catch (e: Exception) {
+                    logger.e(e) { "userRepository.clearAll() failed during logout" }
+                }
 
                 // Contact/mute/pin lists each keep their own in-memory OwnerTagSetCache (see
                 // OwnerTagSetCache.clearAll's doc comment) entirely separate from
@@ -55,18 +63,26 @@ class LogoutUseCase(
                 // the same account logged back in without an app restart).
                 try {
                     contactListRepository.clearAll()
-                } catch (_: Exception) { }
+                } catch (e: Exception) {
+                    logger.e(e) { "contactListRepository.clearAll() failed during logout" }
+                }
                 try {
                     muteListRepository.clearAll()
-                } catch (_: Exception) { }
+                } catch (e: Exception) {
+                    logger.e(e) { "muteListRepository.clearAll() failed during logout" }
+                }
                 try {
                     pinListRepository.clearAll()
-                } catch (_: Exception) { }
+                } catch (e: Exception) {
+                    logger.e(e) { "pinListRepository.clearAll() failed during logout" }
+                }
 
                 if (!pubkey.isNullOrBlank()) {
                     try {
                         eventRepository.clearBackfillAnchors(pubkey)
-                    } catch (_: Exception) { }
+                    } catch (e: Exception) {
+                        logger.e(e) { "eventRepository.clearBackfillAnchors() failed during logout" }
+                    }
                 }
 
                 userPreferences.clearAll()
