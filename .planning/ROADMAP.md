@@ -31,7 +31,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The three LOG-18 sites (`EventRepositoryImpl.kt` x2 relay-URL interpolation, `NegentropySyncOrchestrator.kt` x1 throwable message) route through `LogScrubber`; a release-build log of those paths contains no raw relay URL, pubkey, or unscrubbed exception text.
   4. `./gradlew compileDebugKotlin`, `lintDebug`, and `testDebugUnitTest` all pass with no new warnings (CI treats lint warnings as errors).
   5. `docs/KNOWN_ISSUES.md` entries LOG-18, LOG-20, LOG-26, LOG-27, LOG-28 read `fix applied — needs on-device validation` with a `**Fix:**` line, and `docs/TODO.md`'s LOG-17 has moved verbatim into `docs/DONE.md` with `**Completed:**` and `**From:** TODO LOG-17` lines.
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Recording-logger test double, constructor-injected logger on both cleanup use cases, and the two publish-failure sites (BUG-10, BUG-01 partial)
+- [ ] 01-02-PLAN.md — The six BUG-01 sites in self-constructing-logger classes, both scrubbing gaps, the silent wipe handler, and the swallowed session-activation failures (BUG-01, BUG-02, BUG-04, BUG-11)
+- [ ] 01-03-PLAN.md — Settings logout handler, phase-wide log-hygiene audit sweep and build gate, and the bug-tracker closeout (BUG-09 plus tracker state for all six)
 
 ### Phase 2: Concurrency & State Correctness
 **Goal**: Concurrent job and relay-role mutations are atomic, cached content honours deletions, and every optimistic UI update either reflects what actually persisted or rolls itself back.
@@ -88,7 +93,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Error Visibility & Log Hygiene | 0/TBD | Not started | - |
+| 1. Error Visibility & Log Hygiene | 0/3 | Planned | - |
 | 2. Concurrency & State Correctness | 0/TBD | Not started | - |
 | 3. Fix Validation & Test Coverage | 0/TBD | Not started | - |
 | 4. Version Consistency & v0.1.0 Release Prep | 0/TBD | Not started | - |
