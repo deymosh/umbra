@@ -1,5 +1,6 @@
 package com.umbra.app.domain.usecase
 
+import com.umbra.app.domain.logging.UmbraLogger
 import com.umbra.app.domain.repository.ContactListRepository
 import com.umbra.app.domain.repository.EventRepository
 import com.umbra.app.domain.repository.MuteListRepository
@@ -20,25 +21,36 @@ class TrimMemoryCachesUseCase(
     private val userRepository: UserRepository,
     private val contactListRepository: ContactListRepository,
     private val muteListRepository: MuteListRepository,
-    private val pinListRepository: PinListRepository
+    private val pinListRepository: PinListRepository,
+    private val logger: UmbraLogger
 ) {
     suspend operator fun invoke(aggressive: Boolean) {
         withContext(Dispatchers.IO) {
             try {
                 eventRepository.trimMemory(aggressive)
-            } catch (_: Exception) { }
+            } catch (e: Exception) {
+                logger.e(e) { "eventRepository.trimMemory() failed during cache trim" }
+            }
             try {
                 userRepository.pruneStaleData()
-            } catch (_: Exception) { }
+            } catch (e: Exception) {
+                logger.e(e) { "userRepository.pruneStaleData() failed during cache trim" }
+            }
             try {
                 contactListRepository.trimMemory()
-            } catch (_: Exception) { }
+            } catch (e: Exception) {
+                logger.e(e) { "contactListRepository.trimMemory() failed during cache trim" }
+            }
             try {
                 muteListRepository.trimMemory()
-            } catch (_: Exception) { }
+            } catch (e: Exception) {
+                logger.e(e) { "muteListRepository.trimMemory() failed during cache trim" }
+            }
             try {
                 pinListRepository.trimMemory()
-            } catch (_: Exception) { }
+            } catch (e: Exception) {
+                logger.e(e) { "pinListRepository.trimMemory() failed during cache trim" }
+            }
         }
     }
 }

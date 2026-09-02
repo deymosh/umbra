@@ -304,6 +304,7 @@ object UseCaseModule {
         userRepository,
         contactListRepository,
         muteListRepository,
-        pinListRepository
+        pinListRepository,
+        UmbraLog.tag("UmbraTrimMemory")
     )
 }
