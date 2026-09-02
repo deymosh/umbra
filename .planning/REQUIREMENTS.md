@@ -67,21 +67,46 @@ None — this milestone is deliberately scoped to stability + release, not new f
 
 ## Traceability
 
-Filled in during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BUG-01 .. BUG-14 | TBD | Pending |
-| VALID-01 .. VALID-10 | TBD | Pending |
-| VERS-01, VERS-02 | TBD | Pending |
-| REL-01 .. REL-03 | TBD | Pending |
-| SKILL-01 | TBD | Pending |
+| BUG-01 | Phase 1 | Pending |
+| BUG-02 | Phase 1 | Pending |
+| BUG-04 | Phase 1 | Pending |
+| BUG-09 | Phase 1 | Pending |
+| BUG-10 | Phase 1 | Pending |
+| BUG-11 | Phase 1 | Pending |
+| BUG-03 | Phase 2 | Pending |
+| BUG-05 | Phase 2 | Pending |
+| BUG-06 | Phase 2 | Pending |
+| BUG-07 | Phase 2 | Pending |
+| BUG-08 | Phase 2 | Pending |
+| BUG-12 | Phase 2 | Pending |
+| BUG-13 | Phase 2 | Pending |
+| BUG-14 | Phase 2 | Pending |
+| VALID-01 | Phase 3 | Pending |
+| VALID-02 | Phase 3 | Pending |
+| VALID-03 | Phase 3 | Pending |
+| VALID-04 | Phase 3 | Pending |
+| VALID-05 | Phase 3 | Pending |
+| VALID-06 | Phase 3 | Pending |
+| VALID-07 | Phase 3 | Pending |
+| VALID-08 | Phase 3 | Pending |
+| VALID-09 | Phase 3 | Pending |
+| VALID-10 | Phase 3 | Pending |
+| VERS-01 | Phase 4 | Pending |
+| VERS-02 | Phase 4 | Pending |
+| REL-01 | Phase 4 | Pending |
+| REL-02 | Phase 4 | Pending |
+| REL-03 | Phase 4 | Pending |
+| SKILL-01 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 30 total
-- Mapped to phases: 0 (pending roadmap creation)
-- Unmapped: 30 ⚠️
+- Mapped to phases: 30 ✓
+- Unmapped: 0
+
+**Per-phase counts:** Phase 1 = 6 · Phase 2 = 8 · Phase 3 = 10 · Phase 4 = 6
 
 ---
 *Requirements defined: 2026-09-02*
-*Last updated: 2026-09-02 after initial definition*
+*Last updated: 2026-09-02 after roadmap creation (traceability filled in)*
