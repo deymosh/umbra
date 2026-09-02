@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trying the "Totality" direction — ic_umbra_foreground.xml (the earlier "Corona" design)
+     is kept in the repo, just no longer referenced here, in case we want to switch back. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_umbra_background" />
+    <foreground android:drawable="@drawable/ic_umbra_foreground_totality" />
+    <monochrome android:drawable="@drawable/ic_umbra_foreground_totality" />
+</adaptive-icon>

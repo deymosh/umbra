@@ -1,0 +1,58 @@
+name: Android CI
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - "**/*.md"
+      - "LICENSE"
+  pull_request:
+    branches:
+      - master
+    paths-ignore:
+      - "**/*.md"
+      - "LICENSE"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Ensure Gradle wrapper is executable
+        run: chmod +x gradlew
+
+      - name: Lint, Test, and Assemble
+        run: ./gradlew --continue lintDebug testDebugUnitTest assembleBenchmark
+
+      - name: Upload Benchmark APK
+        # archive: false uploads the raw .apk itself instead of wrapping it in a zip — needs
+        # v7 (GitHub Actions non-zipped-artifact support, Feb 2026) and only accepts a single
+        # file, which assembleBenchmark's one-APK, no-flavor/no-split output already satisfies.
+        # The artifact's name becomes the file's own name (app-benchmark.apk) since archive:
+        # false ignores the `name` input entirely — there's no separate name to set here.
+        uses: actions/upload-artifact@v7
+        with:
+          path: app/build/outputs/apk/benchmark/*.apk
+          archive: false
+          if-no-files-found: error

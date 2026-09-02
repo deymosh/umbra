@@ -1,0 +1,44 @@
+<!--
+  The earlier "Corona" launcher icon direction, kept in the repo unreferenced for comparison
+  against the current "Totality" direction (ic_umbra_foreground_totality.xml); see that file's
+  own header comment. Not dead code to delete.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108"
+    tools:ignore="UnusedResources">
+
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.82"
+        android:scaleY="0.82">
+
+        <path
+            android:fillColor="#FFFFFF"
+            android:fillAlpha="0.10"
+            android:pathData="M54,10A44,44 0 1,1 10,54A44,44 0 0,1 54,10Z" />
+
+        <path
+            android:fillColor="#FFFFFF"
+            android:fillAlpha="0.95"
+            android:pathData="M54,20A34,34 0 1,1 20,54A34,34 0 0,1 54,20Z" />
+
+        <path
+            android:fillColor="#D9D0FF"
+            android:fillAlpha="0.36"
+            android:pathData="M54,24A30,30 0 1,1 24,54A30,30 0 0,1 54,24Z" />
+
+        <path
+            android:fillColor="#090A16"
+            android:pathData="M54,27A27,27 0 1,1 27,54A27,27 0 0,1 54,27Z" />
+
+        <path
+            android:fillColor="#FFFFFF"
+            android:fillAlpha="0.8"
+            android:pathData="M78,24l2.4,6.1 6.1,2.4 -6.1,2.4 -2.4,6.1 -2.4,-6.1 -6.1,-2.4 6.1,-2.4z" />
+    </group>
+</vector>

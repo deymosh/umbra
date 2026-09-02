@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  "Totality" launcher icon — the moment the sun is fully covered, not an eclipse mid-progress.
+  One shadow disc, one thin arc of surviving light, one bright point (the "diamond ring" effect
+  right at totality). Same 108dp/0.82-scale adaptive-icon safe-zone convention as
+  ic_umbra_foreground.xml (kept in the repo, unreferenced, as the earlier "Corona" direction).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.82"
+        android:scaleY="0.82">
+
+        <!-- Faint ambient halo, larger than the disc -->
+        <path
+            android:fillColor="#EDE9FB"
+            android:fillAlpha="0.08"
+            android:pathData="M54,12A42,42 0 1,1 12,54A42,42 0 0,1 54,12Z" />
+
+        <!-- The shadow disc -->
+        <path
+            android:fillColor="#1C1730"
+            android:pathData="M54,18A36,36 0 1,1 18,54A36,36 0 0,1 54,18Z" />
+
+        <!-- Crisp rim definition against the background -->
+        <path
+            android:strokeColor="#EDE9FB"
+            android:strokeWidth="1"
+            android:strokeAlpha="0.18"
+            android:pathData="M54,18A36,36 0 1,1 18,54A36,36 0 0,1 54,18Z" />
+
+        <!-- The thin surviving arc of light -->
+        <path
+            android:strokeColor="#FFCF7A"
+            android:strokeWidth="2.6"
+            android:strokeLineCap="round"
+            android:strokeAlpha="0.92"
+            android:pathData="M63.3,19.2A36,36 0 0,1 86.6,38.8" />
+
+        <!-- The diamond-ring point -->
+        <path
+            android:fillColor="#FFCF7A"
+            android:pathData="M86.6,38.8m-4.5,0a4.5,4.5 0 1,1 9,0a4.5,4.5 0 1,1 -9,0" />
+    </group>
+</vector>

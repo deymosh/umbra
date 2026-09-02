@@ -1,0 +1,104 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: "Create a prerelease instead of a stable GitHub release"
+        required: false
+        default: false
+        type: boolean
+      version:
+        description: "Optional manual version tag to announce on the release"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Ensure Gradle wrapper is executable
+        run: chmod +x gradlew
+
+      - name: Detect release mode
+        id: release_mode
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_NAME:-}" == *-* ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.prerelease }}" == "true" ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build release APK
+        run: ./gradlew clean assembleRelease
+
+      - name: Sign APK
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "36.0.0"
+
+      - name: Collect and rename signed APK
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          # Check if a version was provided via workflow_dispatch input, otherwise use the tag name from the push event
+          if [ -n "$INPUT_VERSION" ]; then
+            TAG="$INPUT_VERSION"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+
+          # Rename the signed APK into dist/ folder
+          cp app/build/outputs/apk/release/*-signed.apk dist/umbra-${TAG}.apk
+          
+          ls -la dist
+
+      - name: Upload release build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-build-artifacts
+          path: dist/*.apk
+          if-no-files-found: error
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version != '' && github.event.inputs.version || github.ref_name }}
+          name: ${{ github.event.inputs.version != '' && github.event.inputs.version || github.ref_name || 'Umbra Release' }}
+          draft: false
+          prerelease: ${{ steps.release_mode.outputs.is_prerelease == 'true' }}
+          generate_release_notes: true
+          files: |
+            dist/*.apk

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Default: HTTPS required for security -->
+    <!-- TOR relays are accessed via SOCKS5 proxy, individual connection requirements vary -->
+    <base-config cleartextTrafficPermitted="false" />
+
+    <!-- Localhost for testing and ORBOT communication -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">[::1]</domain>
+    </domain-config>
+
+    <!-- .onion domains (Tor hidden services)
+         IMPORTANT: use "onion" as base domain with includeSubdomains=true.
+         Android's matcher will then allow *.onion hosts.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">onion</domain>
+    </domain-config>
+
+    <!-- Pin key validation (optional - for known relays) -->
+    <!-- Example: strictTransportSecurity with max-age
+    <domain includeSubdomains="true" hstsEnabled="true">damus.io</domain>
+    -->
+</network-security-config>

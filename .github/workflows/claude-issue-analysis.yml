@@ -1,0 +1,63 @@
+name: Claude Issue Analysis
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  claude:
+    if: github.event.action == 'labeled' && github.event.label.name == 'claude'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: claude-issue-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read # lets Claude read CI results on the PR it opens
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Required for the actions:read job permission above to actually grant Claude
+          # CI-status tools (get_ci_status / get_workflow_run_details / download_job_log) —
+          # the job permission alone is not sufficient.
+          additional_permissions: |
+            actions: read
+          # Automation mode (prompt is set) doesn't create a tracking comment by default;
+          # this run can take many turns, so surface progress on the issue.
+          track_progress: true
+          prompt: |
+            Read AUDIT.md and CLAUDE.md in the repository root before doing anything else.
+            Their rules are absolute and override everything below.
+
+            Investigate and fix the issue described in issue #${{ github.event.issue.number }}
+            ("${{ github.event.issue.title }}").
+
+            Steps:
+            1. Read the relevant code before changing anything. Never guess without reading.
+            2. Implement the smallest correct fix. Follow Clean Architecture layering and every
+               absolute rule in AUDIT.md and .github/agents/umbra.agent.md (TOR-only networking,
+               Amber-only signing, no nsec anywhere, log scrubbing, etc.).
+            3. If a correct fix would require touching TOR networking, Amber signing, key storage,
+               or logging of sensitive data in a way AUDIT.md does not clearly cover: STOP. Do not
+               guess or improvise in these areas. Post a comment on the issue explaining the
+               ambiguity and what decision is needed, and do not open a PR.
+            4. Write at least one regression test that would have caught the problem described in this
+               issue, per the testing rules in .github/agents/umbra.agent.md.
+            5. Run `./gradlew testDebugUnitTest` and fix any failures before proceeding.
+            6. Open a pull request against `master` titled `fix(scope): short description`. The PR
+               body must include `Fixes #${{ github.event.issue.number }}`, a short root-cause
+               explanation, and what the regression test covers.
+            7. Do not merge the PR under any circumstances — a human reviews and merges it.
+          claude_args: |
+            --max-turns 40

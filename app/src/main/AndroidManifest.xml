@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Umbra ships outside the Play Store (F-Droid/direct APK/Zapstore), so Play's
+         restricted-use policy for this permission doesn't apply. Used once, best-effort, to ask
+         OEM battery managers not to aggressively kill the process while backgrounded — see
+         BatteryOptimizationHelper.kt. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Allow querying for AMBER (external signer) and Orbot (TOR proxy) -->
+    <queries>
+        <package android:name="com.greenart7c3.nostrsigner" />
+        <package android:name="org.torproject.android" />
+        <intent>
+            <action android:name="org.torproject.android.intent.action.START" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".UmbraApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/full_backup_content"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Umbra"
+        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:largeHeap="true">
+        <!-- Umbra can legitimately hold hundreds of simultaneous relay connections (see
+             connectToEnabledRelays' dial pacing/cap) plus a bounded in-memory event pool —
+             real, non-leaked memory, not a runaway growth bug (see MAX_IN_MEMORY_EVENT_CACHE's
+             own doc comment for the eviction story). Android's default heap growth limit
+             (~256MB on most devices, confirmed via a field OOM: target footprint/growth limit
+             both exactly 268435456) is an artificial per-app ceiling below the device's actual
+             free RAM, not a hardware limit — largeHeap raises it (commonly 2x+, device-
+             dependent) for exactly this "legitimately memory-hungry, not leaking" case. Does not
+             fix unbounded growth if one is ever introduced — see the eviction/cap comments
+             throughout data/repository and data/nostr instead. -->
+
+
+
+        <!-- configChanges below: without it, Android destroys and recreates the whole Activity
+             (and Compose tree, and every open android.app.Dialog window — including the
+             fullscreen image/video viewer) on every rotation. rememberSaveable survives that via
+             the saved-instance-state Bundle for plain state, but the Dialog's own window doesn't
+             reliably survive the teardown/recreate race the same way, and the fullscreen video
+             player's ExoPlayer instance would be torn down and rebuilt mid-playback either way —
+             this is what was making fullscreen media close itself on rotation "sometimes."
+             Handling the config change ourselves means the Activity is never destroyed for a
+             rotation — Compose just re-lays-out in place — so any open Dialog, player, or other
+             in-memory state rides straight through it untouched. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- NIP-21: nostr: URI scheme deep links (npub/nprofile/note/nevent/naddr). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="nostr" />
+            </intent-filter>
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+    </application>
+
+</manifest>

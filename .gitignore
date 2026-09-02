@@ -1,0 +1,36 @@
+# Build
+build/
+.kotlin/
+.gradle/
+app/build/
+app/release/
+tools/
+apk_extracted/
+local.*
+references.*
+toolchain/
+
+# Local config
+local.properties
+*.keystore
+*.jks
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Kotlin
+*.class
+*.kotlin_module
+
+# Logs
+*.log
+
+# Research/tool caches (ephemeral, not deliverables)
+.planning/**/.cache/

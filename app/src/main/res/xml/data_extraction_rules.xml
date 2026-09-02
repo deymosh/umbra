@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  API 31+ replacement for android:allowBackup, which the app also keeps set to false for pre-31
+  devices. Umbra's own encrypted database and preferences never leave the device via any channel
+  Umbra controls (TOR-only networking, no export feature), so cloud backup and device-to-device
+  transfer are both excluded entirely here to match that, rather than leaving them to whatever
+  the OS default would otherwise back up.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+    </device-transfer>
+</data-extraction-rules>

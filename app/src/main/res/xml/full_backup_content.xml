@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Pre-31 counterpart of data_extraction_rules.xml. android:allowBackup is already false, so this
+  is inert today, but lint wants it specified explicitly alongside dataExtractionRules rather
+  than left to the API 23-30 default.
+-->
+<full-backup-content>
+    <exclude domain="root" />
+</full-backup-content>
