@@ -391,10 +391,15 @@ silently. Fix: apply the same scrubbed-throwable logging `FeedScreen.kt` already
 `SettingsScreen.kt`'s catch block.
 
 ### LOG-27 — LogoutUseCase's (and TrimMemoryCachesUseCase's) per-step cleanup catches discard every failure with zero logging
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-09-02
 - **Where:** `domain/usecase/LogoutUseCase.kt` (every step inside `invoke()`'s `try` block — session
   stop, data wipe, per-repository cache clears, backfill-anchor clear) / `domain/usecase/TrimMemoryCachesUseCase.kt` (every step inside `invoke()`)
+- **Fix:** commits `5df6085` (TrimMemoryCachesUseCase, 5 sites) and `5dd50ce` (LogoutUseCase, 7
+  sites) — each per-step catch now calls `logger.e(throwable) { "<step> failed during ..." }`
+  with a static, data-free description; the outer method-wide catch and the unwrapped
+  `userPreferences.clearAll()` call in `LogoutUseCase` are intentionally untouched (separate,
+  smaller residual gap, not yet filed as its own entry).
 
 Found by the whole-codebase bug-hunt sweep's empty-catch-block grep pass. `LogoutUseCase`
 wraps each of its seven cleanup steps (`nostrSessionController.stop()`, `eventRepository.clearAllData()`,
