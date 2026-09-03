@@ -24,15 +24,29 @@ An item marked `not applicable` stays here (not deleted) with a note explaining 
 triaged out, so the reasoning isn't lost. Once an item ships, it moves verbatim to
 [DONE.md](DONE.md) with a `**Completed:**` date appended and a `**From:** TODO LOG-<n>` back-reference.
 
-### LOG-17 — Publish failure logs drop the throwable and emit at debug level
-- **Status:** in progress
-- **Added:** 2026-08-24
-- **Why:** Found across three separate logging-migration plans and deliberately not fixed in any of them, to keep each migration a behaviour-preserving 1:1 translation with zero regressions. Folded into this single entry at the migration closeout instead of filed as three duplicates, since all eight sites below share the same root cause and the same fix shape.
+### LOG-32 — LogoutUseCase's outer catch and unwrapped final cleanup call are still silent
+- **Status:** backlog
+- **Added:** 2026-09-02
+- **Why:** Found while fixing LOG-27's seven per-step cleanup catches — a real, adjacent gap of the
+  same class, but deliberately outside the seven-site scope that fix was locked to.
 
-- Eight sites share this shape:
+`LogoutUseCase.invoke()`'s outer method-wide `catch (_: Exception) { }` still discards its
+exception with zero logging, and the final `userPreferences.clearAll()` call inside that outer
+try block is the one cleanup step with no per-step handler of its own — so a failure there falls
+straight into the silent outer catch instead of getting the same `logger.e(e) { }` treatment the
+other seven steps now have. Fix: either wrap `userPreferences.clearAll()` in its own per-step catch
+matching the other seven, or log the outer catch directly; either closes the gap.
 
-- ~~`domain/usecase/PublishEventUseCases.kt` — `PublishSignedEventUseCase`/`PublishAuthEventUseCase`'s two `.onFailure` handlers~~ — fixed, commit `aebd2db`
-- `ui/auth/LoginViewModel.kt:97,143,222` — anonymous login failure, save-public-key failure, logout failure
-- `data/nostr/UmbraNostrClient.kt`'s `logWebSocketFailure` non-SOCKS branch, `data/nostr/RelayMessageHandling.kt`'s `onWebSocketMessage` catch block, `data/nostr/RelayWebSocketListener.kt`'s incoming-drain `onFailure` handler
+### LOG-33 — NegentropySyncOrchestrator's sync-aborted debug log interpolates a raw relay-supplied reason string
+- **Status:** backlog
+- **Added:** 2026-09-02
+- **Why:** Found while fixing LOG-18's three unscrubbed log sites — a real scrubbing gap of the
+  same class, but not one of the three sites LOG-18's fix was scoped to.
 
-All eight are debug-level, so release builds already filter them — the stack-trace loss is invisible in release regardless. The fix for each is a deliberate, individually-reviewable promotion to `UmbraLogger`'s three-argument exception overload (`logger.e(throwable) { ... }`), which attaches the throwable and auto-scrubs its message — not something to fold into a migration diff, since a level promotion (DEBUG to ERROR) is itself a real behaviour change whose release-log-visibility impact should be weighed per site.
+`NegentropySyncOrchestrator`'s sync-aborted debug log interpolates a relay-supplied reason string
+directly into the log message, without routing it through the message-scrubbing helper
+(`LogScrubber.scrubMessageForLogs`) that this file's other relay-sourced values already use. Since
+the reason string originates from the remote relay, it could embed a relay URL, pubkey, or other
+content that should be scrubbed before it reaches a release-build log. Fix: wrap the reason string
+in `LogScrubber.scrubMessageForLogs()` before interpolating it, matching the pattern already used
+elsewhere in this file.

@@ -135,3 +135,18 @@ via the project's scrubbed logging utility so a failure is at least visible in a
 logcat.
 **Completed:** 2026-08-29
 **Fix:** applied in the logout flow
+
+### LOG-17 — Publish failure logs drop the throwable and emit at debug level
+- **Status:** in progress
+- **Added:** 2026-08-24
+- **Why:** Found across three separate logging-migration plans and deliberately not fixed in any of them, to keep each migration a behaviour-preserving 1:1 translation with zero regressions. Folded into this single entry at the migration closeout instead of filed as three duplicates, since all eight sites below share the same root cause and the same fix shape.
+
+- Eight sites share this shape:
+
+- ~~`domain/usecase/PublishEventUseCases.kt` — `PublishSignedEventUseCase`/`PublishAuthEventUseCase`'s two `.onFailure` handlers~~ — fixed, commit `aebd2db`
+- `ui/auth/LoginViewModel.kt:97,143,222` — anonymous login failure, save-public-key failure, logout failure
+- `data/nostr/UmbraNostrClient.kt`'s `logWebSocketFailure` non-SOCKS branch, `data/nostr/RelayMessageHandling.kt`'s `onWebSocketMessage` catch block, `data/nostr/RelayWebSocketListener.kt`'s incoming-drain `onFailure` handler
+
+All eight are debug-level, so release builds already filter them — the stack-trace loss is invisible in release regardless. The fix for each is a deliberate, individually-reviewable promotion to `UmbraLogger`'s three-argument exception overload (`logger.e(throwable) { ... }`), which attaches the throwable and auto-scrubs its message — not something to fold into a migration diff, since a level promotion (DEBUG to ERROR) is itself a real behaviour change whose release-log-visibility impact should be weighed per site.
+**Completed:** 2026-09-02
+**From:** TODO LOG-17

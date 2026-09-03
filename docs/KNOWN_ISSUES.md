@@ -245,9 +245,14 @@ promotion. `saveRelay()` — the only manual edit path — never does, so the re
 first) and `buildRelayListEventJson()`'s bucket-sourced publish content both keep ignoring it.
 
 ### LOG-18 — Three unscrubbed log messages survive the logging migration (EventRepositoryImpl.kt x2, NegentropySyncOrchestrator.kt x1)
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-08-24
 - **Where:** `data/repository/EventRepositoryImpl.kt:428` (`"FEED_NOTES EOSE from relay $relayUrl reported MORE — not advancing since watermark"`), `:486` (`"Re-applied ${channelFilters.size} channels to relay $relayUrl"`), and `data/repository/NegentropySyncOrchestrator.kt:118` (`"NIP-77 sync with relay failed: ${e.message}"`) — line numbers for the first two updated 2026-08-27 after `EventRepositoryImpl.kt` extractions shifted them from :493/:551; same unfixed sites, reconfirmed during code review
+- **Fix:** `EventRepositoryImpl.kt`'s two relay-URL interpolations (the feed-EOSE and channel-reapply
+  debug logs) now wrap `relayUrl` in `LogScrubber.scrubUrlForLogs()` before logging; `NegentropySyncOrchestrator.kt`'s
+  NIP-77 per-relay sync-failure log now wraps the caught exception's message in
+  `LogScrubber.scrubThrowableMessageForLogs()` instead of interpolating `e.message` raw. Log level
+  is unchanged at all three sites — this was a scrubbing-only fix.
 
 The first two sites were found during the logging-migration closeout's `find-non-lambda-logs`
 audit. The third (`NegentropySyncOrchestrator.kt:118`) was missed by that same
@@ -287,9 +292,13 @@ the two matches (bounded by the deletion's own `created_at`) before including it
 `resolvedAddressableIds`/removal.
 
 ### LOG-20 — Silent empty catch block during `clearAllData()`'s wipe sequence
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-08-27
 - **Where:** `data/repository/EventRepositoryImpl.kt:498-500` (`clearAllData`)
+- **Fix:** `clearAllData()`'s `disconnectFromAll()` catch no longer discards its exception silently
+  — it now logs the throwable at error level via `logger.e(e) { "disconnectFromAll failed during
+  clearAllData; continuing wipe" }`, naming only the failed step (no relay list, no pubkey, no row
+  count). The wipe sequence still runs its remaining steps afterward exactly as before.
 
 Found during review of the repository extraction. Confirmed pre-existing
 (present before the extractions began). `try { disconnectFromAll() } catch (_: Exception) { }` — any
@@ -374,9 +383,14 @@ already check `result.isSuccess` and surface an error message on failure, so the
 `FeedViewModel`'s equivalents do the same instead of unconditionally showing success.
 
 ### LOG-26 — SettingsScreen's logout flow has the same swallowed-exception bug FeedScreen's just had fixed
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-09-02
 - **Where:** `ui/settings/SettingsScreen.kt` (the logout `MenuItemRow`'s `onClick` try/catch around `loginViewModel.logout()`)
+- **Fix:** `SettingsScreen.kt` gained a file-scope tagged logger (`settingsScreenLogger`); its logout
+  `catch` block now logs the caught exception at error level with the static message "Logout failed"
+  before navigating to the login screen, matching the fix already shipped for `FeedScreen.kt`'s
+  independent logout entry point (LOG-25). Navigation to the login screen still happens
+  unconditionally regardless of whether logout succeeded, exactly as before.
 
 Found by the whole-codebase bug-hunt sweep, specifically its empty-catch-
 block grep pass. `SettingsScreen.kt` has its own, independent logout entry point (Settings ->
@@ -417,10 +431,15 @@ pubkey-scoped data) via the project's logging utility before moving on to the ne
 LOG-20's fix shape.
 
 ### LOG-28 — LoginViewModel's session-activation failures are swallowed with zero logging during both anonymous and Amber login
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-09-02
 - **Where:** `ui/auth/LoginViewModel.kt` (`loginAnonymously()`'s and `savePublicKey()`'s inner
   `try { eventRepository.activateUserSession(...) } catch (_: Exception) { }`)
+- **Fix:** both inner `try/catch` blocks around `eventRepository.activateUserSession(...)` (in
+  `loginAnonymously()` and `savePublicKey()`) now log the caught exception at error level with the
+  static message "Session activation failed" instead of discarding it silently. The inner catch
+  itself is unchanged — a hydration failure still doesn't block login, and `nostrSessionController.start()`
+  plus the authenticated-state update still run right afterward, exactly as before.
 
 Found by the whole-codebase bug-hunt sweep's empty-catch-block grep pass. Both
 `loginAnonymously()` and `savePublicKey()` wrap their `eventRepository.activateUserSession(...)`
