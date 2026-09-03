@@ -244,7 +244,6 @@ internal class RelayCrudCoordinator(
             return
         }
 
-        state.update { it.copy(dmRelayListDirty = true) }
         updateRelayRole(relayId) { relay ->
             if (enabled && !isDmTransportAllowed(relay.url)) {
                 state.update {
@@ -253,6 +252,10 @@ internal class RelayCrudCoordinator(
                 return@updateRelayRole relay
             }
 
+            // Only mark the published DM relay list as needing re-publish once the relay
+            // actually changes below — a rejected/no-op enable must never claim the DM list
+            // now differs from what's published, since it doesn't.
+            state.update { it.copy(dmRelayListDirty = true) }
             relay.copy(
                 isDmActive = enabled,
                 dmRequiresAuth = if (enabled) true else false,
