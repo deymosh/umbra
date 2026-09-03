@@ -35,7 +35,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. `./gradlew compileDebugKotlin`, `lintDebug`, and `testDebugUnitTest` all pass with no new warnings (CI treats lint warnings as errors).
   5. `docs/KNOWN_ISSUES.md` entries LOG-18, LOG-20, LOG-26, LOG-27, LOG-28 read `fix applied — needs on-device validation` with a `**Fix:**` line, and `docs/TODO.md`'s LOG-17 has moved verbatim into `docs/DONE.md` with `**Completed:**` and `**From:** TODO LOG-17` lines.
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans executed
 
 Plans:
 **Wave 1**
@@ -48,7 +48,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 01-03-PLAN.md — Settings logout handler, phase-wide log-hygiene audit sweep and build gate, and the bug-tracker closeout (BUG-09 plus tracker state for all six)
+- [x] 01-03-PLAN.md — Settings logout handler, phase-wide log-hygiene audit sweep and build gate, and the bug-tracker closeout (BUG-09 plus tracker state for all six)
 
 ### Phase 2: Concurrency & State Correctness
 
@@ -115,7 +115,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Error Visibility & Log Hygiene | 2/3 | In Progress|  |
+| 1. Error Visibility & Log Hygiene | 3/3 | In Progress|  |
 | 2. Concurrency & State Correctness | 0/TBD | Not started | - |
 | 3. Fix Validation & Test Coverage | 0/TBD | Not started | - |
 | 4. Version Consistency & v0.1.0 Release Prep | 0/TBD | Not started | - |

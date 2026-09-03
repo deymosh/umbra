@@ -15,7 +15,7 @@
 - [ ] **BUG-06**: Fix LOG-22 — give `ProfileViewModel.deleteEvent` the same pending-action-plus-rollback treatment as `toggleMute`/`togglePin`/`toggleFollow`
 - [ ] **BUG-07**: Fix LOG-23 — `FeedViewModel.muteUser`'s local-filter mute mirror resolves the active filter the same way `ProfileViewModel.toggleMute` does, instead of a lookup that can never match
 - [ ] **BUG-08**: Fix LOG-24 — `FeedViewModel.muteUser`/`togglePin` check the mute/pin write's `Result` and surface failure, instead of discarding it
-- [ ] **BUG-09**: Fix LOG-26 — apply LOG-25's already-shipped logout exception-logging fix to `SettingsScreen.kt`'s independent logout entry point
+- [x] **BUG-09**: Fix LOG-26 — apply LOG-25's already-shipped logout exception-logging fix to `SettingsScreen.kt`'s independent logout entry point
 - [x] **BUG-10**: Fix LOG-27 — log each per-step cleanup exception (scrubbed) in `LogoutUseCase` and `TrimMemoryCachesUseCase` instead of silently swallowing it
 - [x] **BUG-11**: Fix LOG-28 — stop swallowing `activateUserSession`'s exception inside `LoginViewModel`'s inner catch so the outer, already-working logging path can see it
 - [ ] **BUG-12**: Fix LOG-29 — guard `RelayCrudCoordinator.updateRelayRole` with a per-relay lock so concurrent role toggles on the same relay can't silently lose an update
@@ -72,7 +72,7 @@ None — this milestone is deliberately scoped to stability + release, not new f
 | BUG-01 | Phase 1 | Complete |
 | BUG-02 | Phase 1 | Complete |
 | BUG-04 | Phase 1 | Complete |
-| BUG-09 | Phase 1 | Pending |
+| BUG-09 | Phase 1 | Complete |
 | BUG-10 | Phase 1 | Complete |
 | BUG-11 | Phase 1 | Complete |
 | BUG-03 | Phase 2 | Pending |
