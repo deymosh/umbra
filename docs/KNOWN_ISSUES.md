@@ -505,9 +505,13 @@ to `retryJob` at minimum, matching `EventIngestCache.insertDebounceJob`'s existi
 elsewhere in the codebase; audit the sibling fields for the same treatment.
 
 ### LOG-34 — Logger.e() leaks the raw, unscrubbed Throwable via Android's own stack-trace formatting, bypassing LogScrubber entirely
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-09-03
 - **Where:** `util/logging/Logger.kt:23-27` (`e()`)
+- **Fix:** `LogScrubber.scrubThrowableForLogs()` (new) returns a replacement `Throwable` — original
+  stack frames, scrubbed message, no cause — and `Logger.e()` now passes that to `Log.e()` instead
+  of the original throwable. Also moved `LogScrubber.kt` into `util/logging/` alongside
+  `Logger`/`UmbraLog`, since it exists purely to serve them.
 
 Found by code review of Phase 1 (Error Visibility & Log Hygiene), which promoted roughly two
 dozen catch sites from debug to error level specifically so their failures would be visible in
