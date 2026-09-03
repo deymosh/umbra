@@ -5,16 +5,16 @@ milestone_name: Hardening & First Public Release
 current_phase: 02
 current_phase_name: Concurrency & State Correctness
 status: executing
-stopped_at: Phase 2 context gathered
-last_updated: "2026-09-03T21:39:19.466Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-09-03T21:54:55.557Z"
 last_activity: 2026-09-03
-last_activity_desc: Phase 01 complete, transitioned to Phase 2
-state_head: 2e0c8e871ec4d807f14ecc3a3032d902e145e4e2
+last_activity_desc: Phase 02 execution started
+state_head: 000a4222583254f5d1975178c55f4520bbf0b026
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 8
-  completed_plans: 3
+  completed_plans: 4
   percent: 25
 ---
 
@@ -25,16 +25,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-03)
 
 **Core value:** A trustworthy, stable first public release that upholds Umbra's TOR-only and Amber-only guarantees without regressions
-**Current focus:** Phase 2 — Concurrency & State Correctness
+**Current focus:** Phase 02 — Concurrency & State Correctness
 
 ## Current Position
 
-Phase: 02 (Concurrency & State Correctness) — READY TO EXECUTE
-Plan: Not started
+Phase: 02 (Concurrency & State Correctness) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-09-03 — Phase 01 complete, transitioned to Phase 2
+Last activity: 2026-09-03 — Phase 02 execution started
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [███░░░░░░░] 25%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P01 | 14min | 3 tasks | 10 files |
 | Phase 01 P02 | 12min | 3 tasks | 7 files |
 | Phase 01 P03 | ~20min | 3 tasks | 5 files |
+| Phase 02 P01 | 14min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,8 @@ Recent decisions affecting current work:
 - [Phase 01]: [Phase 01] BUG-09 (LOG-26, SettingsScreen's independent logout entry point) fixed, mirroring FeedScreen's already-shipped LOG-25 fix; phase-wide find-non-lambda-logs audit sweep and full build gate both clean across all ten touched files
 - [Phase 01]: [Phase 01] Bug tracker closed out: LOG-18/20/26/28 advanced to applied-fix status (LOG-27 already advanced by Plan 01-01), LOG-17 moved to DONE.md, LOG-32/LOG-33 filed for two out-of-scope gaps found during implementation. All six phase-1 requirements now Complete in REQUIREMENTS.md
 - [Phase 01]: Post-execution code review found a Critical gap (LOG-34): `Logger.e()` passed the raw `Throwable` to `Log.e()`, whose own stack-trace formatting bypasses `LogScrubber` entirely — widening the exposure this phase's whole point was to close. Fixed same-session, out of the three plans' original file scope: `LogScrubber.scrubThrowableForLogs()` (new) returns a replacement throwable with a scrubbed message and no cause; `LogScrubber.kt` also moved into `util/logging/` alongside `Logger`/`UmbraLog`. LOG-35 (untracked swallowed throwable + raw `e.message` in UI, `LoginViewModel`) and LOG-36 (dead-code catch, `SettingsScreen.kt`) filed but left open — out of this phase's ROADMAP success criteria
+- [Phase 02]: [Phase 2 Plan 1] Per-relay-id Mutex (D-06) plus fresh RelayRepository.getRelayById read closes RelayCrudCoordinator's lost-update race (LOG-29/BUG-12) -- the lock alone wasn't sufficient since state.relays only resyncs via a 300ms-throttled collector
+- [Phase 02]: [Phase 2 Plan 1] setDmEnabled's dmRelayListDirty set moved into the mapper, after the transport-rejection branch, so a rejected/no-op DM enable never claims the published DM list changed (LOG-31/BUG-14)
 
 ### Pending Todos
 
@@ -101,6 +104,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-03T16:38:47.671Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-concurrency-state-correctness/02-CONTEXT.md
+Last session: 2026-09-03T21:54:55.537Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: None

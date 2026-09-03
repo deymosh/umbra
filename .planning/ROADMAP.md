@@ -63,12 +63,12 @@ Plans:
   4. New unit tests cover each fix that is unit-testable (job-field atomicity, per-relay serialization, deletion lookup, dirty-flag suppression, Result handling); `compileDebugKotlin`, `lintDebug`, and `testDebugUnitTest` all pass.
   5. `docs/KNOWN_ISSUES.md` entries LOG-19, LOG-21, LOG-22, LOG-23, LOG-24, LOG-29, LOG-30, LOG-31 read `fix applied — needs on-device validation` with a `**Fix:**` line.
 
-**Plans**: 5 plans
+**Plans**: 1/5 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — DM dirty flag scoped to the mapper, per-relay-id lock plus fresh point read in RelayCrudCoordinator, and the reusable concurrent-test harness (BUG-12, BUG-14)
+- [x] 02-01-PLAN.md — DM dirty flag scoped to the mapper, per-relay-id lock plus fresh point read in RelayCrudCoordinator, and the reusable concurrent-test harness (BUG-12, BUG-14)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -131,7 +131,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Error Visibility & Log Hygiene | 3/3 | Complete    | 2026-09-03 |
-| 2. Concurrency & State Correctness | 0/TBD | Not started | - |
+| 2. Concurrency & State Correctness | 1/5 | In Progress|  |
 | 3. Fix Validation & Test Coverage | 0/TBD | Not started | - |
 | 4. Version Consistency & v0.1.0 Release Prep | 0/TBD | Not started | - |
 
