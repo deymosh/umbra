@@ -1,6 +1,5 @@
 package com.umbra.app.data.nostr
 
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.LogScrubber.scrubUrlForLogs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,7 +48,7 @@ internal class RelayWebSocketListener(
             for (text in incoming) {
                 runCatching { client.onWebSocketMessage(relayUrl, text) }
                     .onFailure { e ->
-                        client.logger.d { "Error processing message from ${scrubUrlForLogs(relayUrl)}: ${scrubThrowableMessageForLogs(e)}" }
+                        client.logger.e(e) { "Error processing message from ${scrubUrlForLogs(relayUrl)}" }
                     }
             }
         }

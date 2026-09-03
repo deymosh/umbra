@@ -368,7 +368,7 @@ class UmbraNostrClient @Inject constructor(
             return
         }
 
-        logger.d { "WebSocket error for $relay$responseInfo: $errorMessage" }
+        logger.e(throwable) { "WebSocket error for $relay$responseInfo" }
     }
 
 
