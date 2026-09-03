@@ -7,17 +7,17 @@
 
 ### Bug Fixes (currently `open` in docs/KNOWN_ISSUES.md, plus one TODO.md backlog item)
 
-- [ ] **BUG-01**: Promote LOG-17's 8 swallowed-exception debug-level log sites (`PublishEventUseCases.kt`, `LoginViewModel.kt`, `UmbraNostrClient.kt`, `RelayMessageHandling.kt`, `RelayWebSocketListener.kt`) to scrubbed error-level logging with the throwable attached — 2 of 8 sites done (`PublishEventUseCases.kt`, Plan 01-01); 6 remain for later plans in this phase
-- [ ] **BUG-02**: Scrub LOG-18's 3 unscrubbed log sites (`EventRepositoryImpl.kt` relay-URL interpolations x2, `NegentropySyncOrchestrator.kt` throwable message x1) via `LogScrubber`
+- [x] **BUG-01**: Promote LOG-17's 8 swallowed-exception debug-level log sites (`PublishEventUseCases.kt`, `LoginViewModel.kt`, `UmbraNostrClient.kt`, `RelayMessageHandling.kt`, `RelayWebSocketListener.kt`) to scrubbed error-level logging with the throwable attached — all 8 sites done (2 in Plan 01-01, 6 in Plan 01-02)
+- [x] **BUG-02**: Scrub LOG-18's 3 unscrubbed log sites (`EventRepositoryImpl.kt` relay-URL interpolations x2, `NegentropySyncOrchestrator.kt` throwable message x1) via `LogScrubber`
 - [ ] **BUG-03**: Fix LOG-19 — NIP-09 `"a"`-tag deletions never take effect for a non-owned author's cached addressable event (`EventIngestCache.applyIncomingDeletion` needs an in-memory lookup alongside `ownEventArchive`)
-- [ ] **BUG-04**: Fix LOG-20 — log the exception currently swallowed by `clearAllData()`'s `disconnectFromAll()` catch block
+- [x] **BUG-04**: Fix LOG-20 — log the exception currently swallowed by `clearAllData()`'s `disconnectFromAll()` catch block
 - [ ] **BUG-05**: Fix LOG-21 — replace `EventIngestCache.snapshotEmitJob`'s unsynchronized `var` with `AtomicReference<Job?>`, matching `insertDebounceJob`'s existing pattern
 - [ ] **BUG-06**: Fix LOG-22 — give `ProfileViewModel.deleteEvent` the same pending-action-plus-rollback treatment as `toggleMute`/`togglePin`/`toggleFollow`
 - [ ] **BUG-07**: Fix LOG-23 — `FeedViewModel.muteUser`'s local-filter mute mirror resolves the active filter the same way `ProfileViewModel.toggleMute` does, instead of a lookup that can never match
 - [ ] **BUG-08**: Fix LOG-24 — `FeedViewModel.muteUser`/`togglePin` check the mute/pin write's `Result` and surface failure, instead of discarding it
 - [ ] **BUG-09**: Fix LOG-26 — apply LOG-25's already-shipped logout exception-logging fix to `SettingsScreen.kt`'s independent logout entry point
 - [x] **BUG-10**: Fix LOG-27 — log each per-step cleanup exception (scrubbed) in `LogoutUseCase` and `TrimMemoryCachesUseCase` instead of silently swallowing it
-- [ ] **BUG-11**: Fix LOG-28 — stop swallowing `activateUserSession`'s exception inside `LoginViewModel`'s inner catch so the outer, already-working logging path can see it
+- [x] **BUG-11**: Fix LOG-28 — stop swallowing `activateUserSession`'s exception inside `LoginViewModel`'s inner catch so the outer, already-working logging path can see it
 - [ ] **BUG-12**: Fix LOG-29 — guard `RelayCrudCoordinator.updateRelayRole` with a per-relay lock so concurrent role toggles on the same relay can't silently lose an update
 - [ ] **BUG-13**: Fix LOG-30 — apply `AtomicReference<Job?>` to `NostrSessionManager.retryJob` (and audit the sibling `Job?` fields for the same treatment)
 - [ ] **BUG-14**: Fix LOG-31 — only mark the DM relay list dirty in `RelayCrudCoordinator.setDmEnabled` when the mapper actually produces a changed relay
@@ -69,12 +69,12 @@ None — this milestone is deliberately scoped to stability + release, not new f
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BUG-01 | Phase 1 | In progress (2/8 sites — Plan 01-01) |
-| BUG-02 | Phase 1 | Pending |
-| BUG-04 | Phase 1 | Pending |
+| BUG-01 | Phase 1 | Complete |
+| BUG-02 | Phase 1 | Complete |
+| BUG-04 | Phase 1 | Complete |
 | BUG-09 | Phase 1 | Pending |
 | BUG-10 | Phase 1 | Complete |
-| BUG-11 | Phase 1 | Pending |
+| BUG-11 | Phase 1 | Complete |
 | BUG-03 | Phase 2 | Pending |
 | BUG-05 | Phase 2 | Pending |
 | BUG-06 | Phase 2 | Pending |
