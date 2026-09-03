@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
@@ -200,7 +201,7 @@ internal class EventIngestCache(
      * membership out from under an already-built feed snapshot. */
     val feedRebuildSignals: SharedFlow<Unit> = _feedRebuildSignals.asSharedFlow()
 
-    private var snapshotEmitJob: Job? = null
+    private val snapshotEmitJob = AtomicReference<Job?>(null)
     private val pendingSnapshotEvents: MutableSet<Event> = ConcurrentHashMap.newKeySet()
     @Volatile
     private var snapshotEmitPending: Boolean = false
@@ -349,12 +350,21 @@ internal class EventIngestCache(
      * `scheduleSnapshotEmit` calls inside one [SNAPSHOT_BATCH_MS] window collapses into exactly
      * one [cachedEventsFlow] emission (the full cache snapshot) and one [cachedEventBundles]
      * emission (just the events enqueued during the window), not one of each per event.
+     *
+     * [snapshotEmitJob]'s read-then-write is a single [AtomicReference.compareAndSet] because this
+     * is called from concurrent [EventRepositoryImpl.subscribeToEvents] `flatMapMerge` branches
+     * running on different real threads — a plain read-then-assign could let two branches both
+     * observe no active job and both launch one, leaking a second, unobserved coroutine. This
+     * keeps the existing skip-relaunch-if-active semantics (unlike [scheduleInsert]'s cancel-and-
+     * replace coalescing): the job is built lazily so a CAS loser can be cancelled before it ever
+     * starts, rather than cancelling and replacing a job that's already running.
      */
     fun scheduleSnapshotEmit() {
         snapshotEmitPending = true
-        if (snapshotEmitJob?.isActive == true) return
+        val observedJob = snapshotEmitJob.get()
+        if (observedJob?.isActive == true) return
 
-        snapshotEmitJob = repoScope.launch {
+        val newJob = repoScope.launch(start = CoroutineStart.LAZY) {
             delay(SNAPSHOT_BATCH_MS)
             if (!snapshotEmitPending) return@launch
             snapshotEmitPending = false
@@ -370,6 +380,14 @@ internal class EventIngestCache(
                 _cachedEventBundles.tryEmit(bundle)
             }
         }
+        if (snapshotEmitJob.compareAndSet(observedJob, newJob)) {
+            newJob.start()
+        } else {
+            // Lost the CAS to a concurrent caller that installed its own job between this call's
+            // get() and compareAndSet() -- cancel the unstarted loser so it never runs and is
+            // never left orphaned on repoScope.
+            newJob.cancel()
+        }
     }
 
     /** Queues [event] into the next coalesced [cachedEventBundles] emission — call alongside
@@ -382,8 +400,7 @@ internal class EventIngestCache(
      * for callers (e.g. [EventRepositoryImpl.clearAllData]) that are about to wipe all data and
      * must ensure no stale scheduled emit fires afterward. */
     fun cancelPendingSnapshotEmit() {
-        snapshotEmitJob?.cancel()
-        snapshotEmitJob = null
+        snapshotEmitJob.getAndSet(null)?.cancel()
         snapshotEmitPending = false
         pendingSnapshotEvents.clear()
     }

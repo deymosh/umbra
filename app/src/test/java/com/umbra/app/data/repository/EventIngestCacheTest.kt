@@ -327,6 +327,59 @@ class EventIngestCacheTest {
     }
 
     @Test
+    fun `given eight overlapping coroutines calling scheduleSnapshotEmit concurrently when time advances then exactly one snapshot and one bundle emission occur with no event lost`() = runTest {
+        val cache = subject(this)
+        val snapshots = mutableListOf<List<Event>>()
+        val bundles = mutableListOf<Set<Event>>()
+        val snapshotJob = launch { cache.cachedEventsFlow.collect { snapshots.add(it) } }
+        val bundleJob = launch { cache.cachedEventBundles.collect { bundles.add(it) } }
+        advanceUntilIdle()
+
+        val events = (1..8).map { textNote("concurrent-$it") }
+        events.forEach { cache.ingest(it, relayA, currentUserPubkey = null) }
+        events.forEach { event ->
+            launch {
+                cache.enqueueSnapshotEvent(event)
+                cache.scheduleSnapshotEmit()
+            }
+        }
+        advanceTimeBy(300L)
+        advanceUntilIdle()
+
+        assertEquals(1, snapshots.size)
+        assertEquals(1, bundles.size)
+        assertEquals(events.toSet(), bundles.single())
+
+        snapshotJob.cancel()
+        bundleJob.cancel()
+    }
+
+    @Test
+    fun `given a scheduled snapshot emit when cancelPendingSnapshotEmit runs then no emission occurs and a repeated cancel is a harmless no-op`() = runTest {
+        val cache = subject(this)
+        val snapshots = mutableListOf<List<Event>>()
+        val job = launch { cache.cachedEventsFlow.collect { snapshots.add(it) } }
+        advanceUntilIdle()
+
+        val event = textNote("cancel-1")
+        cache.ingest(event, relayA, currentUserPubkey = null)
+        cache.enqueueSnapshotEvent(event)
+        cache.scheduleSnapshotEmit()
+        cache.cancelPendingSnapshotEmit()
+
+        advanceTimeBy(300L)
+        advanceUntilIdle()
+        advanceTimeBy(300L)
+        advanceUntilIdle()
+
+        assertEquals(0, snapshots.size)
+        // A second cancel with no pending job/state must not throw.
+        cache.cancelPendingSnapshotEmit()
+
+        job.cancel()
+    }
+
+    @Test
     fun `given cached events and engagement when clearAll is called then everything is emptied together and an empty snapshot is emitted`() = runTest {
         val cache = subject(this)
         val snapshots = mutableListOf<List<Event>>()
