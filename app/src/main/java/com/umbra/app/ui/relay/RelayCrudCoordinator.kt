@@ -6,6 +6,7 @@ import com.umbra.app.domain.relay.Relay
 import com.umbra.app.domain.relay.RelayIdGenerator
 import com.umbra.app.domain.relay.normalizeRelayUrl
 import com.umbra.app.domain.repository.EventRepository
+import com.umbra.app.domain.repository.RelayRepository
 import com.umbra.app.domain.usecase.AddRelayUseCase
 import com.umbra.app.domain.usecase.RemoveRelayUseCase
 import com.umbra.app.domain.usecase.UpdateRelayUseCase
@@ -14,7 +15,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.net.URI
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Relay CRUD/enable-flag cluster extracted from [RelayConfigViewModel]. Manually constructed by
@@ -32,11 +36,17 @@ internal class RelayCrudCoordinator(
     private val addRelayUseCase: AddRelayUseCase,
     private val updateRelayUseCase: UpdateRelayUseCase,
     private val removeRelayUseCase: RemoveRelayUseCase,
+    private val relayRepository: RelayRepository,
     private val eventRepository: EventRepository,
     private val userPreferences: UserPreferences,
     private val state: MutableStateFlow<RelayConfigState>,
     private val scope: CoroutineScope
 ) {
+
+    // Per-relay-id lock for updateRelayRole (LOG-29/BUG-12/D-06): two concurrent role toggles on
+    // the SAME relay must serialize so neither one's write is silently lost, while toggles on
+    // DIFFERENT relays keep running concurrently instead of waiting on an unrelated relay's write.
+    private val relayRoleMutexes = ConcurrentHashMap<String, Mutex>()
 
     fun saveRelay(relay: Relay) {
         scope.launch {
@@ -311,22 +321,35 @@ internal class RelayCrudCoordinator(
 
     private fun updateRelayRole(relayId: String, mapper: (Relay) -> Relay) {
         scope.launch {
-            val relay = state.value.relays.find { it.id == relayId } ?: return@launch
-            try {
-                val updated = mapper(relay)
-                updateRelayUseCase(updated)
-                // The relay may have been auto-disabled for failing to connect too many times in
-                // a row (RelayIssueKind.AUTO_DISABLED) — its consecutive-failure count otherwise
-                // sits at that threshold forever, so re-enabling it here would immediately
-                // re-trip on the very next failure instead of getting a fresh run.
-                if (!relay.isEnabled && updated.isEnabled) {
-                    eventRepository.resetRelayFailureCount(relay.url)
+            val mutex = relayRoleMutexes.computeIfAbsent(relayId) { Mutex() }
+            mutex.withLock {
+                // The base snapshot must come from the persisted source of truth, not the
+                // throttled UI mirror: state.relays is only repopulated by
+                // RelayConfigViewModel.observeRelays()'s 300ms-throttled collector, so a second
+                // serialized toggle reading from state here would still map from a pre-write
+                // snapshot and re-lose the first toggle's flag even with the lock in place.
+                // state.value.relays is only a fallback for a relay this coordinator's own
+                // caller already has in memory but the repository hasn't reported yet (e.g. a
+                // relay added in the same batch of work).
+                val relay = relayRepository.getRelayById(relayId)
+                    ?: state.value.relays.find { it.id == relayId }
+                    ?: return@withLock
+                try {
+                    val updated = mapper(relay)
+                    updateRelayUseCase(updated)
+                    // The relay may have been auto-disabled for failing to connect too many times
+                    // in a row (RelayIssueKind.AUTO_DISABLED) — its consecutive-failure count
+                    // otherwise sits at that threshold forever, so re-enabling it here would
+                    // immediately re-trip on the very next failure instead of getting a fresh run.
+                    if (!relay.isEnabled && updated.isEnabled) {
+                        eventRepository.resetRelayFailureCount(relay.url)
+                    }
+                    if (relay.isEnabled && !updated.isEnabled) {
+                        eventRepository.disconnectRelay(relay.url)
+                    }
+                } catch (e: Exception) {
+                    state.update { it.copy(errorMessage = UiMessage.Res(R.string.error_update_relay, listOf(e.message ?: ""))) }
                 }
-                if (relay.isEnabled && !updated.isEnabled) {
-                    eventRepository.disconnectRelay(relay.url)
-                }
-            } catch (e: Exception) {
-                state.update { it.copy(errorMessage = UiMessage.Res(R.string.error_update_relay, listOf(e.message ?: ""))) }
             }
         }
     }

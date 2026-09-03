@@ -196,6 +196,7 @@ class RelayConfigViewModel @Inject constructor(
         addRelayUseCase = addRelayUseCase,
         updateRelayUseCase = updateRelayUseCase,
         removeRelayUseCase = removeRelayUseCase,
+        relayRepository = relayRepository,
         eventRepository = eventRepository,
         userPreferences = userPreferences,
         state = _state,
