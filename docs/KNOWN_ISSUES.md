@@ -456,8 +456,15 @@ explaining why. Fix: log the caught exception (scrubbed) inside the inner catch 
 discarding it silently, or let it propagate to the outer catch that already logs correctly.
 
 ### LOG-29 — RelayCrudCoordinator's per-role enable-flag setters can lose a concurrent update to the same relay
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-09-02
+- **Fix:** Added a per-relay-id `Mutex` around `updateRelayRole`'s whole read-map-persist
+  sequence and switched the base-relay read to a fresh `RelayRepository.getRelayById(relayId)`
+  point read (falling back to `state.value.relays` only when the repository has no entry yet) —
+  the lock alone wasn't sufficient since `state.relays` only resyncs on a 300ms-throttled
+  collector, so a second serialized toggle would still have mapped from a pre-write snapshot.
+  Covered by two genuinely-concurrent `RelayCrudCoordinatorTest` cases (same relay serializes and
+  keeps both role flags, different relays don't false-serialize).
 - **Where:** `ui/relay/RelayCrudCoordinator.kt` (`updateRelayRole`, shared by `setOutboxEnabled`/
   `setInboxEnabled`/`setDmEnabled`/`setSearchEnabled`/`setIndexEnabled`)
 
@@ -565,8 +572,13 @@ string) before it reaches `UiMessage.Res`. The same raw-`e.message`-in-UI patter
 `savePublicKey()` (`LoginViewModel.kt:150-160`) and should get the same scrubbing fix.
 
 ### LOG-31 — RelayCrudCoordinator.setDmEnabled marks the DM relay list dirty even when the enable is rejected
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-09-02
+- **Fix:** Moved the `dmRelayListDirty = true` update into the mapper lambda, after the
+  transport-rejection branch and immediately before the `relay.copy(...)` that actually changes
+  the relay, so the flag only flips on the branch that produces a genuinely changed relay.
+  Covered by `RelayCrudCoordinatorTest` (rejected `ws://` non-onion enable, accepted `wss://`
+  enable, unknown relayId).
 - **Where:** `ui/relay/RelayCrudCoordinator.kt` (`setDmEnabled`)
 
 `setDmEnabled` unconditionally flips `dmRelayListDirty = true` before calling `updateRelayRole`,
