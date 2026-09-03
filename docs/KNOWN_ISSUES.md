@@ -413,7 +413,7 @@ silently. Fix: apply the same scrubbed-throwable logging `FeedScreen.kt` already
   sites) — each per-step catch now calls `logger.e(throwable) { "<step> failed during ..." }`
   with a static, data-free description; the outer method-wide catch and the unwrapped
   `userPreferences.clearAll()` call in `LogoutUseCase` are intentionally untouched (separate,
-  smaller residual gap, not yet filed as its own entry).
+  smaller residual gap, filed as TODO LOG-32).
 
 Found by the whole-codebase bug-hunt sweep's empty-catch-block grep pass. `LogoutUseCase`
 wraps each of its seven cleanup steps (`nostrSessionController.stop()`, `eventRepository.clearAllData()`,
@@ -503,6 +503,62 @@ above share the same plain-`var`-with-no-atomic-wrapper shape, mutated from seve
 methods without a lock. Fix: apply `AtomicReference<Job?>` (or a `Mutex`-guarded check-and-launch)
 to `retryJob` at minimum, matching `EventIngestCache.insertDebounceJob`'s existing precedent
 elsewhere in the codebase; audit the sibling fields for the same treatment.
+
+### LOG-34 — Logger.e() leaks the raw, unscrubbed Throwable via Android's own stack-trace formatting, bypassing LogScrubber entirely
+- **Status:** open
+- **Found:** 2026-09-03
+- **Where:** `util/logging/Logger.kt:23-27` (`e()`)
+
+Found by code review of Phase 1 (Error Visibility & Log Hygiene), which promoted roughly two
+dozen catch sites from debug to error level specifically so their failures would be visible in
+release builds. `Logger.e()` correctly scrubs the `message()` string via
+`LogScrubber.scrubThrowableMessageForLogs()`, but it also passes the raw, un-sanitized
+`throwable` object as `Log.e(tag, msg, throwable)`'s third argument. Android's own `Log.e`
+implementation appends `Log.getStackTraceString(tr)` to the printed line, and that helper's
+first line is `tr.toString()` — the exception's own unscrubbed class name and message — repeated
+for every exception in the `cause` chain. None of that text passes through `LogScrubber`; the
+scrubbed string computed one line earlier is functionally redundant, since the very next thing
+`Log.e` prints is the same content, unscrubbed, sourced directly from the `Throwable` itself.
+
+This is not hypothetical: every one of Phase 1's promoted call sites is either a live-network
+failure (SOCKS/TLS/timeout/connect exceptions from OkHttp, whose `.message` routinely embeds a
+hostname, `.onion` address, or resolved `IP:port`) or a JSON/event-parsing failure that can echo
+malformed input. Before Phase 1 these all logged at debug level, filtered out of release builds
+by `Log.isLoggable(tag, Log.DEBUG)` — the raw throwable text never reached a release logcat.
+Promoting them to error level (`Log.isLoggable(tag, Log.ERROR)` is true by default, and this
+project's `proguard-rules.pro` has no `Log.e` stripping rule) removes that filter, so Phase 1
+inadvertently widened the exposure window for this pre-existing gap from "never" to "every
+occurrence." This directly contradicts `AUDIT.md`'s and the `find-non-lambda-logs` skill's claim
+that `logger.e(throwable) { }` auto-scrubs the throwable — both describe the intended behavior,
+not the actual one. Fix: build a sanitized throwable that keeps the real stack frames (harmless —
+just class/method/file/line of this app's own code and library internals) but replaces the
+exception's own message/cause chain with the already-scrubbed text, e.g.:
+```kotlin
+val scrubbed = LogScrubber.scrubThrowableMessageForLogs(throwable)
+val safeForTrace = RuntimeException("${throwable.javaClass.simpleName}: $scrubbed").apply {
+    stackTrace = throwable.stackTrace
+}
+Log.e(tag, "${message()}: $scrubbed", safeForTrace)
+```
+
+### LOG-35 — LoginViewModel.requestAmberLogin's catch block fully discards its throwable — never logged, only surfaced as raw UI text
+- **Status:** open
+- **Found:** 2026-09-03
+- **Where:** `ui/auth/LoginViewModel.kt:182-192` (`requestAmberLogin`)
+
+Found by code review of Phase 1. Unlike every other catch block Phase 1 touched in this same
+file, `requestAmberLogin()`'s catch neither logs nor rethrows — it only sets
+`errorMessage = UiMessage.Res(R.string.login_amber_response_error, listOf(e.message ?: ""))`.
+Predates Phase 1 (not part of its changed hunks) but sits in a file that phase substantially
+edited for exactly this class of bug, and is the same swallowed-throwable pattern LOG-25/27/28
+were written to close elsewhere in this file. A secondary, more direct exposure: `e.message` is
+never scrubbed before being interpolated into `UiMessage.Res` and rendered on-screen — visible to
+anyone looking at the device or a screenshot, no `adb logcat` access needed, for the same class of
+relay/network exception LOG-34 covers on the logging side. Fix: add
+`logger.e(e) { "Amber login response failed" }` before updating `_authState`, and route `e.message`
+through `LogScrubber.scrubThrowableMessageForLogs(e)` (or drop the raw detail from the user-facing
+string) before it reaches `UiMessage.Res`. The same raw-`e.message`-in-UI pattern also exists in
+`savePublicKey()` (`LoginViewModel.kt:150-160`) and should get the same scrubbing fix.
 
 ### LOG-31 — RelayCrudCoordinator.setDmEnabled marks the DM relay list dirty even when the enable is rejected
 - **Status:** open

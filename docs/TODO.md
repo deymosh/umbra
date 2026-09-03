@@ -24,6 +24,24 @@ An item marked `not applicable` stays here (not deleted) with a note explaining 
 triaged out, so the reasoning isn't lost. Once an item ships, it moves verbatim to
 [DONE.md](DONE.md) with a `**Completed:**` date appended and a `**From:** TODO LOG-<n>` back-reference.
 
+### LOG-36 — SettingsScreen's logout catch block is unreachable dead code
+- **Status:** backlog
+- **Added:** 2026-09-03
+- **Why:** Found by code review of Phase 1 (Error Visibility & Log Hygiene) — harmless (no leak,
+  no crash) but worth cleaning up or documenting so it isn't mistaken for a load-bearing fix.
+
+LOG-26's fix wraps `loginViewModel.logout()` in `SettingsScreen.kt` with a new
+`try { ... } catch (e: Exception) { settingsScreenLogger.e(e) { "Logout failed" } }`. But
+`LoginViewModel.logout()` (`ui/auth/LoginViewModel.kt:225-234`) already wraps its own body in
+`try { logoutUseCase() } catch (e: Exception) { logger.e(e) { "Logout failed" } } finally { ... }`
+— it catches `Exception`, never rethrows, and the `finally` always runs. `logout()` is a normal
+(non-throwing-by-contract) suspend function, and the only other statement inside `SettingsScreen`'s
+new `try` is a plain state assignment that cannot throw — so the new `catch` added by LOG-26's fix
+can never execute; the real visibility improvement already happened one layer down in
+`LoginViewModel.logout()` itself. Fix: either remove the now-redundant `try/catch` in
+`SettingsScreen.kt` (since `logout()` never throws), or, if defense-in-depth against a future
+change to `logout()`'s contract is the intent, say so in a comment.
+
 ### LOG-32 — LogoutUseCase's outer catch and unwrapped final cleanup call are still silent
 - **Status:** backlog
 - **Added:** 2026-09-02
