@@ -20,7 +20,7 @@ import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.repository.Nip05Repository
 import com.umbra.app.domain.util.thresholdMillisBefore
 import com.umbra.app.util.ImagePrefetcher
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.logging.UmbraLog
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope

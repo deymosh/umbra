@@ -1,4 +1,4 @@
-package com.umbra.app.util
+package com.umbra.app.util.logging
 
 object LogScrubber {
     private val urlRegex = Regex("""\b(?:wss?|https?)://[^\s'\")>]+""", RegexOption.IGNORE_CASE)
@@ -28,6 +28,23 @@ object LogScrubber {
 
     fun scrubThrowableMessageForLogs(throwable: Throwable): String =
         scrubMessageForLogs(throwable.message ?: throwable.javaClass.simpleName)
+
+    /**
+     * Returns a [Throwable] safe to pass to `android.util.Log.e(tag, msg, throwable)`.
+     *
+     * `Log.e`'s three-arg overload appends its own stack-trace text to the printed line via
+     * `Throwable.printStackTrace()`, whose first line is the throwable's own unscrubbed
+     * `toString()` (class name + raw message) — repeated for every exception in the `cause`
+     * chain. That text never passes through [scrubMessageForLogs], so handing the original
+     * throwable to `Log.e` reprints exactly the content [scrubThrowableMessageForLogs] was
+     * used to redact. The returned throwable keeps the real stack frames (harmless — just
+     * class/method/file/line) but carries a scrubbed message and no cause, so nothing
+     * unscrubbed reaches the printed trace.
+     */
+    fun scrubThrowableForLogs(throwable: Throwable): Throwable =
+        RuntimeException("${throwable.javaClass.simpleName}: ${scrubThrowableMessageForLogs(throwable)}").apply {
+            stackTrace = throwable.stackTrace
+        }
 
     fun scrubMessageForLogs(message: String?): String {
         if (message.isNullOrBlank()) return "unknown"

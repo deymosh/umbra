@@ -1,4 +1,4 @@
-package com.umbra.app.util
+package com.umbra.app.util.logging
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -40,5 +40,34 @@ class LogScrubberTest {
 
         assertTrue(scrubbed.contains("[url]"))
         assertEquals("unknown", LogScrubber.scrubMessageForLogs(""))
+    }
+
+    @Test
+    fun `given_throwableWithSensitiveMessage_when_scrubbingForLogs_then_returnedThrowableMessageIsRedacted`() {
+        val original = IllegalStateException("Failed to connect to 198.51.100.7:443")
+
+        val safe = LogScrubber.scrubThrowableForLogs(original)
+
+        assertTrue(safe.message!!.contains("IllegalStateException"))
+        assertTrue(!safe.message!!.contains("198.51.100.7"))
+    }
+
+    @Test
+    fun `given_throwableWithCause_when_scrubbingForLogs_then_causeChainIsDropped`() {
+        val cause = IllegalStateException("leaked-relay.example:443")
+        val original = RuntimeException("outer failure", cause)
+
+        val safe = LogScrubber.scrubThrowableForLogs(original)
+
+        assertEquals(null, safe.cause)
+    }
+
+    @Test
+    fun `given_throwable_when_scrubbingForLogs_then_originalStackFramesArePreserved`() {
+        val original = IllegalStateException("boom")
+
+        val safe = LogScrubber.scrubThrowableForLogs(original)
+
+        assertEquals(original.stackTrace.toList(), safe.stackTrace.toList())
     }
 }

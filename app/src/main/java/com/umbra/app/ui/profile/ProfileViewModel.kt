@@ -49,7 +49,7 @@ import com.umbra.app.ui.common.futureEventRecheckTicker
 import com.umbra.app.ui.common.mergeBounded
 import com.umbra.app.ui.common.requestViewportMentionedProfiles
 import com.umbra.app.ui.common.resolveViewportQuotedEvents
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.ImagePrefetcher
 import com.umbra.app.util.UrlPrefetcher
 import com.umbra.app.util.logging.UmbraLog

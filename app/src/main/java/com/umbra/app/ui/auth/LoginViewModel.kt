@@ -13,7 +13,7 @@ import com.umbra.app.domain.repository.FeedRepository
 import com.umbra.app.domain.usecase.LogoutUseCase
 import com.umbra.app.domain.feed.DefaultFeedFilters
 import com.umbra.app.ui.common.UiMessage
-import com.umbra.app.util.LogScrubber.scrubPubkeyForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubPubkeyForLogs
 import com.umbra.app.util.logging.UmbraLog
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow

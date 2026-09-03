@@ -23,7 +23,8 @@ class Logger internal constructor(private val tag: String) : UmbraLogger {
     }
     override fun e(throwable: Throwable, message: () -> String) {
         if (Log.isLoggable(tag, Log.ERROR)) {
-            Log.e(tag, "${message()}: ${LogScrubber.scrubThrowableMessageForLogs(throwable)}", throwable)
+            val safeThrowable = LogScrubber.scrubThrowableForLogs(throwable)
+            Log.e(tag, "${message()}: ${safeThrowable.message}", safeThrowable)
         }
     }
 }
@@ -31,7 +32,7 @@ class Logger internal constructor(private val tag: String) : UmbraLogger {
 
 `domain/logging/UmbraLogger.kt` is the pure-Kotlin interface (`d`, `w`, `e`) that `domain/` code depends on instead of the Android-backed `Logger` directly, plus a `NoOpUmbraLogger` for tests.
 
-**Three methods only** — `d(() -> String)`, `w(() -> String)`, `e(Throwable, () -> String)`. No `i`/`v`. `e()` *requires* a throwable — there's no throwable-less error overload, and it doesn't need one: `e()` already scrubs `throwable.message` via `LogScrubber.scrubThrowableMessageForLogs` and appends it to the caller's message, while still passing the raw `throwable` object through to `Log.e(tag, msg, throwable)` for the stack trace. A call site should never re-scrub the throwable manually inside the lambda passed to `e()` — that's already handled.
+**Three methods only** — `d(() -> String)`, `w(() -> String)`, `e(Throwable, () -> String)`. No `i`/`v`. `e()` *requires* a throwable — there's no throwable-less error overload, and it doesn't need one: `e()` scrubs the throwable via `LogScrubber.scrubThrowableForLogs` — which returns a *replacement* throwable carrying a scrubbed message and the original stack frames but no cause — and passes that sanitized object to `Log.e(tag, msg, throwable)`, not the original. This matters because `Log.e`'s stack-trace formatting reprints a throwable's own unscrubbed `toString()` (and its cause chain) independent of the message string passed alongside it — passing the raw throwable through would leak whatever `LogScrubber` had just redacted from the message. A call site should never re-scrub the throwable manually inside the lambda passed to `e()` — that's already handled.
 
 Every class obtains its logger the same way: `private val logger = UmbraLog.tag(TAG)` with `private const val TAG = "UmbraXxx"` alongside it.
 
@@ -39,13 +40,14 @@ Every class obtains its logger the same way: `private val logger = UmbraLog.tag(
 
 AUDIT.md: "Logs must be scrubbed of relay URLs, pubkeys, and profile/event content in release builds (`LogScrubber` helpers), gated behind `Log.isLoggable`." This is a privacy requirement specific to Umbra — a raw pubkey, relay URL, or npub/nsec-shaped string in a release-build log is exactly the kind of leak this whole client exists to prevent. The isLoggable half of this rule is already satisfied by the wrapper for every call; scrubbing is not — that's still the caller's job.
 
-`app/src/main/java/com/umbra/app/util/LogScrubber.kt` (plain `object`) exposes:
+`app/src/main/java/com/umbra/app/util/logging/LogScrubber.kt` (plain `object`) exposes:
 
 ```kotlin
 fun scrubUrlForLogs(url: String?): String                    // "[url]" or "scheme://[redacted]"
 fun scrubEndpointForLogs(host: String?, port: Int?): String   // always "[endpoint]"
 fun scrubPubkeyForLogs(pubkey: String?): String                // "[pubkey]" or first 8 chars + "..."
-fun scrubThrowableMessageForLogs(throwable: Throwable): String
+fun scrubThrowableMessageForLogs(throwable: Throwable): String // scrubbed message string only
+fun scrubThrowableForLogs(throwable: Throwable): Throwable     // replacement throwable, safe for Log.e's 3rd arg
 fun scrubMessageForLogs(message: String?): String              // regex-scrubs urls/nostrsigner:/host:port/npub/nsec/hex64
 ```
 

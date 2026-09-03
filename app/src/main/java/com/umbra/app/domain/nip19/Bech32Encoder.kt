@@ -4,7 +4,7 @@ import com.umbra.app.domain.logging.NoOpUmbraLogger
 import com.umbra.app.domain.logging.UmbraLogger
 import com.umbra.app.domain.util.hexToBytes
 import com.umbra.app.domain.util.toHex
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 
 /**
  * NIP-19: Bech32 Encoding for Nostr Entities

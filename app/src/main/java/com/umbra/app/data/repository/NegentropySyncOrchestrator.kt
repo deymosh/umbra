@@ -16,7 +16,7 @@ import com.umbra.app.domain.relay.RelayIssueKind
 import com.umbra.app.domain.relay.normalizeRelayUrl
 import com.umbra.app.domain.util.hexToBytes
 import com.umbra.app.domain.util.toHex
-import com.umbra.app.util.LogScrubber
+import com.umbra.app.util.logging.LogScrubber
 import com.umbra.app.util.logging.UmbraLog
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean

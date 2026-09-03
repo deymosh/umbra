@@ -51,8 +51,8 @@ import com.umbra.app.domain.nip51.extractSearchRelaysList
 import com.umbra.app.domain.nip65.RelayListMetadata
 import com.umbra.app.domain.nipb7.UserServerList
 import com.umbra.app.domain.profile.UserProfile
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
-import com.umbra.app.util.LogScrubber.scrubUrlForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubUrlForLogs
 import com.umbra.app.util.logging.UmbraLog
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch

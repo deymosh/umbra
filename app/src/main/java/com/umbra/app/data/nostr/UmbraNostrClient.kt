@@ -24,9 +24,9 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.WebSocket
 import okhttp3.Response
-import com.umbra.app.util.LogScrubber.scrubMessageForLogs
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
-import com.umbra.app.util.LogScrubber.scrubUrlForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubUrlForLogs
 import com.umbra.app.util.logging.UmbraLog
 import java.util.concurrent.ConcurrentHashMap
 

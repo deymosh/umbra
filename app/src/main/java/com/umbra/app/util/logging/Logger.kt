@@ -2,7 +2,6 @@ package com.umbra.app.util.logging
 
 import android.util.Log
 import com.umbra.app.domain.logging.UmbraLogger
-import com.umbra.app.util.LogScrubber
 
 /**
  * Android-backed implementation of [UmbraLogger] for one bound tag.
@@ -22,7 +21,8 @@ class Logger internal constructor(private val tag: String) : UmbraLogger {
 
     override fun e(throwable: Throwable, message: () -> String) {
         if (Log.isLoggable(tag, Log.ERROR)) {
-            Log.e(tag, "${message()}: ${LogScrubber.scrubThrowableMessageForLogs(throwable)}", throwable)
+            val safeThrowable = LogScrubber.scrubThrowableForLogs(throwable)
+            Log.e(tag, "${message()}: ${safeThrowable.message}", safeThrowable)
         }
     }
 }

@@ -9,8 +9,8 @@ import com.umbra.app.domain.nip77.NegSignal
 import com.umbra.app.domain.relay.RelayIssueKind
 import com.umbra.app.domain.relay.RelayPublishResult
 import com.umbra.app.domain.util.JsonUtils
-import com.umbra.app.util.LogScrubber.scrubMessageForLogs
-import com.umbra.app.util.LogScrubber.scrubUrlForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubUrlForLogs
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
