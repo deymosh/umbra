@@ -22,10 +22,10 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-09-02)
+See: .planning/PROJECT.md (updated 2026-09-03)
 
 **Core value:** A trustworthy, stable first public release that upholds Umbra's TOR-only and Amber-only guarantees without regressions
-**Current focus:** Phase 01 — Error Visibility & Log Hygiene
+**Current focus:** Phase 2 — Concurrency & State Correctness
 
 ## Current Position
 
@@ -81,10 +81,11 @@ Recent decisions affecting current work:
 - [Phase 01]: [Phase 01] BUG-01 (LOG-17, all 8 sites) fully resolved across Plans 01-01/01-02; REQUIREMENTS.md's BUG-01 checkbox/traceability corrected manually since the automated mark-complete verb didn't match its prior partial-progress annotation
 - [Phase 01]: [Phase 01] BUG-09 (LOG-26, SettingsScreen's independent logout entry point) fixed, mirroring FeedScreen's already-shipped LOG-25 fix; phase-wide find-non-lambda-logs audit sweep and full build gate both clean across all ten touched files
 - [Phase 01]: [Phase 01] Bug tracker closed out: LOG-18/20/26/28 advanced to applied-fix status (LOG-27 already advanced by Plan 01-01), LOG-17 moved to DONE.md, LOG-32/LOG-33 filed for two out-of-scope gaps found during implementation. All six phase-1 requirements now Complete in REQUIREMENTS.md
+- [Phase 01]: Post-execution code review found a Critical gap (LOG-34): `Logger.e()` passed the raw `Throwable` to `Log.e()`, whose own stack-trace formatting bypasses `LogScrubber` entirely — widening the exposure this phase's whole point was to close. Fixed same-session, out of the three plans' original file scope: `LogScrubber.scrubThrowableForLogs()` (new) returns a replacement throwable with a scrubbed message and no cause; `LogScrubber.kt` also moved into `util/logging/` alongside `Logger`/`UmbraLog`. LOG-35 (untracked swallowed throwable + raw `e.message` in UI, `LoginViewModel`) and LOG-36 (dead-code catch, `SettingsScreen.kt`) filed but left open — out of this phase's ROADMAP success criteria
 
 ### Pending Todos
 
-None yet. (Project bug/backlog tracking lives in docs/KNOWN_ISSUES.md, docs/TODO.md, docs/DONE.md under the shared LOG-N counter, currently at LOG-31.)
+None yet. (Project bug/backlog tracking lives in docs/KNOWN_ISSUES.md, docs/TODO.md, docs/DONE.md under the shared LOG-N counter, currently at LOG-36.)
 
 ### Blockers/Concerns
 

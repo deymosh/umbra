@@ -20,12 +20,12 @@ A trustworthy, stable first public release that upholds Umbra's TOR-only and Amb
 - ✓ Encrypted SQLCipher Room persistence scoped to the signed-in user's own events only; everyone else's content lives in an in-memory `EventLruCache` — existing
 - ✓ CI pipeline (`android-ci.yml`): lint, unit tests, `assembleBenchmark` (R8-shaped) on every push/PR — existing
 - ✓ Tag-triggered signed release workflow scaffold (`android-release.yml`) — existing but never exercised end-to-end
-- ✓ Local bug-tracking convention already established (`docs/KNOWN_ISSUES.md`/`TODO.md`/`DONE.md`, shared `LOG-N` counter, currently at LOG-31) — existing
+- ✓ Local bug-tracking convention already established (`docs/KNOWN_ISSUES.md`/`TODO.md`/`DONE.md`, shared `LOG-N` counter, currently at LOG-36) — existing
+- ✓ Every failure path in publish/login/logout/cleanup/relay-transport code logs its throwable at a visible, scrubbed level instead of vanishing silently, and `Logger.e()`'s scrubbing is now airtight end-to-end (message string *and* the `Throwable` object itself, closing a leak in the wrapper predating this milestone) — Phase 1
 
 ### Active
 
-- [ ] Fix all 13 currently-`open` bugs in `docs/KNOWN_ISSUES.md`: LOG-18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 29, 30, 31
-- [ ] Fix LOG-17 (`docs/TODO.md`): promote 8 sites that swallow throwables at debug level to scrubbed error-level logging
+- [ ] Fix the remaining 8 open bugs in `docs/KNOWN_ISSUES.md`: LOG-19, 21, 22, 23, 24, 29, 30, 31 (LOG-18/20/26/27/28 fixed in Phase 1; LOG-34 — a Critical gap in `Logger.e()`'s own throwable scrubbing, found by Phase 1's code review — also fixed in Phase 1; LOG-32/33/35/36 are new backlog/open items filed during Phase 1, not part of the original 13)
 - [ ] Review the 10 `fix applied — needs on-device validation` entries (LOG-1, 2, 3, 4, 6, 7, 11, 12, 13, 14): for each, determine whether it's verifiable by automated test alone or genuinely needs visual/on-device confirmation. Add/confirm tests and move to `DONE.md` for the testable ones; leave the rest in `KNOWN_ISSUES.md` for the user's own on-device validation later
 - [ ] Fix `versionName` drift: `app/build.gradle.kts`'s `versionName = "0.1.0"` is the source of truth; `strings.xml`'s hardcoded `settings_version_value` ("0.1.0-beta") disagrees. Enable `buildConfig` and read `BuildConfig.VERSION_NAME` in `SettingsScreen.kt` instead of a second hand-maintained string
 - [ ] Update `CHANGELOG.md`: convert the `[Unreleased]` section into a dated `[0.1.0]` section (Keep a Changelog format, already followed in this file)
@@ -67,6 +67,8 @@ A trustworthy, stable first public release that upholds Umbra's TOR-only and Amb
 | Author a new project skill for Umbra's release process | User asked to adopt/learn a release skill; best captured as a reusable project skill under `.claude/skills/`, consistent with the existing `umbra-*` skill catalog | — Pending |
 | Prepare the v0.1.0 tag locally but require explicit confirmation before pushing it | Pushing triggers a real signed GitHub Release via CI — irreversible and publicly visible | — Pending |
 | Reuse the pre-existing `.planning/config.json` instead of re-running Step 5's preference questions | It was already committed with sensible settings in the initial commit; re-asking would just duplicate existing intent | — Pending |
+| Fixed `Logger.e()`'s throwable-scrub gap (LOG-34) inside Phase 1 rather than deferring it | Phase 1's code review found `Logger.e()` passed the raw `Throwable` to `Log.e()`, whose own stack-trace formatting bypasses `LogScrubber` — since Phase 1's entire purpose was promoting ~24 call sites from debug (filtered in release) to error (always printed), leaving this unfixed would have shipped a wider version of exactly the leak the phase was meant to close | ✓ Shipped Phase 1 |
+| Moved `LogScrubber.kt` from `util/` into `util/logging/` alongside `Logger`/`UmbraLog` | User request while fixing LOG-34 — it exists purely to serve the logging wrapper, so it belongs in the same package | ✓ Shipped Phase 1 |
 
 ## Evolution
 
@@ -86,4 +88,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-02 after initialization*
+*Last updated: 2026-09-03 after Phase 1*
