@@ -544,13 +544,19 @@ internal class EventIngestCache(
      * Only deletes notes authored by the same pubkey that signed the delete request.
      */
     suspend fun applyIncomingDeletion(deletionEvent: Event) {
+        // Holds just enough of either a cached Event or an archived EventEntity to pick a winner
+        // and issue the shared removal below, without the two source types needing a common
+        // interface -- a function-local value, not a new field or public type.
+        data class DeletionTarget(val id: String, val createdAt: Long)
+
         val eTagIds = deletionEvent.getTagValues("e")
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .distinct()
         // "a" tags reference addressable events as "kind:pubkey:d-identifier" rather than an
-        // id — resolved to concrete ids below (via the same getLatestAddressableEvent lookup
-        // ProfileViewModel/EventRepositoryImpl already use elsewhere), since the in-memory and
+        // id — resolved to concrete ids below against both the in-memory cache and the own-
+        // archive, since non-owned authors' events only ever live in the in-memory cache while
+        // the signed-in user's own addressable events live in the archive; the in-memory and
         // Room deletes below both key on event id.
         val aTagCoordinates = deletionEvent.getTagValues("a")
             .map { it.trim() }
@@ -559,6 +565,9 @@ internal class EventIngestCache(
         if (eTagIds.isEmpty() && aTagCoordinates.isEmpty()) return
 
         val resolvedAddressableIds = mutableListOf<String>()
+        // Taken once, before the per-coordinate loop below and before entering the IO dispatcher
+        // -- snapshot() acquires cachedEventsMutex, and must not be re-entered per coordinate.
+        val inMemorySnapshot = if (aTagCoordinates.isNotEmpty()) snapshot() else emptyList()
 
         withContext(Dispatchers.IO) {
             // Only the signed-in user's own events are ever persisted to Room (the encrypted
@@ -582,15 +591,26 @@ internal class EventIngestCache(
                 // request's pubkey — same ownership check as the e-tag path above.
                 if (!authorPubkey.equals(deletionEvent.pubkey, ignoreCase = true)) return@forEach
 
-                // Spec: an a-tag deletion only removes versions up to this request's own
-                // created_at, not any version published after it.
-                ownEventArchive.getLatestAddressableEvent(kind, authorPubkey, identifier)
+                // Resolved against both sources -- mirrors EventRepositoryImpl.getLatestAddressableEvent's
+                // established two-source resolution. Both are bounded by the same spec rule: an
+                // a-tag deletion only removes versions up to this request's own created_at, not
+                // any version published after it.
+                val inMemoryCandidate = inMemorySnapshot.asSequence()
+                    .filter { it.kind == kind && it.pubkey.equals(authorPubkey, ignoreCase = true) }
+                    .filter { it.getTagValue("d") == identifier }
+                    .filter { it.createdAt <= deletionEvent.createdAt }
+                    .maxByOrNull { it.createdAt }
+                    ?.let { DeletionTarget(it.id, it.createdAt) }
+
+                val archiveCandidate = ownEventArchive.getLatestAddressableEvent(kind, authorPubkey, identifier)
                     ?.takeIf { it.createdAt <= deletionEvent.createdAt }
-                    ?.let { target ->
-                        ownEventArchive.deleteEventById(target.id)
-                        seenEventIds.remove(target.id)
-                        resolvedAddressableIds.add(target.id)
-                    }
+                    ?.let { DeletionTarget(it.id, it.createdAt) }
+
+                listOfNotNull(inMemoryCandidate, archiveCandidate).maxByOrNull { it.createdAt }?.let { target ->
+                    ownEventArchive.deleteEventById(target.id)
+                    seenEventIds.remove(target.id)
+                    resolvedAddressableIds.add(target.id)
+                }
             }
         }
 

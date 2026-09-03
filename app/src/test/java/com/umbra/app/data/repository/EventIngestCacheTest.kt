@@ -609,6 +609,90 @@ class EventIngestCacheTest {
         assertEquals(0, archive.deleteEventByIdCalls.size)
     }
 
+    // --- NIP-09 a-tag deletion resolves against the in-memory cache too (LOG-19/BUG-03) ---
+
+    @Test
+    fun `given a non-owned addressable event resident only in the in-memory cache when an a-tag deletion targets it then it is removed from the cache`() = runTest {
+        val archive = FakeOwnEventArchive()
+        val authorPubkey = "a".repeat(64)
+        val dTagValue = "article-1"
+        val cache = subject(this, ownEventArchive = archive, isCurrentUserPubkey = { false })
+        val target = event(
+            id = "addr-mem-1",
+            pubkey = authorPubkey,
+            kind = Event.KIND_LONG_FORM,
+            tags = listOf(listOf("d", dTagValue)),
+            createdAt = 100L
+        )
+        cache.ingest(target, relayA, currentUserPubkey = null)
+
+        val coordinate = "${Event.KIND_LONG_FORM}:$authorPubkey:$dTagValue"
+        val deletionEvent = event(
+            pubkey = authorPubkey,
+            kind = Event.KIND_EVENT_DELETION,
+            tags = listOf(listOf("a", coordinate)),
+            createdAt = 200L
+        )
+        cache.applyIncomingDeletion(deletionEvent)
+
+        assertTrue(cache.snapshot().none { it.id == target.id })
+    }
+
+    @Test
+    fun `given an a-tag deletion signed by a different pubkey than the coordinate's author when applied then the in-memory event is not removed`() = runTest {
+        val archive = FakeOwnEventArchive()
+        val authorPubkey = "a".repeat(64)
+        val deleterPubkey = "b".repeat(64)
+        val dTagValue = "article-2"
+        val cache = subject(this, ownEventArchive = archive, isCurrentUserPubkey = { false })
+        val target = event(
+            id = "addr-mem-2",
+            pubkey = authorPubkey,
+            kind = Event.KIND_LONG_FORM,
+            tags = listOf(listOf("d", dTagValue)),
+            createdAt = 100L
+        )
+        cache.ingest(target, relayA, currentUserPubkey = null)
+
+        val coordinate = "${Event.KIND_LONG_FORM}:$authorPubkey:$dTagValue"
+        val deletionEvent = event(
+            pubkey = deleterPubkey,
+            kind = Event.KIND_EVENT_DELETION,
+            tags = listOf(listOf("a", coordinate)),
+            createdAt = 200L
+        )
+        cache.applyIncomingDeletion(deletionEvent)
+
+        assertTrue(cache.snapshot().any { it.id == target.id })
+    }
+
+    @Test
+    fun `given an in-memory addressable event newer than the deletion's own created_at when applied then it is not removed`() = runTest {
+        val archive = FakeOwnEventArchive()
+        val authorPubkey = "a".repeat(64)
+        val dTagValue = "article-3"
+        val cache = subject(this, ownEventArchive = archive, isCurrentUserPubkey = { false })
+        val target = event(
+            id = "addr-mem-3",
+            pubkey = authorPubkey,
+            kind = Event.KIND_LONG_FORM,
+            tags = listOf(listOf("d", dTagValue)),
+            createdAt = 300L
+        )
+        cache.ingest(target, relayA, currentUserPubkey = null)
+
+        val coordinate = "${Event.KIND_LONG_FORM}:$authorPubkey:$dTagValue"
+        val deletionEvent = event(
+            pubkey = authorPubkey,
+            kind = Event.KIND_EVENT_DELETION,
+            tags = listOf(listOf("a", coordinate)),
+            createdAt = 100L
+        )
+        cache.applyIncomingDeletion(deletionEvent)
+
+        assertTrue(cache.snapshot().any { it.id == target.id })
+    }
+
     // --- normalizeIncomingEvent ---
 
     @Test
