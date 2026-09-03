@@ -142,6 +142,10 @@ None - no external service configuration required.
 - LOG-29/LOG-31 sit in `docs/KNOWN_ISSUES.md` as "fix applied — needs on-device validation," consistent with the project's opt-in on-device validation convention — no blocker for downstream plans.
 - No blockers for Wave 2.
 
+## Self-Check: PASSED
+
+All created/modified files and all task/docs/summary commit hashes verified present on disk and in git log.
+
 ---
 *Phase: 02-concurrency-state-correctness*
 *Completed: 2026-09-03*
