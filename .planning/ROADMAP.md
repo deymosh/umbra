@@ -15,7 +15,7 @@ Ordering is dependency-driven: error visibility lands first so the state fixes i
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Error Visibility & Log Hygiene** - Every swallowed throwable surfaces at a scrubbed, visible level
+- [x] **Phase 1: Error Visibility & Log Hygiene** - Every swallowed throwable surfaces at a scrubbed, visible level (completed 2026-09-03)
 - [ ] **Phase 2: Concurrency & State Correctness** - Atomic job/relay mutations and optimistic UI that tells the truth
 - [ ] **Phase 3: Fix Validation & Test Coverage** - Ten pending fixes closed out by test evidence or explicitly handed to the user
 - [ ] **Phase 4: Version Consistency & v0.1.0 Release Prep** - One true version, a dated changelog, and a release one push away
@@ -115,7 +115,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Error Visibility & Log Hygiene | 3/3 | In Progress|  |
+| 1. Error Visibility & Log Hygiene | 3/3 | Complete    | 2026-09-03 |
 | 2. Concurrency & State Correctness | 0/TBD | Not started | - |
 | 3. Fix Validation & Test Coverage | 0/TBD | Not started | - |
 | 4. Version Consistency & v0.1.0 Release Prep | 0/TBD | Not started | - |
