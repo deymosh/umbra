@@ -52,6 +52,7 @@ import com.umbra.app.domain.nip65.RelayListMetadata
 import com.umbra.app.domain.nipb7.UserServerList
 import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.LogScrubber.scrubUrlForLogs
 import com.umbra.app.util.logging.UmbraLog
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -425,7 +426,7 @@ class EventRepositoryImpl @Inject constructor(
                         if (FeedRelaySincePolicy.shouldAdvanceWatermark(completeness)) {
                             feedSinceByRelay[relayUrl] = System.currentTimeMillis() / 1000
                         } else {
-                            logger.d { "FEED_NOTES EOSE from relay $relayUrl reported MORE — not advancing since watermark" }
+                            logger.d { "FEED_NOTES EOSE from relay ${scrubUrlForLogs(relayUrl)} reported MORE — not advancing since watermark" }
                         }
                     } else if (channelId != null && channelId in MERGEABLE_BACKFILL_CHANNEL_IDS) {
                         // Same rationale, for OUTBOX_NOTES/INBOX_NOTES's own live filters — see
@@ -483,7 +484,7 @@ class EventRepositoryImpl @Inject constructor(
         channelFilters.keys.forEach { channelId ->
             eventChannelRouting.applyChannelToRelay(relayUrl, channelId, effectiveChannelFilters(channelId))
         }
-        logger.d { "Re-applied ${channelFilters.size} channels to relay $relayUrl" }
+        logger.d { "Re-applied ${channelFilters.size} channels to relay ${scrubUrlForLogs(relayUrl)}" }
     }
 
     /**
@@ -497,7 +498,9 @@ class EventRepositoryImpl @Inject constructor(
             // Ensure no further network activity or background inserts will repopulate DB
             try {
                 disconnectFromAll()
-            } catch (_: Exception) { }
+            } catch (e: Exception) {
+                logger.e(e) { "disconnectFromAll failed during clearAllData; continuing wipe" }
+            }
 
             // Cancel any pending insert batch job and clear pending inserts queue
             eventIngestCache.cancelPendingInserts()
