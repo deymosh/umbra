@@ -506,11 +506,24 @@ codebase. Fix: guard `updateRelayRole` with a per-relay-id `Mutex` (or route thr
 read-modify-write primitive), matching LOG-4/LOG-12's precedent.
 
 ### LOG-30 — NostrSessionManager's retry-scheduling and job-bookkeeping fields are plain vars racing across concurrent IO-dispatcher coroutines
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-09-02
 - **Where:** `data/nostr/NostrSessionManager.kt` (`scheduleRetry()`'s `retryJob` check-then-act;
   also `bootstrapJob`/`userBackfillJob`/`autoDisableRelayJob`/`torCircuitRecoveryJob`/
   `ownProfileBootstrapWatcherJob`, all plain `var Job?` fields)
+- **Fix:** Audited all six fields against their live call sites; `retryJob`, `userBackfillJob`,
+  and `ownProfileBootstrapWatcherJob` became `AtomicReference<Job?>` holders, scheduled through
+  two new non-blocking extension functions (`AtomicReference<Job?>.launchIfIdle`/`.launchReplacing`
+  in the new `data/nostr/AtomicJobScheduling.kt`) instead of a plain check-then-act pair. Scheduling
+  now goes through a single compare-and-set (or unconditional atomic swap for the cancel-and-replace
+  fields) that cancels the losing/displaced candidate before it can execute a single statement, so a
+  burst of concurrent reconciles can no longer schedule two jobs where one was intended or leave one
+  silently orphaned. `bootstrapJob`, `autoDisableRelayJob`, and `torCircuitRecoveryJob` stay plain
+  nullable fields — they're written only by the `start()`/`stop()` pair, which the volatile `started`
+  flag already serializes, so an atomic holder would add no guarantee; that invariant is now recorded
+  as an inline comment above the three fields rather than left unaudited. The no-lost-schedule and
+  no-orphan guarantees are covered by a unit test that races eight genuinely parallel coroutines on a
+  real `Dispatchers.Default` thread pool per scenario, not a single-threaded approximation.
 
 Found by the whole-codebase bug-hunt sweep's TOCTOU and unsynchronized-shared-state grep
 passes. `NostrSessionManager` runs its own `CoroutineScope(SupervisorJob() + Dispatchers.IO)` — a
