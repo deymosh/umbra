@@ -636,3 +636,120 @@ changed and there's nothing new to publish. Found during the code-review pass ov
 pre-extraction `RelayConfigViewModel.setDmEnabled`), not introduced by that extraction. Fix: move
 the `dmRelayListDirty = true` update inside the mapper, conditioned on the mapper actually
 producing a changed `Relay`, so the dirty flag only flips on a real DM-role change.
+
+### LOG-37 — RelayCrudCoordinator.removeRelayRole bypasses the per-relay Mutex LOG-29 added for its sibling setters
+- **Status:** open
+- **Found:** 2026-09-04
+- **Where:** `ui/relay/RelayCrudCoordinator.kt:174-220` (`removeRelayRole`)
+
+Found during Phase 2's code review of the LOG-29 fix. `removeRelayRole` is functionally a sixth
+role-mutating setter — it clears one role's enable/active flags, exactly like the five setters
+LOG-29 fixed — but was never folded into `updateRelayRole`, which is the single chokepoint that
+acquires `relayRoleMutexes[relayId]` and re-reads the relay fresh from
+`relayRepository.getRelayById(relayId)` instead of the 300ms-throttled `state.value.relays`
+mirror. `removeRelayRole` still reads from that stale mirror and acquires no lock at all. A
+`removeRelayRole` call racing against any of the five `updateRelayRole`-routed setters — or
+against a second `removeRelayRole` call — for the same relay id can silently lose one write,
+reintroducing the identical lost-update race LOG-29 fixed for the other five methods.
+`RelayDetailsScreen` exposes both role-remove actions and role-toggle switches for the same relay
+in the same view, so this is realistically reachable, not theoretical. Fix: route
+`removeRelayRole` through `updateRelayRole` the same way the five setters do, and add a
+`RelayCrudCoordinatorTest` case racing `removeRelayRole` against a setter on the same relay id.
+
+### LOG-38 — NostrSessionManager's plain instance fields are still unsynchronized across the two coroutines LOG-30's own fix comment says race each other
+- **Status:** open
+- **Found:** 2026-09-04
+- **Where:** `data/nostr/NostrSessionManager.kt:150-171` (field declarations), `:311-398`
+  (`reconcile`), `:449-460` (`startUserHistoryBackfill`), `:596-603` (`scheduleRetry`), `:271-287`
+  (`stop`)
+
+Found during Phase 2's code review of the LOG-30 fix. LOG-30 converted `retryJob`,
+`userBackfillJob`, and `ownProfileBootstrapWatcherJob` to `AtomicReference<Job?>`, correctly
+preventing double-scheduling the same job slot — but `reconcile()`'s body itself reads and writes
+several plain, non-`@Volatile`, non-atomic fields reachable from the same two concurrent entry
+points LOG-30's own retained-fields comment names (the `combine()`-driven collect loop and
+`retryJob`'s own delayed relaunch): `relaysConnected`, `backfillPubkey`, `firstRelayConnectedLogged`,
+`lastSnapshot`, and `ownProfileBootstrapPubkey`. None are protected by a `Mutex`, `AtomicReference`,
+or `@Volatile`. Two `reconcile()` invocations racing on different threads can interleave reads and
+writes of these fields — e.g. a spurious duplicate or missed backfill restart from
+`startUserHistoryBackfill`'s `backfillPubkey`-keyed guard, or `relaysConnected` flipping back after
+a newer state already set it. `stop()` compounds this: it writes several of the same fields from
+whatever thread calls it, and only requests cancellation (`bootstrapJob?.cancel()`) rather than
+joining, leaving a window where an in-flight `reconcile()` can still be executing concurrently
+with `stop()`'s own field writes. This is the same class of bug LOG-30 set out to close, left
+half-done for the plain state the same functions mutate. Fix: either confine all
+`reconcile()`-reachable mutable state behind a single `Mutex` held for each field-touching
+section, or migrate the listed fields to `AtomicReference`/`@Volatile`; at minimum `lastSnapshot`
+needs `@Volatile` for cross-thread visibility since it's written on one thread and read on two
+others.
+
+### LOG-39 — RelayConfigViewModel.enforceAnonymousRelayPolicyIfNeeded silently discards failures while enforcing the anonymous-session privacy restriction
+- **Status:** open
+- **Found:** 2026-09-04
+- **Where:** `ui/relay/RelayConfigViewModel.kt:346-367`
+
+Found during Phase 2's code review. `enforceAnonymousRelayPolicyIfNeeded` turns off read/DM relay
+roles when a session is anonymous — a genuine privacy control meant to keep read/DM relay usage
+from being tied to an identity. The write is wrapped in an unchecked `runCatching { ... }` with no
+`.onFailure { }` and no logging: if `updateRelayUseCase` throws for any reason, the anonymous-session
+restriction silently fails to apply for that relay, with zero diagnostic trail and no way for the
+caller to know enforcement didn't take effect. Same class of silent-catch-on-a-privacy-relevant-path
+bug already fixed at LOG-20/LOG-27/LOG-28 elsewhere in this codebase, but this specific site was
+never covered by any of those fixes. Fix: add `.onFailure { e -> logger.e(e) { "Failed to enforce
+anonymous-session relay restriction" } }` after the `runCatching` block, matching LOG-20's fix
+shape.
+
+### LOG-40 — EventIngestCache.scheduleInsert's cancel-and-replace ordering lets the old and new debounce jobs run concurrently
+- **Status:** open
+- **Found:** 2026-09-04
+- **Where:** `data/repository/EventIngestCache.kt:513-531` (`scheduleInsert`)
+
+Found during Phase 2's code review, comparing `scheduleInsert` against the same file's
+`scheduleSnapshotEmit` and `AtomicJobScheduling.launchReplacing`, both of which guarantee the old
+job is cancelled strictly before the new one starts. `scheduleInsert` implements the same
+cancel-and-replace shape by hand but gets the ordering backwards: it starts the new debounce job
+eagerly (`repoScope.launch(Dispatchers.IO) { ... }`, not `CoroutineStart.LAZY`) and only cancels
+the previous job afterward (`insertDebounceJob.getAndSet(newJob)?.cancel()`). Because the new job's
+delay begins before the old one is cancelled, there is a narrow but real window where both the
+superseded and superseding debounce coroutines are simultaneously alive.
+`ConcurrentLinkedQueue.poll()` prevents this from losing data (each drains whatever's left), but it
+can produce two separate `ownEventArchive.writeBatch()` transactions instead of the intended one
+coalesced batch under a tight burst, defeating the debounce's purpose. Fix: route `scheduleInsert`
+through the existing `AtomicJobScheduling.launchReplacing` helper (adjusted for the
+`Dispatchers.IO` context), or manually cancel-then-lazily-start to match.
+
+### LOG-41 — EventIngestCache.cacheRepostTarget skips the replaceable-event supersede bookkeeping ingest() enforces for the same slot
+- **Status:** open
+- **Found:** 2026-09-04
+- **Where:** `data/repository/EventIngestCache.kt:278-283`, `:492-498` (`cacheRepostTarget`,
+  `cacheVerifiedRepostTarget`)
+
+Found during Phase 2's code review. `ingest()` maintains `latestReplaceableEventId` and runs
+`winsReplaceableRace()` so only one revision per `ReplaceableEventKey` slot is ever retrievable
+(the LOG-1 fix). `cacheRepostTarget` — used by NIP-18's `cacheVerifiedRepostTarget` to cache an
+already-verified repost's embedded original event — bypasses all of that: it does an id-keyed
+`cachedEvents.put(target)` with no `replaceableKey()`/`latestReplaceableEventId` update. If
+`target` is itself a replaceable or parameterized-replaceable event (a NIP-18 repost of a
+long-form article, a list, or a live-status event — all addressable kinds), caching it this way
+never updates `latestReplaceableEventId`, so a subsequently-ingested direct revision of the same
+slot won't know about this cached id when computing `supersededId`, and an older revision arriving
+via a repost after a newer one was already ingested directly gets cached under its own id with no
+race check at all — the exact bug LOG-1 was written to close for the direct-ingest path, left open
+for the repost-embedded path. Fix: route `cacheRepostTarget` through the same replaceable-key-aware
+logic `ingest()` uses (or a shared private helper both can call).
+
+### LOG-42 — RelayCrudCoordinator.saveRelay/deleteRelay mutate a relay's persisted record without the per-relay Mutex updateRelayRole uses
+- **Status:** open
+- **Found:** 2026-09-04
+- **Where:** `ui/relay/RelayCrudCoordinator.kt:51-143` (`saveRelay`), `:145-172` (`deleteRelay`)
+
+Found during Phase 2's code review, as a narrower variant of LOG-37. `updateRelayRole` serializes
+writes to a given relay id via `relayRoleMutexes.computeIfAbsent(relayId) { Mutex() }`. `saveRelay`
+(the add/edit dialog's Save action) and `deleteRelay` write/remove the same underlying `Relay`
+record via `updateRelayUseCase`/`removeRelayUseCase` without acquiring that same mutex. A role
+toggle in flight for a relay simultaneously being edited or deleted can race: whichever call lands
+last wins, silently discarding the other. Lower likelihood in practice than LOG-37 since the
+add/edit dialog typically has focus while open, but it's still an unguarded write path to relay
+records the rest of this class treats as needing per-relay serialization. Fix: either document why
+the UI genuinely can't produce this race (dialog exclusivity), or route `saveRelay`/`deleteRelay`'s
+persistence calls through the same `relayRoleMutexes[relayId]` guard.
