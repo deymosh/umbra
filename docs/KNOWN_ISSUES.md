@@ -853,3 +853,79 @@ guarantee.
 Found during Phase 2's iteration-2 code re-review. Both handlers routed their caught throwable
 through `.d { "... ${scrubThrowableMessageForLogs(e)}" }`, discarding the stack trace that would
 otherwise be available for on-device debugging, instead of `.e(e) { ... }`.
+
+### LOG-52 — ownProfileBootstrapMutex only guarded maybeBootstrapOwnProfile's own body, not the other two call sites mutating the same fields
+- **Status:** fix applied — needs on-device validation
+- **Found:** 2026-09-04
+- **Where:** `data/nostr/NostrSessionManager.kt` (`stop()`, `maybeBootstrapOwnProfile`'s watcher-job
+  tail, `stopOwnProfileBootstrap`)
+- **Fix:** Split `stopOwnProfileBootstrap()` into a private, non-locking
+  `stopOwnProfileBootstrapLocked()` (called only by code that already holds
+  `ownProfileBootstrapMutex` — `Mutex` isn't reentrant, so a second call site couldn't just
+  reacquire it) and updated both in-lock call sites in `maybeBootstrapOwnProfile` to use it
+  directly. The watcher job's own trailing teardown, which runs on its own separately-scheduled
+  coroutine outside the block that launched it, now wraps that call in its own
+  `ownProfileBootstrapMutex.withLock { }`. `stop()` can't take the lock at all (`start()`/`stop()`
+  aren't suspend per `NostrSessionController`'s interface), so it mutates
+  `ownProfileBootstrapWatcherJob`/`ownProfileBootstrapPubkey` directly instead, mirroring the
+  `getAndSet(null)?.cancel()` pattern already used there for `retryJob`/`userBackfillJob`; `start()`
+  now also unconditionally resets `ownProfileBootstrapPubkey` to `null`, so a lost race in `stop()`
+  can at worst leave a bootstrap channel running slightly longer than intended but can never cause a
+  same-pubkey re-login to silently skip re-bootstrapping.
+
+Found during Phase 2's iteration-3 (final) code re-review, as a residual gap in LOG-49's fix.
+LOG-49 correctly serialized `maybeBootstrapOwnProfile`'s own check-then-act sequence, but
+`stopOwnProfileBootstrap()` — which mutates the exact same fields — was still reachable unguarded
+from `NostrSessionManager.stop()` and from the watcher job's own trailing statement, both outside
+any lock, so a stale watcher-job completion could tear down a just-started replacement bootstrap,
+or an unguarded `stop()` race could leave `ownProfileBootstrapPubkey` non-null and cause the next
+same-pubkey login to skip bootstrapping entirely.
+
+### LOG-53 — RelayCrudCoordinator.saveRelay's new-relay/URL-collision decision still read the throttled state.value.relays mirror
+- **Status:** fix applied — needs on-device validation
+- **Found:** 2026-09-04
+- **Where:** `ui/relay/RelayCrudCoordinator.kt:82-99` (`saveRelay`, existing-relay-vs-new branch)
+- **Fix:** `existingRelay` is now resolved from a fresh `relayRepository.getAllRelays().first()`
+  read first, falling back to the throttled `state.value.relays` mirror only if that repository
+  read itself doesn't find a match — consistent with this file's established "fresh read, not
+  throttled mirror" principle (see LOG-47) used everywhere else in `updateRelayRole`.
+
+Found during Phase 2's iteration-3 (final) code re-review, as a second, independent gap in the
+same method LOG-47 already fixed. LOG-47 closed the stale-merge-base bug once `existingRelay !=
+null` was already known, but the `existingRelay != null` decision itself — whether a URL is
+treated as new-vs-existing at all — was still made from `state.value.relays`, populated by a
+300ms-throttled collector. A relay added moments earlier (e.g. a double-tap on the add-relay
+dialog's save button, or a concurrent NIP-65 sync path adding the same URL) that hadn't yet been
+reflected in that mirror routed into the unguarded "add new" branch, and since neither
+`AddRelayUseCase` nor `RelayRepository.addRelay` enforces URL uniqueness, this could produce two
+`Relay` rows with the same normalized URL and different ids.
+
+### LOG-54 — InteractionActionsCoordinator still discarded the throwable in two logger.d catch/onFailure sites
+- **Status:** fix applied — needs on-device validation
+- **Found:** 2026-09-04
+- **Where:** `ui/common/InteractionActionsCoordinator.kt` (`requestSignAndPublish`'s `catch`,
+  `publishSignedEvent`'s `onFailure`)
+- **Fix:** Both sites now call `logger.e(e) { ... }` instead of `logger.d { ... }`, keeping the
+  same scrubbed message text as the log line's content — matching LOG-51's fix in
+  `NostrSessionManager` and `RelayConfigViewModel`'s existing correct pattern.
+
+Found during Phase 2's iteration-3 (final) code re-review. This is the same throwable-discarding
+pattern LOG-51 fixed in `NostrSessionManager`, present unaddressed in the file this phase's own
+`runCatchingCancellable` migration (LOG-43/LOG-46) was actively editing — pre-existing from the
+initial commit rather than a regression, but the exact same bug class caught and fixed elsewhere
+in a file already under active review.
+
+### LOG-55 — No regression test exercised RelayCrudCoordinator.saveRelay's merge-branch fresh-read fix
+- **Status:** fix applied — needs on-device validation
+- **Found:** 2026-09-04
+- **Where:** `test/.../ui/relay/RelayCrudCoordinatorTest.kt`
+- **Fix:** Added a test that seeds a relay directly into `RecordingRelayRepository` while leaving
+  it out of the `state.value.relays` passed to `subject()` (simulating the throttled UI mirror not
+  having caught up yet), then calls `saveRelay` with a blank id and the same URL, and asserts the
+  repository still holds exactly one row for that URL with both the pre-existing and newly-merged
+  flags set — proving the merge path resolves `existingRelay` via a fresh repository read rather
+  than the stale mirror (LOG-53's fix).
+
+Found during Phase 2's iteration-3 (final) code re-review. `RelayCrudCoordinatorTest` had strong
+concurrency coverage for `updateRelayRole`'s per-relay-id lock, but nothing called `saveRelay` at
+all, so the LOG-47/LOG-53 merge-branch fixes had zero test coverage in either direction.
