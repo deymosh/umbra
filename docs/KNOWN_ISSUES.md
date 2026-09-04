@@ -270,9 +270,16 @@ log site in `EventRepositoryImpl.kt`), and wrap the `NegentropySyncOrchestrator.
 `LogScrubber.scrubThrowableMessageForLogs(e)`.
 
 ### LOG-19 — NIP-09 "a"-tag deletions never take effect for a non-owned author's cached addressable event
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-08-27
 - **Where:** `data/repository/EventIngestCache.kt:558-577` (`applyIncomingDeletion`)
+- **Fix:** `applyIncomingDeletion`'s "a"-tag branch now resolves against both an in-memory
+  candidate (a single upfront `cachedEvents` snapshot filtered by kind/pubkey/d-tag/created_at,
+  taken once before the per-coordinate loop) and the existing `ownEventArchive` candidate, taking
+  the newer of the two — mirroring `EventRepositoryImpl.getLatestAddressableEvent`'s established
+  two-source resolution. The author-equality check and the `created_at` upper bound apply
+  identically to the new source, and the removal is shared rather than branched by source. Pinned
+  by three new `EventIngestCacheTest` cases (regression, ownership guard, recency guard).
 
 Found during review of the repository extraction — a regression introduced by narrowing
 `OwnEventArchive`, not a pre-existing gap. `applyIncomingDeletion`'s "a"-tag
@@ -309,9 +316,16 @@ nobody would know from the logs why. Fix: log the exception via `logger.e(e) { "
 failed during clearAllData; continuing wipe" }` instead of swallowing it silently.
 
 ### LOG-21 — `snapshotEmitJob` is a plain, unsynchronized field mutated from concurrent coroutines
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-08-27
 - **Where:** `data/repository/EventIngestCache.kt:203,353-373,384-389` (`scheduleSnapshotEmit`/`cancelPendingSnapshotEmit`)
+- **Fix:** `snapshotEmitJob` is now a `val AtomicReference<Job?>`, matching `insertDebounceJob`'s
+  existing precedent. `scheduleSnapshotEmit()` builds its job with `CoroutineStart.LAZY` and
+  installs it via a single `compareAndSet` — a caller that loses the CAS cancels its unstarted
+  job instead of leaking it, and the existing skip-relaunch-if-active coalescing semantics are
+  unchanged. `cancelPendingSnapshotEmit()` now uses `getAndSet(null)?.cancel()`. Pinned by two new
+  `EventIngestCacheTest` cases (an eight-way concurrent schedule burst producing exactly one
+  snapshot and one bundle emission with no event lost, and a cancel-then-idempotent-recancel case).
 
 Found during review of the repository extraction. Confirmed pre-existing (the same
 plain, non-`AtomicReference` `var` existed on `EventRepositoryImpl` before it was relocated
