@@ -89,28 +89,36 @@ internal class RelayCrudCoordinator(
                         // toggle in flight for this relay id must not have its write silently
                         // discarded by this merge, or vice versa.
                         relayRoleMutexes.computeIfAbsent(existingRelay.id) { Mutex() }.withLock {
+                            // Re-read the base relay from the persisted source of truth inside
+                            // the lock rather than merging against the throttled state.relays
+                            // snapshot captured above: that snapshot can already be stale by the
+                            // time this coroutine reaches the lock (e.g. a concurrent role
+                            // disable landed in between), and every flag below is merged via an
+                            // OR that only ever turns a role on — merging against a stale base
+                            // would silently revert that concurrent disable.
+                            val freshBase = relayRepository.getRelayById(existingRelay.id) ?: existingRelay
                             updateRelayUseCase(
-                                existingRelay.copy(
+                                freshBase.copy(
                                     url = sanitizedRelay.url,
                                     isOnion = sanitizedRelay.isOnion,
                                     isDiscovered = false,
-                                    isReadEnabled = existingRelay.isReadEnabled || sanitizedRelay.isReadEnabled,
-                                    isReadActive = existingRelay.isReadActive || sanitizedRelay.isReadActive,
-                                    isWriteEnabled = existingRelay.isWriteEnabled || sanitizedRelay.isWriteEnabled,
-                                    isWriteActive = existingRelay.isWriteActive || sanitizedRelay.isWriteActive,
-                                    isDmEnabled = existingRelay.isDmEnabled || sanitizedRelay.isDmEnabled,
-                                    isDmActive = existingRelay.isDmActive || sanitizedRelay.isDmActive,
-                                    dmRequiresAuth = (existingRelay.isDmEnabled || sanitizedRelay.isDmEnabled),
-                                    isSearchEnabled = existingRelay.isSearchEnabled || sanitizedRelay.isSearchEnabled,
-                                    isSearchActive = existingRelay.isSearchActive || sanitizedRelay.isSearchActive,
-                                    isIndexEnabled = existingRelay.isIndexEnabled || sanitizedRelay.isIndexEnabled,
-                                    isIndexActive = existingRelay.isIndexActive || sanitizedRelay.isIndexActive,
+                                    isReadEnabled = freshBase.isReadEnabled || sanitizedRelay.isReadEnabled,
+                                    isReadActive = freshBase.isReadActive || sanitizedRelay.isReadActive,
+                                    isWriteEnabled = freshBase.isWriteEnabled || sanitizedRelay.isWriteEnabled,
+                                    isWriteActive = freshBase.isWriteActive || sanitizedRelay.isWriteActive,
+                                    isDmEnabled = freshBase.isDmEnabled || sanitizedRelay.isDmEnabled,
+                                    isDmActive = freshBase.isDmActive || sanitizedRelay.isDmActive,
+                                    dmRequiresAuth = (freshBase.isDmEnabled || sanitizedRelay.isDmEnabled),
+                                    isSearchEnabled = freshBase.isSearchEnabled || sanitizedRelay.isSearchEnabled,
+                                    isSearchActive = freshBase.isSearchActive || sanitizedRelay.isSearchActive,
+                                    isIndexEnabled = freshBase.isIndexEnabled || sanitizedRelay.isIndexEnabled,
+                                    isIndexActive = freshBase.isIndexActive || sanitizedRelay.isIndexActive,
                                     isEnabled =
-                                        existingRelay.isReadActive || sanitizedRelay.isReadActive ||
-                                        existingRelay.isWriteActive || sanitizedRelay.isWriteActive ||
-                                        existingRelay.isDmActive || sanitizedRelay.isDmActive ||
-                                        existingRelay.isSearchActive || sanitizedRelay.isSearchActive ||
-                                        existingRelay.isIndexActive || sanitizedRelay.isIndexActive
+                                        freshBase.isReadActive || sanitizedRelay.isReadActive ||
+                                        freshBase.isWriteActive || sanitizedRelay.isWriteActive ||
+                                        freshBase.isDmActive || sanitizedRelay.isDmActive ||
+                                        freshBase.isSearchActive || sanitizedRelay.isSearchActive ||
+                                        freshBase.isIndexActive || sanitizedRelay.isIndexActive
                                 )
                             )
                         }
