@@ -87,6 +87,8 @@ class RelayCrudCoordinatorTest {
 
         fun get(id: String): Relay? = relays[id]
 
+        fun snapshot(): List<Relay> = relays.values.toList()
+
         fun gateInvocation(index: Int): CompletableDeferred<Unit> =
             CompletableDeferred<Unit>().also { gatesByInvocationIndex[index] = it }
 
@@ -202,5 +204,32 @@ class RelayCrudCoordinatorTest {
 
         assertTrue(repository.get("relayA")?.isWriteActive == true)
         assertTrue(repository.get("relayB")?.isSearchActive == true)
+    }
+
+    @Test
+    fun `given a relay already in the repository but not yet reflected in the throttled state mirror when saveRelay is called with a blank id then it merges into the existing row instead of creating a duplicate`() = runTest {
+        // Seeded directly into the repository, deliberately left out of the state passed to
+        // subject() below -- simulating RelayConfigViewModel.observeRelays()'s 300ms-throttled
+        // collector not having caught up yet with a relay the repository already has (e.g. a
+        // double-tap on the add-relay dialog's save button, or a concurrent NIP-65 sync path
+        // adding the same URL). Before the WR-02 fix, saveRelay's existence check only consulted
+        // state.value.relays, so this relay would look "new" and get a second, duplicate-URL row.
+        val existing = sampleRelay(id = "existing1", url = "wss://relay.example").copy(isReadEnabled = true)
+        val repository = RecordingRelayRepository()
+        repository.seed(existing)
+        val (coordinator, _) = subject(scope = this, relays = emptyList(), relayRepository = repository)
+
+        coordinator.saveRelay(
+            Relay(id = "", url = "wss://relay.example", isEnabled = false, isReadEnabled = false, isWriteEnabled = true)
+        )
+        advanceUntilIdle()
+
+        assertEquals(1, repository.snapshot().size)
+        val merged = repository.get("existing1")
+        assertTrue(merged?.isWriteEnabled == true)
+        // The pre-existing repository row's isReadEnabled=true must survive the OR-merge --
+        // proof the merge base came from the fresh repository read, not a freshly-generated,
+        // blank relay created by the unguarded "add new" branch.
+        assertTrue(merged?.isReadEnabled == true)
     }
 }
