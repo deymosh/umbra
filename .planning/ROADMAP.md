@@ -63,7 +63,7 @@ Plans:
   4. New unit tests cover each fix that is unit-testable (job-field atomicity, per-relay serialization, deletion lookup, dirty-flag suppression, Result handling); `compileDebugKotlin`, `lintDebug`, and `testDebugUnitTest` all pass.
   5. `docs/KNOWN_ISSUES.md` entries LOG-19, LOG-21, LOG-22, LOG-23, LOG-24, LOG-29, LOG-30, LOG-31 read `fix applied — needs on-device validation` with a `**Fix:**` line.
 
-**Plans**: 3/5 plans executed
+**Plans**: 4/5 plans executed
 
 Plans:
 **Wave 1**
@@ -74,7 +74,7 @@ Plans:
 
 - [x] 02-02-PLAN.md — Atomic snapshot-emit scheduling and two-source resolution for NIP-09 a-tag deletions in EventIngestCache (BUG-03, BUG-05)
 - [x] 02-03-PLAN.md — NIP-09 delete commits only after Amber confirms, in the shared coordinator and the profile call site (BUG-06)
-- [ ] 02-04-PLAN.md — NostrSessionManager job-field audit: three racy fields converted to atomic holders, three documented as safe (BUG-13)
+- [x] 02-04-PLAN.md — NostrSessionManager job-field audit: three racy fields converted to atomic holders, three documented as safe (BUG-13)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -131,7 +131,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Error Visibility & Log Hygiene | 3/3 | Complete    | 2026-09-03 |
-| 2. Concurrency & State Correctness | 3/5 | In Progress|  |
+| 2. Concurrency & State Correctness | 4/5 | In Progress|  |
 | 3. Fix Validation & Test Coverage | 0/TBD | Not started | - |
 | 4. Version Consistency & v0.1.0 Release Prep | 0/TBD | Not started | - |
 

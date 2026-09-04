@@ -19,7 +19,7 @@
 - [x] **BUG-10**: Fix LOG-27 — log each per-step cleanup exception (scrubbed) in `LogoutUseCase` and `TrimMemoryCachesUseCase` instead of silently swallowing it
 - [x] **BUG-11**: Fix LOG-28 — stop swallowing `activateUserSession`'s exception inside `LoginViewModel`'s inner catch so the outer, already-working logging path can see it
 - [x] **BUG-12**: Fix LOG-29 — guard `RelayCrudCoordinator.updateRelayRole` with a per-relay lock so concurrent role toggles on the same relay can't silently lose an update
-- [ ] **BUG-13**: Fix LOG-30 — apply `AtomicReference<Job?>` to `NostrSessionManager.retryJob` (and audit the sibling `Job?` fields for the same treatment)
+- [x] **BUG-13**: Fix LOG-30 — apply `AtomicReference<Job?>` to `NostrSessionManager.retryJob` (and audit the sibling `Job?` fields for the same treatment)
 - [x] **BUG-14**: Fix LOG-31 — only mark the DM relay list dirty in `RelayCrudCoordinator.setDmEnabled` when the mapper actually produces a changed relay
 
 ### Fix Validation (currently `fix applied — needs on-device validation` in docs/KNOWN_ISSUES.md)
@@ -81,7 +81,7 @@ None — this milestone is deliberately scoped to stability + release, not new f
 | BUG-07 | Phase 2 | Pending |
 | BUG-08 | Phase 2 | Pending |
 | BUG-12 | Phase 2 | Complete |
-| BUG-13 | Phase 2 | Pending |
+| BUG-13 | Phase 2 | Complete |
 | BUG-14 | Phase 2 | Complete |
 | VALID-01 | Phase 3 | Pending |
 | VALID-02 | Phase 3 | Pending |

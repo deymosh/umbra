@@ -5,16 +5,16 @@ milestone_name: Hardening & First Public Release
 current_phase: 02
 current_phase_name: Concurrency & State Correctness
 status: executing
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-09-04T06:18:56.508Z"
-last_activity: 2026-09-03
-last_activity_desc: Phase 02 execution started
-state_head: 3463eb7685cc73f03c7b5c5e714c380d1790a32e
+stopped_at: Completed 02-04-PLAN.md
+last_updated: "2026-09-04T06:41:00.000Z"
+last_activity: 2026-09-04
+last_activity_desc: Phase 02 Plan 4 (NostrSessionManager job-field atomicity, BUG-13) completed
+state_head: f1fa2aa
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
   percent: 25
 ---
 
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-09-03)
 ## Current Position
 
 Phase: 02 (Concurrency & State Correctness) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
-Last activity: 2026-09-03 — Phase 02 execution started
+Last activity: 2026-09-04 — Phase 02 Plan 4 (NostrSessionManager job-field atomicity, BUG-13) completed
 
 Progress: [███░░░░░░░] 25%
 
@@ -40,7 +40,7 @@ Progress: [███░░░░░░░] 25%
 
 **Velocity:**
 
-- Total plans completed: 3
+- Total plans completed: 4
 - Average duration: —
 - Total execution time: —
 
@@ -66,6 +66,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P01 | 14min | 2 tasks | 4 files |
 | Phase 02 P02 | N/A (resumed from interrupted run) | 2 tasks | 3 files |
 | Phase 02 P03 | ~6min | 3 tasks | 4 files |
+| Phase 02 P04 | ~24min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,7 @@ Recent decisions affecting current work:
 - [Phase 02]: [Phase 2 Plan 1] setDmEnabled's dmRelayListDirty set moved into the mapper, after the transport-rejection branch, so a rejected/no-op DM enable never claims the published DM list changed (LOG-31/BUG-14)
 - [Phase 02]: [Phase 02] Plan 02-02 (LOG-21/BUG-05 snapshotEmitJob CAS-scheduled AtomicReference; LOG-19/BUG-03 a-tag deletions resolve against the in-memory cache too) closed out after an interrupted prior executor run left both task commits done but doc/state work unfinished -- verified against acceptance_criteria (fresh 31/31 test pass, compileDebugKotlin/lintDebug clean) rather than re-implemented
 - [Phase 02]: [Phase 02] Plan 02-03 (LOG-22/BUG-06): deleteEvent's onOptimisticApply renamed onDeleteConfirmed and moved inside requestSignAndPublish's onSigned callback, alongside the cache/archive removal -- no pending-action/rollback machinery added since nothing is applied before confirmation; FeedViewModel.kt untouched (only ever passed onCacheRemoveFailure)
+- [Phase 02]: [Phase 02] Plan 02-04 (LOG-30/BUG-13): audited all six NostrSessionManager job fields; retryJob/userBackfillJob/ownProfileBootstrapWatcherJob converted to AtomicReference<Job?> scheduled through two new non-blocking helpers (launchIfIdle/launchReplacing in new AtomicJobScheduling.kt); bootstrapJob/autoDisableRelayJob/torCircuitRecoveryJob stay plain, documented with an inline start()/stop()-serialization invariant. The 200-iteration real-thread concurrency test itself caught a compareAndSet-ordering race in the plan's literal launchIfIdle spec (isActive-keyed check left a window before start() landed) -- fixed by keying the idle check on isCompleted instead (Rule 1 auto-fix)
 
 ### Pending Todos
 
@@ -108,6 +110,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-04T06:18:56.486Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-09-04T06:41:00.000Z
+Stopped at: Completed 02-04-PLAN.md
 Resume file: None
