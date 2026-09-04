@@ -34,7 +34,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import com.umbra.app.util.coroutines.runCatchingCancellable
 import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
@@ -184,6 +186,14 @@ class NostrSessionManager @Inject constructor(
     @Volatile
     private var ownProfileBootstrapPubkey: String? = null
     private val ownProfileBootstrapWatcherJob = AtomicReference<Job?>(null)
+    // Guards maybeBootstrapOwnProfile's own compound check-then-act sequence
+    // (ownProfileBootstrapPubkey != pubkey -> stop -> assign -> start) — @Volatile on
+    // ownProfileBootstrapPubkey alone only makes each individual read/write visible across
+    // threads, it does not make that whole sequence exclusive. Without this, two overlapping
+    // reconcile() calls (this class's own two documented concurrent entry points) for the same
+    // pubkey can both observe the stale value and both call bootstrapOwnProfileUseCase.start(),
+    // a duplicate channel start.
+    private val ownProfileBootstrapMutex = Mutex()
 
     @Volatile
     private var started = false
@@ -424,23 +434,29 @@ class NostrSessionManager @Inject constructor(
      * [OWN_PROFILE_BOOTSTRAP_MAX_MS] regardless, so it can't linger forever if the identity's
      * relay list genuinely isn't reachable from the current pool.
      */
-    private fun maybeBootstrapOwnProfile(pubkey: String?) {
+    private suspend fun maybeBootstrapOwnProfile(pubkey: String?) {
         if (pubkey.isNullOrBlank()) return
-        if (userRepository.getRelayList(pubkey)?.getOutboxRelays()?.isNotEmpty() == true) {
-            stopOwnProfileBootstrap()
-            return
-        }
-        if (ownProfileBootstrapPubkey == pubkey) return
-        stopOwnProfileBootstrap()
-        ownProfileBootstrapPubkey = pubkey
-        bootstrapOwnProfileUseCase.start(pubkey)
-        ownProfileBootstrapWatcherJob.launchReplacing(scope) {
-            val deadline = System.currentTimeMillis() + OWN_PROFILE_BOOTSTRAP_MAX_MS
-            while (isActive && System.currentTimeMillis() < deadline) {
-                delay(OWN_PROFILE_BOOTSTRAP_POLL_MS)
-                if (userRepository.getRelayList(pubkey)?.getOutboxRelays()?.isNotEmpty() == true) break
+        // The check-then-act sequence below (read ownProfileBootstrapPubkey, decide, then stop/
+        // assign/start) must run as one exclusive unit — reconcile()'s two documented concurrent
+        // entry points can otherwise both observe the pre-write state and both start a duplicate
+        // bootstrap channel for the same pubkey.
+        ownProfileBootstrapMutex.withLock {
+            if (userRepository.getRelayList(pubkey)?.getOutboxRelays()?.isNotEmpty() == true) {
+                stopOwnProfileBootstrap()
+                return@withLock
             }
+            if (ownProfileBootstrapPubkey == pubkey) return@withLock
             stopOwnProfileBootstrap()
+            ownProfileBootstrapPubkey = pubkey
+            bootstrapOwnProfileUseCase.start(pubkey)
+            ownProfileBootstrapWatcherJob.launchReplacing(scope) {
+                val deadline = System.currentTimeMillis() + OWN_PROFILE_BOOTSTRAP_MAX_MS
+                while (isActive && System.currentTimeMillis() < deadline) {
+                    delay(OWN_PROFILE_BOOTSTRAP_POLL_MS)
+                    if (userRepository.getRelayList(pubkey)?.getOutboxRelays()?.isNotEmpty() == true) break
+                }
+                stopOwnProfileBootstrap()
+            }
         }
     }
 
