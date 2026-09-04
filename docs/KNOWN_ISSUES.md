@@ -363,11 +363,18 @@ into `InteractionActionsCoordinator`, which preserved the behavior deliberately 
 fixing it as a side effect.
 
 ### LOG-23 — FeedViewModel.muteUser's local-filter mute mirror is dead code
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-08-28
 - **Where:** `ui/feed/FeedViewModel.kt` (`muteUser`, delegated through
   `InteractionActionsCoordinator.mirrorMuteIntoActiveFilter`'s caller-supplied
   `resolveActiveFilter` callback)
+- **Fix:** `muteUser`'s resolver now takes the first entry of the live active-filters list
+  (`feedRepository.getActiveFilters().first().firstOrNull()`), the same expression
+  `ProfileViewModel.toggleMute` already uses, instead of the by-id lookup against
+  `mergeActiveFeedFilters`'s fixed synthetic id. `mirrorMuteIntoActiveFilter`'s
+  caller-supplied resolver parameter is unchanged. A new `FeedFilterTest` case pins the
+  invariant that made the old lookup permanently dead: the merged filter's id is always the
+  fixed synthetic id, never any input filter's id.
 
 `muteUser` resolves "the currently active filter" via `feedRepository.getFilterById(activeFeedFilter.id)`
 so it can mirror a mute into that filter's local `mutedPubkeys` immediately (offline-safe, ahead of
@@ -387,10 +394,16 @@ converging it onto `ProfileViewModel`'s working one. Fix: resolve the active fil
 instead of `getFilterById(activeFeedFilter.id)`.
 
 ### LOG-24 — FeedViewModel.muteUser/togglePin discard the mute/pin write's success/failure result
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-08-29
 - **Where:** `ui/feed/FeedViewModel.kt` (`muteUser`, `togglePin`, calling
   `InteractionActionsCoordinator.applyMuteChange`/`applyPinChange`)
+- **Fix:** Both local writes' `Result<Unit>` are now inspected via two new top-level
+  `muteWriteResultMessage`/`pinWriteResultMessage` functions, which map success to the
+  existing success messages unchanged and failure to the existing
+  `error_mute_author`/`error_pin_note`/`error_unpin_note` strings carrying the failure's
+  message — the same vocabulary and expression `ProfileViewModel.toggleMute`/`togglePin`
+  already use. The mapping is covered by unit tests in `FeedViewModelStateTest`.
 
 `muteUser`'s and `togglePin`'s `onSigned` callbacks call `applyMuteChange`/`applyPinChange` without
 inspecting the returned `Result<Unit>`. If the local mute-list/pin-list write fails after Amber has
