@@ -25,6 +25,7 @@ import com.umbra.app.domain.usecase.PublishSignedEventUseCase
 import com.umbra.app.domain.usecase.RemoveRelayUseCase
 import com.umbra.app.domain.usecase.UpdateRelayUseCase
 import com.umbra.app.ui.common.UiMessage
+import com.umbra.app.util.logging.UmbraLog
 import androidx.compose.runtime.Immutable
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -143,6 +144,8 @@ class RelayConfigViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
+        private const val TAG = "RelayConfigViewModel"
+
         // Per relay (by normalized URL), not global — see appendBoundedRelayIssue. A global cap
         // let one relay's burst of activity, or simply a large relay pool where every relay emits
         // its own one-time "Connected" message, evict a *different* relay's history first (e.g.
@@ -184,6 +187,7 @@ class RelayConfigViewModel @Inject constructor(
         private const val RELAY_LIST_FLUSH_INTERVAL_MS = 300L
     }
 
+    private val logger = UmbraLog.tag(TAG)
     private val _state = MutableStateFlow(RelayConfigState())
     val state: StateFlow<RelayConfigState> = _state.asStateFlow()
     private var defaultsBootstrapRequested = false
@@ -361,6 +365,8 @@ class RelayConfigViewModel @Inject constructor(
                                 isEnabled = relay.isWriteActive
                             )
                         )
+                    }.onFailure { e ->
+                        logger.e(e) { "Failed to enforce anonymous-session relay restriction" }
                     }
                 }
             }

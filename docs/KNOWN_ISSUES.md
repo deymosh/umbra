@@ -698,9 +698,13 @@ needs `@Volatile` for cross-thread visibility since it's written on one thread a
 others.
 
 ### LOG-39 — RelayConfigViewModel.enforceAnonymousRelayPolicyIfNeeded silently discards failures while enforcing the anonymous-session privacy restriction
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-09-04
 - **Where:** `ui/relay/RelayConfigViewModel.kt:346-367`
+- **Fix:** `enforceAnonymousRelayPolicyIfNeeded`'s `runCatching { updateRelayUseCase(...) }` now
+  chains `.onFailure { e -> logger.e(e) { "Failed to enforce anonymous-session relay restriction" } }`,
+  matching LOG-20's fix shape. `RelayConfigViewModel` gained its own `TAG`/`logger` (it had neither
+  before).
 
 Found during Phase 2's code review. `enforceAnonymousRelayPolicyIfNeeded` turns off read/DM relay
 roles when a session is anonymous — a genuine privacy control meant to keep read/DM relay usage
