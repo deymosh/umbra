@@ -341,21 +341,26 @@ same file. Failure mode is a lost/duplicate scheduled emit, not a crash. Fix: us
 `AtomicReference<Job?>` for `snapshotEmitJob`, matching `insertDebounceJob`'s pattern.
 
 ### LOG-22 — ProfileViewModel.deleteEvent removes a note from the visible list before Amber confirms the delete, with no rollback
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-08-28
 - **Where:** `ui/profile/ProfileViewModel.kt` (`deleteEvent`, delegated through
   `InteractionActionsCoordinator.deleteEvent`'s `onOptimisticApply` callback)
+- **Fix:** `InteractionActionsCoordinator.deleteEvent` no longer applies anything ahead of
+  confirmation — instead of firing the caller's state-removal callback and the cache/archive
+  removal synchronously before the async sign round trip resolves, both now run only from
+  `requestSignAndPublish`'s `onSigned` callback, matching the commit-after-sign pattern
+  `toggleMute`/`togglePin`/`toggleFollow` already use. No pending-action/rollback machinery was
+  added; a rejected or failed sign leaves visible state, the in-memory cache, and the encrypted
+  archive untouched, since nothing was applied before confirmation in the first place. Pinned by
+  new `InteractionActionsCoordinatorTest` cases covering both the confirmed and rejected paths.
 
-`deleteEvent` removes the target note from `state.notes` unconditionally, synchronously, before
-the Amber sign round trip even resolves — not gated on the signature actually being confirmed,
-and with no rollback path if signing is rejected or fails. This is inconsistent with the same
-ViewModel's own `toggleMute`/`togglePin`/`toggleFollow`, all three of which record a pending
-action and roll it back (`rollbackPendingMuteIfNeeded`/`rollbackPendingPinIfNeeded`/
-`rollbackPendingFollowIfNeeded`) if `requestSignEvent` comes back rejected/failed. Confirmed
-pre-existing — present before this note's extraction into `InteractionActionsCoordinator`, which
-preserved the behavior deliberately rather than fixing it as a side effect. Fix: give delete the
-same pending-action-plus-rollback treatment as mute/pin/follow (restore the removed note to
-`state.notes` if the sign round trip fails).
+`deleteEvent` removed the target note from `state.notes` unconditionally, synchronously, before
+the Amber sign round trip even resolved — not gated on the signature actually being confirmed,
+and with no rollback path if signing was rejected or failed. This was inconsistent with the same
+ViewModel's own `toggleMute`/`togglePin`/`toggleFollow`, all three of which commit only after
+Amber confirms the signature. Confirmed pre-existing — present before this note's extraction
+into `InteractionActionsCoordinator`, which preserved the behavior deliberately rather than
+fixing it as a side effect.
 
 ### LOG-23 — FeedViewModel.muteUser's local-filter mute mirror is dead code
 - **Status:** open
