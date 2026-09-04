@@ -69,26 +69,6 @@ content that should be scrubbed before it reaches a release-build log. Fix: wrap
 in `LogScrubber.scrubMessageForLogs()` before interpolating it, matching the pattern already used
 elsewhere in this file.
 
-### LOG-43 — Broad catch (e: Exception)/unchecked runCatching around suspend calls swallow CancellationException across Phase 2's write paths
-- **Status:** in progress
-- **Added:** 2026-09-04
-- **Why:** Found during Phase 2's code review as a systemic pattern across most of the phase's
-  reviewed write paths, not a single-file bug — tracked here as the umbrella item while individual
-  sites are fixed as part of Phase 2's code-review remediation pass.
-
-`CancellationException` is a subtype of `Exception` in Kotlin, so `catch (e: Exception) { ... }`
-(and unchecked `runCatching { ... }`) catches it without rethrowing, defeating structured
-cancellation. Representative sites (not exhaustive): `InteractionActionsCoordinator.kt:90-95`
-(`requestSignAndPublish`), `ProfileViewModel.kt:611-616` (`requestSignEvent`),
-`RelayCrudCoordinator.kt:134-141, 163-170, 214-218, 337-352` (`saveRelay`, `deleteRelay`,
-`removeRelayRole`, `updateRelayRole`), `NostrSessionManager.kt:302-308` (`disableDeadRelay`),
-`RelayConfigViewModel.kt:331-333, 352-365, 520-521` (`applyRelaysSnapshot`,
-`enforceAnonymousRelayPolicyIfNeeded`, `loadRelayInfo`). This project's own
-`kotlin-coroutines-structured-concurrency` skill documents this exact anti-pattern. Fix: add
-`catch (e: CancellationException) { throw e }` before the generic catch at each site (or check
-`result.exceptionOrNull() is CancellationException` and rethrow for `runCatching` variants);
-consider a small shared helper given how many sites share this shape.
-
 ### LOG-44 — NostrSessionManager and RelayConfigViewModel have no dedicated unit test for the concurrency behavior Phase 2 changed
 - **Status:** in progress
 - **Added:** 2026-09-04

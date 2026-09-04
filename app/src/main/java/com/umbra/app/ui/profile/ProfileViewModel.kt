@@ -55,6 +55,7 @@ import com.umbra.app.util.UrlPrefetcher
 import com.umbra.app.util.logging.UmbraLog
 import dagger.hilt.android.lifecycle.HiltViewModel
 import androidx.compose.runtime.Immutable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -610,6 +611,8 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             val signedEvent = try {
                 amberSignerGateway.signEvent(eventJson, currentUserHex)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.d { "Error requesting signed event: ${scrubThrowableMessageForLogs(e)}" }
                 null

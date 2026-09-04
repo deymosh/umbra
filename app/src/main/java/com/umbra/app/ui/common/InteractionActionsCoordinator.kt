@@ -14,6 +14,7 @@ import com.umbra.app.domain.usecase.RemoveDeletedNoteFromCacheUseCase
 import com.umbra.app.domain.util.JsonUtils
 import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.logging.UmbraLog
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -89,6 +90,8 @@ internal class InteractionActionsCoordinator(
         scope.launch {
             val signedEvent = try {
                 amberSignerGateway.signEvent(buildEventJson(), currentUserHex)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.d { "Error requesting signed event: ${scrubThrowableMessageForLogs(e)}" }
                 null

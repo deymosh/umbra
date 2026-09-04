@@ -11,6 +11,7 @@ import com.umbra.app.domain.usecase.AddRelayUseCase
 import com.umbra.app.domain.usecase.RemoveRelayUseCase
 import com.umbra.app.domain.usecase.UpdateRelayUseCase
 import com.umbra.app.ui.common.UiMessage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -141,6 +142,8 @@ internal class RelayCrudCoordinator(
                         indexListDirty = true
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 state.update {
                     it.copy(
@@ -174,6 +177,8 @@ internal class RelayCrudCoordinator(
                         indexListDirty = true
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 state.update {
                     it.copy(
@@ -354,6 +359,8 @@ internal class RelayCrudCoordinator(
                     if (relay.isEnabled && !updated.isEnabled) {
                         eventRepository.disconnectRelay(relay.url)
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     state.update { it.copy(errorMessage = UiMessage.Res(R.string.error_update_relay, listOf(e.message ?: ""))) }
                 }

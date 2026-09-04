@@ -25,6 +25,7 @@ import com.umbra.app.domain.usecase.PublishSignedEventUseCase
 import com.umbra.app.domain.usecase.RemoveRelayUseCase
 import com.umbra.app.domain.usecase.UpdateRelayUseCase
 import com.umbra.app.ui.common.UiMessage
+import com.umbra.app.util.coroutines.runCatchingCancellable
 import com.umbra.app.util.logging.UmbraLog
 import androidx.compose.runtime.Immutable
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -333,7 +334,7 @@ class RelayConfigViewModel @Inject constructor(
         if (relays.isEmpty() && !defaultsBootstrapRequested) {
             defaultsBootstrapRequested = true
             viewModelScope.launch {
-                runCatching { relayRepository.bootstrapDefaultsOnFirstLogin() }
+                runCatchingCancellable { relayRepository.bootstrapDefaultsOnFirstLogin() }
             }
         }
         _state.update {
@@ -354,7 +355,7 @@ class RelayConfigViewModel @Inject constructor(
             .filter { it.isReadEnabled || it.isDmEnabled }
             .forEach { relay ->
                 viewModelScope.launch {
-                    runCatching {
+                    runCatchingCancellable {
                         updateRelayUseCase(
                             relay.copy(
                                 isReadEnabled = false,
@@ -523,7 +524,7 @@ class RelayConfigViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            val result = runCatching {
+            val result = runCatchingCancellable {
                 relayInfoRepository.fetchAndPersist(relayUrl, force = forceRefresh)
             }
 

@@ -36,6 +36,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import com.umbra.app.util.coroutines.runCatchingCancellable
 import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.logging.UmbraLog
 import java.util.concurrent.atomic.AtomicReference
@@ -313,7 +314,7 @@ class NostrSessionManager @Inject constructor(
             .firstOrNull { normalizeRelayUrl(it.url) == normalizedUrl }
             ?: return
         if (!relay.isEnabled) return
-        runCatching { relayRepository.updateRelay(relay.copy(isEnabled = false)) }
+        runCatchingCancellable { relayRepository.updateRelay(relay.copy(isEnabled = false)) }
             .onSuccess {
                 eventRepository.disconnectRelay(relay.url)
             }
