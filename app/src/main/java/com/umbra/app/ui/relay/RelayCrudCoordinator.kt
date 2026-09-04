@@ -84,36 +84,46 @@ internal class RelayCrudCoordinator(
                     }
 
                     if (existingRelay != null) {
-                        updateRelayUseCase(
-                            existingRelay.copy(
-                                url = sanitizedRelay.url,
-                                isOnion = sanitizedRelay.isOnion,
-                                isDiscovered = false,
-                                isReadEnabled = existingRelay.isReadEnabled || sanitizedRelay.isReadEnabled,
-                                isReadActive = existingRelay.isReadActive || sanitizedRelay.isReadActive,
-                                isWriteEnabled = existingRelay.isWriteEnabled || sanitizedRelay.isWriteEnabled,
-                                isWriteActive = existingRelay.isWriteActive || sanitizedRelay.isWriteActive,
-                                isDmEnabled = existingRelay.isDmEnabled || sanitizedRelay.isDmEnabled,
-                                isDmActive = existingRelay.isDmActive || sanitizedRelay.isDmActive,
-                                dmRequiresAuth = (existingRelay.isDmEnabled || sanitizedRelay.isDmEnabled),
-                                isSearchEnabled = existingRelay.isSearchEnabled || sanitizedRelay.isSearchEnabled,
-                                isSearchActive = existingRelay.isSearchActive || sanitizedRelay.isSearchActive,
-                                isIndexEnabled = existingRelay.isIndexEnabled || sanitizedRelay.isIndexEnabled,
-                                isIndexActive = existingRelay.isIndexActive || sanitizedRelay.isIndexActive,
-                                isEnabled =
-                                    existingRelay.isReadActive || sanitizedRelay.isReadActive ||
-                                    existingRelay.isWriteActive || sanitizedRelay.isWriteActive ||
-                                    existingRelay.isDmActive || sanitizedRelay.isDmActive ||
-                                    existingRelay.isSearchActive || sanitizedRelay.isSearchActive ||
-                                    existingRelay.isIndexActive || sanitizedRelay.isIndexActive
+                        // Same per-relay-id Mutex updateRelayRole uses (LOG-42/WR-03) — a role
+                        // toggle in flight for this relay id must not have its write silently
+                        // discarded by this merge, or vice versa.
+                        relayRoleMutexes.computeIfAbsent(existingRelay.id) { Mutex() }.withLock {
+                            updateRelayUseCase(
+                                existingRelay.copy(
+                                    url = sanitizedRelay.url,
+                                    isOnion = sanitizedRelay.isOnion,
+                                    isDiscovered = false,
+                                    isReadEnabled = existingRelay.isReadEnabled || sanitizedRelay.isReadEnabled,
+                                    isReadActive = existingRelay.isReadActive || sanitizedRelay.isReadActive,
+                                    isWriteEnabled = existingRelay.isWriteEnabled || sanitizedRelay.isWriteEnabled,
+                                    isWriteActive = existingRelay.isWriteActive || sanitizedRelay.isWriteActive,
+                                    isDmEnabled = existingRelay.isDmEnabled || sanitizedRelay.isDmEnabled,
+                                    isDmActive = existingRelay.isDmActive || sanitizedRelay.isDmActive,
+                                    dmRequiresAuth = (existingRelay.isDmEnabled || sanitizedRelay.isDmEnabled),
+                                    isSearchEnabled = existingRelay.isSearchEnabled || sanitizedRelay.isSearchEnabled,
+                                    isSearchActive = existingRelay.isSearchActive || sanitizedRelay.isSearchActive,
+                                    isIndexEnabled = existingRelay.isIndexEnabled || sanitizedRelay.isIndexEnabled,
+                                    isIndexActive = existingRelay.isIndexActive || sanitizedRelay.isIndexActive,
+                                    isEnabled =
+                                        existingRelay.isReadActive || sanitizedRelay.isReadActive ||
+                                        existingRelay.isWriteActive || sanitizedRelay.isWriteActive ||
+                                        existingRelay.isDmActive || sanitizedRelay.isDmActive ||
+                                        existingRelay.isSearchActive || sanitizedRelay.isSearchActive ||
+                                        existingRelay.isIndexActive || sanitizedRelay.isIndexActive
+                                )
                             )
-                        )
+                        }
                     } else {
+                        // A freshly generated id can't race an in-flight role toggle — nothing
+                        // else has ever seen this id before this point — so no lock is needed here.
                         val newRelay = sanitizedRelay.copy(id = RelayIdGenerator.create())
                         addRelayUseCase(newRelay)
                     }
                 } else {
-                    updateRelayUseCase(sanitizedRelay)
+                    // Same per-relay-id Mutex updateRelayRole uses (LOG-42/WR-03).
+                    relayRoleMutexes.computeIfAbsent(relay.id) { Mutex() }.withLock {
+                        updateRelayUseCase(sanitizedRelay)
+                    }
                 }
 
                 // Conservatively marks all four kinds dirty rather than diffing which role flags
@@ -146,7 +156,11 @@ internal class RelayCrudCoordinator(
         scope.launch {
             try {
                 state.update { it.copy(isLoading = true) }
-                removeRelayUseCase(relayId)
+                // Same per-relay-id Mutex updateRelayRole uses (LOG-42/WR-03) — a role toggle in
+                // flight for this relay id must not race the removal itself.
+                relayRoleMutexes.computeIfAbsent(relayId) { Mutex() }.withLock {
+                    removeRelayUseCase(relayId)
+                }
                 // Same conservative all-four-dirty marking as saveRelay — the deleted relay may
                 // have held any combination of roles.
                 state.update {

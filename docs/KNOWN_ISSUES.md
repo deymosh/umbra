@@ -769,9 +769,15 @@ for the repost-embedded path. Fix: route `cacheRepostTarget` through the same re
 logic `ingest()` uses (or a shared private helper both can call).
 
 ### LOG-42 — RelayCrudCoordinator.saveRelay/deleteRelay mutate a relay's persisted record without the per-relay Mutex updateRelayRole uses
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-09-04
 - **Where:** `ui/relay/RelayCrudCoordinator.kt:51-143` (`saveRelay`), `:145-172` (`deleteRelay`)
+- **Fix:** `saveRelay`'s update-existing-relay and merge-onto-existing-relay branches, and
+  `deleteRelay`'s removal, now acquire the same `relayRoleMutexes.computeIfAbsent(relayId) { Mutex() }`
+  lock `updateRelayRole` uses, so a role toggle racing an edit/delete for the same relay id can no
+  longer silently lose one write. `saveRelay`'s brand-new-relay branch is left unlocked
+  deliberately — a freshly generated id can't race anything, since nothing else has seen it yet.
+  `RelayCrudCoordinatorTest`'s existing cases continue to pass unmodified.
 
 Found during Phase 2's code review, as a narrower variant of LOG-37. `updateRelayRole` serializes
 writes to a given relay id via `relayRoleMutexes.computeIfAbsent(relayId) { Mutex() }`. `saveRelay`
