@@ -329,7 +329,7 @@ class NostrSessionManager @Inject constructor(
                 eventRepository.disconnectRelay(relay.url)
             }
             .onFailure { e ->
-                logger.d { "Failed to auto-disable relay: ${scrubThrowableMessageForLogs(e)}" }
+                logger.e(e) { "Failed to auto-disable relay: ${scrubThrowableMessageForLogs(e)}" }
             }
     }
 
@@ -417,7 +417,7 @@ class NostrSessionManager @Inject constructor(
             startUserHistoryBackfill(state.pubkey, resyncFromNow = activeRelaysChanged)
         }.onFailure { error ->
             relaysConnected = false
-            logger.d { "Relay connect failed (${state.torStatus}) -> scheduling retry: ${scrubThrowableMessageForLogs(error)}" }
+            logger.e(error) { "Relay connect failed (${state.torStatus}) -> scheduling retry: ${scrubThrowableMessageForLogs(error)}" }
             scheduleRetry()
         }
     }
