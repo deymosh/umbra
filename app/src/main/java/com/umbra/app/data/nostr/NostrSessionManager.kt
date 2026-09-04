@@ -203,6 +203,14 @@ class NostrSessionManager @Inject constructor(
         started = true
         appStartMs = System.currentTimeMillis()
         firstRelayConnectedLogged = false
+        // Unconditionally reset rather than trusting whatever stop() left behind: stop() cannot
+        // take ownProfileBootstrapMutex (NostrSessionController.stop() is a plain, non-suspend
+        // fun), so a stop() call racing a concurrent maybeBootstrapOwnProfile invocation can, in
+        // the narrow lost-race case, leave this non-null after stop() completes. Without this
+        // reset, a re-login as that same pubkey would see ownProfileBootstrapPubkey already equal
+        // to it and silently skip re-bootstrapping, even though stop()'s own
+        // eventRepository.disconnectFromAll() already tore down every real subscription.
+        ownProfileBootstrapPubkey = null
 
         torRuntimeManager.start()
         // Session-lifetime, not tied to any particular screen — see its own doc comment for why
@@ -305,7 +313,16 @@ class NostrSessionManager @Inject constructor(
         torCircuitRecoveryJob = null
         backfillPubkey = null
         relaysConnected = false
-        stopOwnProfileBootstrap()
+        // Not suspend (NostrSessionController.stop() is a plain fun), so this cannot acquire
+        // ownProfileBootstrapMutex the way maybeBootstrapOwnProfile does. Mutating these fields
+        // directly here — mirroring the getAndSet(null)?.cancel() pattern already used above for
+        // retryJob/userBackfillJob — can in principle race a concurrent maybeBootstrapOwnProfile
+        // call, but start() unconditionally resets ownProfileBootstrapPubkey to null, so a lost
+        // race here can at worst leave a bootstrap channel running slightly longer than intended;
+        // it can never cause a future re-login to silently skip bootstrapping.
+        ownProfileBootstrapWatcherJob.getAndSet(null)?.cancel()
+        ownProfileBootstrapPubkey = null
+        bootstrapOwnProfileUseCase.stop()
         relayListDecryptionCoordinator.stop()
         torRuntimeManager.stop()
         eventRepository.disconnectFromAll()
@@ -442,11 +459,11 @@ class NostrSessionManager @Inject constructor(
         // bootstrap channel for the same pubkey.
         ownProfileBootstrapMutex.withLock {
             if (userRepository.getRelayList(pubkey)?.getOutboxRelays()?.isNotEmpty() == true) {
-                stopOwnProfileBootstrap()
+                stopOwnProfileBootstrapLocked()
                 return@withLock
             }
             if (ownProfileBootstrapPubkey == pubkey) return@withLock
-            stopOwnProfileBootstrap()
+            stopOwnProfileBootstrapLocked()
             ownProfileBootstrapPubkey = pubkey
             bootstrapOwnProfileUseCase.start(pubkey)
             ownProfileBootstrapWatcherJob.launchReplacing(scope) {
@@ -455,12 +472,23 @@ class NostrSessionManager @Inject constructor(
                     delay(OWN_PROFILE_BOOTSTRAP_POLL_MS)
                     if (userRepository.getRelayList(pubkey)?.getOutboxRelays()?.isNotEmpty() == true) break
                 }
-                stopOwnProfileBootstrap()
+                // This lambda runs on its own separately-scheduled coroutine (launchReplacing),
+                // outside the withLock block above that launched it — it must take the mutex
+                // itself before tearing anything down, or a stale watcher's completion here can
+                // race a different maybeBootstrapOwnProfile invocation that, under the same lock,
+                // is concurrently installing a brand-new watcher/pubkey and tear that down instead.
+                ownProfileBootstrapMutex.withLock { stopOwnProfileBootstrapLocked() }
             }
         }
     }
 
-    private fun stopOwnProfileBootstrap() {
+    /**
+     * Tears down the current own-profile bootstrap channel. Mutex is not reentrant, so this must
+     * only be called by code that already holds [ownProfileBootstrapMutex] (both call sites above
+     * do). [stop] mutates the same fields directly instead, since it cannot suspend to acquire the
+     * lock — see the comment at its own call site.
+     */
+    private fun stopOwnProfileBootstrapLocked() {
         if (ownProfileBootstrapPubkey == null) return
         ownProfileBootstrapWatcherJob.getAndSet(null)?.cancel()
         ownProfileBootstrapPubkey = null
