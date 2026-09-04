@@ -20,12 +20,13 @@ A trustworthy, stable first public release that upholds Umbra's TOR-only and Amb
 - ✓ Encrypted SQLCipher Room persistence scoped to the signed-in user's own events only; everyone else's content lives in an in-memory `EventLruCache` — existing
 - ✓ CI pipeline (`android-ci.yml`): lint, unit tests, `assembleBenchmark` (R8-shaped) on every push/PR — existing
 - ✓ Tag-triggered signed release workflow scaffold (`android-release.yml`) — existing but never exercised end-to-end
-- ✓ Local bug-tracking convention already established (`docs/KNOWN_ISSUES.md`/`TODO.md`/`DONE.md`, shared `LOG-N` counter, currently at LOG-36) — existing
+- ✓ Local bug-tracking convention already established (`docs/KNOWN_ISSUES.md`/`TODO.md`/`DONE.md`, shared `LOG-N` counter, currently at LOG-55) — existing
 - ✓ Every failure path in publish/login/logout/cleanup/relay-transport code logs its throwable at a visible, scrubbed level instead of vanishing silently, and `Logger.e()`'s scrubbing is now airtight end-to-end (message string *and* the `Throwable` object itself, closing a leak in the wrapper predating this milestone) — Phase 1
+- ✓ Concurrent job/relay-role mutations are atomic and optimistic UI tells the truth: `EventIngestCache.snapshotEmitJob`/`NostrSessionManager`'s racy job fields are CAS-scheduled, `RelayCrudCoordinator.updateRelayRole` closes the per-relay lost-update race, NIP-09 "a"-tag deletions resolve against the in-memory cache, `deleteEvent` commits only after Amber confirms, and `FeedViewModel.muteUser`/`togglePin` surface write failures instead of discarding them — Phase 2 (LOG-19/21/22/23/24/29/30/31, BUG-03/05/06/07/08/12/13/14)
 
 ### Active
 
-- [ ] Fix the remaining 8 open bugs in `docs/KNOWN_ISSUES.md`: LOG-19, 21, 22, 23, 24, 29, 30, 31 (LOG-18/20/26/27/28 fixed in Phase 1; LOG-34 — a Critical gap in `Logger.e()`'s own throwable scrubbing, found by Phase 1's code review — also fixed in Phase 1; LOG-32/33/35/36 are new backlog/open items filed during Phase 1, not part of the original 13)
+- [ ] LOG-44: `NostrSessionManager`/`RelayConfigViewModel` still have no dedicated unit test for the concurrency behavior Phase 2 changed — deliberately deferred (no mocking framework on the test classpath, 3 concrete-class dependencies with no interface seam; a real architectural change, not a targeted-fix-pass task)
 - [ ] Review the 10 `fix applied — needs on-device validation` entries (LOG-1, 2, 3, 4, 6, 7, 11, 12, 13, 14): for each, determine whether it's verifiable by automated test alone or genuinely needs visual/on-device confirmation. Add/confirm tests and move to `DONE.md` for the testable ones; leave the rest in `KNOWN_ISSUES.md` for the user's own on-device validation later
 - [ ] Fix `versionName` drift: `app/build.gradle.kts`'s `versionName = "0.1.0"` is the source of truth; `strings.xml`'s hardcoded `settings_version_value` ("0.1.0-beta") disagrees. Enable `buildConfig` and read `BuildConfig.VERSION_NAME` in `SettingsScreen.kt` instead of a second hand-maintained string
 - [ ] Update `CHANGELOG.md`: convert the `[Unreleased]` section into a dated `[0.1.0]` section (Keep a Changelog format, already followed in this file)
@@ -69,6 +70,8 @@ A trustworthy, stable first public release that upholds Umbra's TOR-only and Amb
 | Reuse the pre-existing `.planning/config.json` instead of re-running Step 5's preference questions | It was already committed with sensible settings in the initial commit; re-asking would just duplicate existing intent | — Pending |
 | Fixed `Logger.e()`'s throwable-scrub gap (LOG-34) inside Phase 1 rather than deferring it | Phase 1's code review found `Logger.e()` passed the raw `Throwable` to `Log.e()`, whose own stack-trace formatting bypasses `LogScrubber` — since Phase 1's entire purpose was promoting ~24 call sites from debug (filtered in release) to error (always printed), leaving this unfixed would have shipped a wider version of exactly the leak the phase was meant to close | ✓ Shipped Phase 1 |
 | Moved `LogScrubber.kt` from `util/` into `util/logging/` alongside `Logger`/`UmbraLog` | User request while fixing LOG-34 — it exists purely to serve the logging wrapper, so it belongs in the same package | ✓ Shipped Phase 1 |
+| Ran a 3-iteration code-review/auto-fix chain on Phase 2 rather than deferring findings to backlog | User explicitly asked to fix code-review findings within the same phase; each iteration surfaced genuinely new, narrowing-severity gaps (3 critical → 0 critical/4 warning → 0 critical/2 warning), so continuing to the auto-fix loop's 3-pass cap was worth it rather than stopping at "good enough" | ✓ Shipped Phase 2 |
+| Left LOG-44 (missing `NostrSessionManagerTest`/`RelayConfigViewModelTest`) open rather than force-fixing it | Both classes have concrete-class dependencies with no interface seam and this project has no mocking framework — closing the gap would require an architectural change (new seams or a new test dependency) out of scope for a targeted code-review fix pass | — Deferred |
 
 ## Evolution
 
@@ -88,4 +91,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-03 after Phase 1*
+*Last updated: 2026-09-04 after Phase 2*
