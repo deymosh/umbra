@@ -5,16 +5,16 @@ milestone_name: Hardening & First Public Release
 current_phase: 02
 current_phase_name: Concurrency & State Correctness
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-09-03T21:54:55.557Z"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-09-04T06:11:47.567Z"
 last_activity: 2026-09-03
 last_activity_desc: Phase 02 execution started
-state_head: 000a4222583254f5d1975178c55f4520bbf0b026
+state_head: b674248eefe60fa52b2326f36f0d0f5a855693b5
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 8
-  completed_plans: 4
+  completed_plans: 5
   percent: 25
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-09-03)
 ## Current Position
 
 Phase: 02 (Concurrency & State Correctness) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-09-03 — Phase 02 execution started
 
@@ -64,6 +64,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 01 P02 | 12min | 3 tasks | 7 files |
 | Phase 01 P03 | ~20min | 3 tasks | 5 files |
 | Phase 02 P01 | 14min | 2 tasks | 4 files |
+| Phase 02 P02 | N/A (resumed from interrupted run) | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,7 @@ Recent decisions affecting current work:
 - [Phase 01]: Post-execution code review found a Critical gap (LOG-34): `Logger.e()` passed the raw `Throwable` to `Log.e()`, whose own stack-trace formatting bypasses `LogScrubber` entirely — widening the exposure this phase's whole point was to close. Fixed same-session, out of the three plans' original file scope: `LogScrubber.scrubThrowableForLogs()` (new) returns a replacement throwable with a scrubbed message and no cause; `LogScrubber.kt` also moved into `util/logging/` alongside `Logger`/`UmbraLog`. LOG-35 (untracked swallowed throwable + raw `e.message` in UI, `LoginViewModel`) and LOG-36 (dead-code catch, `SettingsScreen.kt`) filed but left open — out of this phase's ROADMAP success criteria
 - [Phase 02]: [Phase 2 Plan 1] Per-relay-id Mutex (D-06) plus fresh RelayRepository.getRelayById read closes RelayCrudCoordinator's lost-update race (LOG-29/BUG-12) -- the lock alone wasn't sufficient since state.relays only resyncs via a 300ms-throttled collector
 - [Phase 02]: [Phase 2 Plan 1] setDmEnabled's dmRelayListDirty set moved into the mapper, after the transport-rejection branch, so a rejected/no-op DM enable never claims the published DM list changed (LOG-31/BUG-14)
+- [Phase 02]: [Phase 02] Plan 02-02 (LOG-21/BUG-05 snapshotEmitJob CAS-scheduled AtomicReference; LOG-19/BUG-03 a-tag deletions resolve against the in-memory cache too) closed out after an interrupted prior executor run left both task commits done but doc/state work unfinished -- verified against acceptance_criteria (fresh 31/31 test pass, compileDebugKotlin/lintDebug clean) rather than re-implemented
 
 ### Pending Todos
 
@@ -104,6 +106,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-03T21:54:55.537Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-09-04T06:11:47.545Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None

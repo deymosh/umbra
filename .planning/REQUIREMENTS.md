@@ -9,9 +9,9 @@
 
 - [x] **BUG-01**: Promote LOG-17's 8 swallowed-exception debug-level log sites (`PublishEventUseCases.kt`, `LoginViewModel.kt`, `UmbraNostrClient.kt`, `RelayMessageHandling.kt`, `RelayWebSocketListener.kt`) to scrubbed error-level logging with the throwable attached — all 8 sites done (2 in Plan 01-01, 6 in Plan 01-02)
 - [x] **BUG-02**: Scrub LOG-18's 3 unscrubbed log sites (`EventRepositoryImpl.kt` relay-URL interpolations x2, `NegentropySyncOrchestrator.kt` throwable message x1) via `LogScrubber`
-- [ ] **BUG-03**: Fix LOG-19 — NIP-09 `"a"`-tag deletions never take effect for a non-owned author's cached addressable event (`EventIngestCache.applyIncomingDeletion` needs an in-memory lookup alongside `ownEventArchive`)
+- [x] **BUG-03**: Fix LOG-19 — NIP-09 `"a"`-tag deletions never take effect for a non-owned author's cached addressable event (`EventIngestCache.applyIncomingDeletion` needs an in-memory lookup alongside `ownEventArchive`)
 - [x] **BUG-04**: Fix LOG-20 — log the exception currently swallowed by `clearAllData()`'s `disconnectFromAll()` catch block
-- [ ] **BUG-05**: Fix LOG-21 — replace `EventIngestCache.snapshotEmitJob`'s unsynchronized `var` with `AtomicReference<Job?>`, matching `insertDebounceJob`'s existing pattern
+- [x] **BUG-05**: Fix LOG-21 — replace `EventIngestCache.snapshotEmitJob`'s unsynchronized `var` with `AtomicReference<Job?>`, matching `insertDebounceJob`'s existing pattern
 - [ ] **BUG-06**: Fix LOG-22 — give `ProfileViewModel.deleteEvent` the same pending-action-plus-rollback treatment as `toggleMute`/`togglePin`/`toggleFollow`
 - [ ] **BUG-07**: Fix LOG-23 — `FeedViewModel.muteUser`'s local-filter mute mirror resolves the active filter the same way `ProfileViewModel.toggleMute` does, instead of a lookup that can never match
 - [ ] **BUG-08**: Fix LOG-24 — `FeedViewModel.muteUser`/`togglePin` check the mute/pin write's `Result` and surface failure, instead of discarding it
@@ -75,8 +75,8 @@ None — this milestone is deliberately scoped to stability + release, not new f
 | BUG-09 | Phase 1 | Complete |
 | BUG-10 | Phase 1 | Complete |
 | BUG-11 | Phase 1 | Complete |
-| BUG-03 | Phase 2 | Pending |
-| BUG-05 | Phase 2 | Pending |
+| BUG-03 | Phase 2 | Complete |
+| BUG-05 | Phase 2 | Complete |
 | BUG-06 | Phase 2 | Pending |
 | BUG-07 | Phase 2 | Pending |
 | BUG-08 | Phase 2 | Pending |
