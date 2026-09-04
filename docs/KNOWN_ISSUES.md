@@ -662,11 +662,20 @@ in the same view, so this is realistically reachable, not theoretical. Fix: rout
 `RelayCrudCoordinatorTest` case racing `removeRelayRole` against a setter on the same relay id.
 
 ### LOG-38 — NostrSessionManager's plain instance fields are still unsynchronized across the two coroutines LOG-30's own fix comment says race each other
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-09-04
 - **Where:** `data/nostr/NostrSessionManager.kt:150-171` (field declarations), `:311-398`
   (`reconcile`), `:449-460` (`startUserHistoryBackfill`), `:596-603` (`scheduleRetry`), `:271-287`
   (`stop`)
+- **Fix:** `relaysConnected`, `backfillPubkey`, `firstRelayConnectedLogged`, `lastSnapshot`, and
+  `ownProfileBootstrapPubkey` are now `@Volatile`, guaranteeing the write from whichever thread
+  (the combine()-driven collect loop, scheduleRetry()'s delayed relaunch, or stop()'s caller) is
+  visible to a read on any other. Every mutation of these five fields is a single unconditional
+  assignment, never a read-modify-write of the field's own prior value, so cross-thread visibility
+  was the actual gap — a full Mutex around reconcile()'s body was considered and rejected as a
+  much larger, higher-risk restructuring for a class with no dedicated unit test (see LOG-44) to
+  catch a regression. No dedicated concurrency test exists for this fix; flagged for manual
+  verification.
 
 Found during Phase 2's code review of the LOG-30 fix. LOG-30 converted `retryJob`,
 `userBackfillJob`, and `ownProfileBootstrapWatcherJob` to `AtomicReference<Job?>`, correctly

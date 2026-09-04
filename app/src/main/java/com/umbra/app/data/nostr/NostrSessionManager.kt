@@ -159,14 +159,28 @@ class NostrSessionManager @Inject constructor(
     private var torCircuitRecoveryJob: Job? = null
     private val retryJob = AtomicReference<Job?>(null)
     private var appStartMs: Long = 0L
+    // The five fields below are all read and written from reconcile()'s two genuinely-concurrent
+    // entry points on this class's own multi-threaded scope (Dispatchers.IO, not confined to one
+    // thread): the bootstrapJob's combine()-driven collect loop, and scheduleRetry()'s own delayed
+    // relaunch (see retryJob above and reconcile()'s doc comment). @Volatile guarantees the write
+    // from one of those threads is visible to a read on the other — it does not make a
+    // read-check-write sequence atomic, but every actual mutation here is a single unconditional
+    // assignment (never a read-modify-write of its own prior value), so visibility is the only gap
+    // that existed. stop() also writes several of these from whatever thread calls it; @Volatile
+    // covers that cross-thread visibility too.
+    @Volatile
     private var firstRelayConnectedLogged = false
+    @Volatile
     private var relaysConnected = false
+    @Volatile
     private var lastSnapshot: OrchestratorSnapshot? = null
     private val userBackfillJob = AtomicReference<Job?>(null)
+    @Volatile
     private var backfillPubkey: String? = null
     // Pubkey the own-profile bootstrap channel (BootstrapOwnProfileUseCase) is currently open
     // for — null when no bootstrap is active. Keyed by pubkey (not a plain boolean) so a session
     // that switches identity without a full stop()/start() cycle still bootstraps the new one.
+    @Volatile
     private var ownProfileBootstrapPubkey: String? = null
     private val ownProfileBootstrapWatcherJob = AtomicReference<Job?>(null)
 
