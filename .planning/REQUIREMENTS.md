@@ -13,8 +13,8 @@
 - [x] **BUG-04**: Fix LOG-20 — log the exception currently swallowed by `clearAllData()`'s `disconnectFromAll()` catch block
 - [x] **BUG-05**: Fix LOG-21 — replace `EventIngestCache.snapshotEmitJob`'s unsynchronized `var` with `AtomicReference<Job?>`, matching `insertDebounceJob`'s existing pattern
 - [x] **BUG-06**: Fix LOG-22 — give `ProfileViewModel.deleteEvent` the same pending-action-plus-rollback treatment as `toggleMute`/`togglePin`/`toggleFollow`
-- [ ] **BUG-07**: Fix LOG-23 — `FeedViewModel.muteUser`'s local-filter mute mirror resolves the active filter the same way `ProfileViewModel.toggleMute` does, instead of a lookup that can never match
-- [ ] **BUG-08**: Fix LOG-24 — `FeedViewModel.muteUser`/`togglePin` check the mute/pin write's `Result` and surface failure, instead of discarding it
+- [x] **BUG-07**: Fix LOG-23 — `FeedViewModel.muteUser`'s local-filter mute mirror resolves the active filter the same way `ProfileViewModel.toggleMute` does, instead of a lookup that can never match
+- [x] **BUG-08**: Fix LOG-24 — `FeedViewModel.muteUser`/`togglePin` check the mute/pin write's `Result` and surface failure, instead of discarding it
 - [x] **BUG-09**: Fix LOG-26 — apply LOG-25's already-shipped logout exception-logging fix to `SettingsScreen.kt`'s independent logout entry point
 - [x] **BUG-10**: Fix LOG-27 — log each per-step cleanup exception (scrubbed) in `LogoutUseCase` and `TrimMemoryCachesUseCase` instead of silently swallowing it
 - [x] **BUG-11**: Fix LOG-28 — stop swallowing `activateUserSession`'s exception inside `LoginViewModel`'s inner catch so the outer, already-working logging path can see it
@@ -78,8 +78,8 @@ None — this milestone is deliberately scoped to stability + release, not new f
 | BUG-03 | Phase 2 | Complete |
 | BUG-05 | Phase 2 | Complete |
 | BUG-06 | Phase 2 | Complete |
-| BUG-07 | Phase 2 | Pending |
-| BUG-08 | Phase 2 | Pending |
+| BUG-07 | Phase 2 | Complete |
+| BUG-08 | Phase 2 | Complete |
 | BUG-12 | Phase 2 | Complete |
 | BUG-13 | Phase 2 | Complete |
 | BUG-14 | Phase 2 | Complete |

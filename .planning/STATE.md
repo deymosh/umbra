@@ -4,17 +4,17 @@ milestone: v0.1.0
 milestone_name: Hardening & First Public Release
 current_phase: 02
 current_phase_name: Concurrency & State Correctness
-status: executing
-stopped_at: Completed 02-04-PLAN.md
-last_updated: "2026-09-04T06:41:00.000Z"
+status: verifying
+stopped_at: Completed 02-05-PLAN.md (Phase 2 complete, all 5 plans)
+last_updated: "2026-09-04T06:50:34.962Z"
 last_activity: 2026-09-04
 last_activity_desc: Phase 02 Plan 4 (NostrSessionManager job-field atomicity, BUG-13) completed
-state_head: f1fa2aa
+state_head: 05e678e025daf4d40815d355df4444d2751e1932
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
   percent: 25
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-09-03)
 
 Phase: 02 (Concurrency & State Correctness) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-04 — Phase 02 Plan 4 (NostrSessionManager job-field atomicity, BUG-13) completed
 
 Progress: [███░░░░░░░] 25%
@@ -67,6 +67,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P02 | N/A (resumed from interrupted run) | 2 tasks | 3 files |
 | Phase 02 P03 | ~6min | 3 tasks | 4 files |
 | Phase 02 P04 | ~24min | 3 tasks | 4 files |
+| Phase 02 P05 | ~3min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,7 @@ Recent decisions affecting current work:
 - [Phase 02]: [Phase 02] Plan 02-02 (LOG-21/BUG-05 snapshotEmitJob CAS-scheduled AtomicReference; LOG-19/BUG-03 a-tag deletions resolve against the in-memory cache too) closed out after an interrupted prior executor run left both task commits done but doc/state work unfinished -- verified against acceptance_criteria (fresh 31/31 test pass, compileDebugKotlin/lintDebug clean) rather than re-implemented
 - [Phase 02]: [Phase 02] Plan 02-03 (LOG-22/BUG-06): deleteEvent's onOptimisticApply renamed onDeleteConfirmed and moved inside requestSignAndPublish's onSigned callback, alongside the cache/archive removal -- no pending-action/rollback machinery added since nothing is applied before confirmation; FeedViewModel.kt untouched (only ever passed onCacheRemoveFailure)
 - [Phase 02]: [Phase 02] Plan 02-04 (LOG-30/BUG-13): audited all six NostrSessionManager job fields; retryJob/userBackfillJob/ownProfileBootstrapWatcherJob converted to AtomicReference<Job?> scheduled through two new non-blocking helpers (launchIfIdle/launchReplacing in new AtomicJobScheduling.kt); bootstrapJob/autoDisableRelayJob/torCircuitRecoveryJob stay plain, documented with an inline start()/stop()-serialization invariant. The 200-iteration real-thread concurrency test itself caught a compareAndSet-ordering race in the plan's literal launchIfIdle spec (isActive-keyed check left a window before start() landed) -- fixed by keying the idle check on isCompleted instead (Rule 1 auto-fix)
+- [Phase 02]: [Phase 02] Plan 02-05 (LOG-23/BUG-07, LOG-24/BUG-08): FeedViewModel.muteUser's dead mute mirror now resolves via feedRepository.getActiveFilters().first().firstOrNull() (matching ProfileViewModel.toggleMute) instead of a by-id lookup against mergeActiveFeedFilters's fixed synthetic id; muteUser/togglePin's onSigned callbacks now capture and map their write's Result via two new top-level muteWriteResultMessage/pinWriteResultMessage functions reusing ProfileViewModel's exact error vocabulary (D-04). TDD RED/GREEN followed for Task 2. Phase 2 (all 5 plans) now complete.
 
 ### Pending Todos
 
@@ -110,6 +112,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-04T06:41:00.000Z
-Stopped at: Completed 02-04-PLAN.md
+Last session: 2026-09-04T06:50:34.939Z
+Stopped at: Completed 02-05-PLAN.md (Phase 2 complete, all 5 plans)
 Resume file: None
