@@ -28,9 +28,9 @@ import kotlinx.coroutines.launch
  * JSON/share-URL formatting. It never calls `canSignWithAmber()` itself — the two callers show
  * different error messages (or none at all) when a write is blocked, so that guard and its
  * UI-state side effect stay on each caller's own wrapper method, one guard per call path. It also
- * never decides WHEN to mutate relative to a sign confirmation — one caller commits only after
- * Amber confirms the signature, the other commits optimistically and rolls back on failure — that
- * ordering is entirely caller-controlled by which of this class's methods it calls from where.
+ * never decides WHEN to mutate relative to a sign confirmation — every mutation this class
+ * performs, for every caller, commits only after Amber confirms the signature; there is no
+ * optimistic-apply-then-rollback path anywhere in this coordinator.
  */
 internal class InteractionActionsCoordinator(
     private val userPreferences: UserPreferences,
@@ -148,23 +148,29 @@ internal class InteractionActionsCoordinator(
         if (pin) pinListRepository.pin(eventId) else pinListRepository.unpin(eventId)
 
     /**
-     * Orchestrates a NIP-09 delete: builds and fires the sign-and-publish round trip, then invokes
-     * [onOptimisticApply] synchronously — before the async cache-removal call below even starts —
-     * so a caller relying on that exact ordering gets it, then asynchronously removes the event
-     * from the local cache/archive, invoking [onCacheRemoveFailure] if that removal fails. Neither
-     * current caller gates this on `canSignWithAmber()`; this primitive does not add one.
+     * Orchestrates a NIP-09 delete: builds the delete request and fires the sign-and-publish round
+     * trip, running both [onDeleteConfirmed] (the caller's visible-state removal) and the local
+     * cache/archive removal only once Amber has actually confirmed the signature — from inside
+     * [requestSignAndPublish]'s `onSigned` callback, before the signed event is published.
+     * [onCacheRemoveFailure] fires if that cache/archive removal itself fails. A rejected or failed
+     * sign runs neither: nothing is applied ahead of confirmation, so there is nothing to roll
+     * back. Neither current caller gates this on `canSignWithAmber()`; this primitive does not add
+     * one.
      */
     fun deleteEvent(
         event: Event,
         currentUserHex: String,
-        onOptimisticApply: () -> Unit = {},
+        onDeleteConfirmed: () -> Unit = {},
         onCacheRemoveFailure: () -> Unit = {}
     ) {
         val eventJson = deleteNoteUseCase(event, currentUserHex).getOrElse { return }
-        requestSignAndPublish(eventJson, currentUserHex)
-        onOptimisticApply()
-        scope.launch {
-            removeDeletedNoteFromCacheUseCase(event.id).onFailure { onCacheRemoveFailure() }
-        }
+        requestSignAndPublish(
+            eventJson,
+            currentUserHex,
+            onSigned = {
+                onDeleteConfirmed()
+                removeDeletedNoteFromCacheUseCase(event.id).onFailure { onCacheRemoveFailure() }
+            }
+        )
     }
 }
