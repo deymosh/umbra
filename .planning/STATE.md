@@ -5,16 +5,16 @@ milestone_name: Hardening & First Public Release
 current_phase: 02
 current_phase_name: Concurrency & State Correctness
 status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-09-04T06:11:47.567Z"
+stopped_at: Completed 02-03-PLAN.md
+last_updated: "2026-09-04T06:18:56.508Z"
 last_activity: 2026-09-03
 last_activity_desc: Phase 02 execution started
-state_head: b674248eefe60fa52b2326f36f0d0f5a855693b5
+state_head: 3463eb7685cc73f03c7b5c5e714c380d1790a32e
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 6
   percent: 25
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-09-03)
 ## Current Position
 
 Phase: 02 (Concurrency & State Correctness) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-09-03 — Phase 02 execution started
 
@@ -65,6 +65,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 01 P03 | ~20min | 3 tasks | 5 files |
 | Phase 02 P01 | 14min | 2 tasks | 4 files |
 | Phase 02 P02 | N/A (resumed from interrupted run) | 2 tasks | 3 files |
+| Phase 02 P03 | ~6min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,7 @@ Recent decisions affecting current work:
 - [Phase 02]: [Phase 2 Plan 1] Per-relay-id Mutex (D-06) plus fresh RelayRepository.getRelayById read closes RelayCrudCoordinator's lost-update race (LOG-29/BUG-12) -- the lock alone wasn't sufficient since state.relays only resyncs via a 300ms-throttled collector
 - [Phase 02]: [Phase 2 Plan 1] setDmEnabled's dmRelayListDirty set moved into the mapper, after the transport-rejection branch, so a rejected/no-op DM enable never claims the published DM list changed (LOG-31/BUG-14)
 - [Phase 02]: [Phase 02] Plan 02-02 (LOG-21/BUG-05 snapshotEmitJob CAS-scheduled AtomicReference; LOG-19/BUG-03 a-tag deletions resolve against the in-memory cache too) closed out after an interrupted prior executor run left both task commits done but doc/state work unfinished -- verified against acceptance_criteria (fresh 31/31 test pass, compileDebugKotlin/lintDebug clean) rather than re-implemented
+- [Phase 02]: [Phase 02] Plan 02-03 (LOG-22/BUG-06): deleteEvent's onOptimisticApply renamed onDeleteConfirmed and moved inside requestSignAndPublish's onSigned callback, alongside the cache/archive removal -- no pending-action/rollback machinery added since nothing is applied before confirmation; FeedViewModel.kt untouched (only ever passed onCacheRemoveFailure)
 
 ### Pending Todos
 
@@ -106,6 +108,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-04T06:11:47.545Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-09-04T06:18:56.486Z
+Stopped at: Completed 02-03-PLAN.md
 Resume file: None
