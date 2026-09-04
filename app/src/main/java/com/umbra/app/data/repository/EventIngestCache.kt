@@ -2,6 +2,7 @@ package com.umbra.app.data.repository
 
 import com.umbra.app.data.db.entities.EventEntity
 import com.umbra.app.data.db.entities.EventTagEntity
+import com.umbra.app.data.nostr.launchReplacing
 import com.umbra.app.data.repository.cache.EventLruCache
 import com.umbra.app.domain.crypto.EventCrypto
 import com.umbra.app.domain.feed.FeedFilter
@@ -518,16 +519,23 @@ internal class EventIngestCache(
         if (isWiping()) return
         if (!isCurrentUserPubkey(entity.pubkey)) return
         pendingInserts.add(PendingEventInsert(entity = entity, tags = tags, replaceableKey = replaceableKey))
-        val newJob = repoScope.launch(Dispatchers.IO) {
-            delay(INSERT_DEBOUNCE_MS)
-            val batch = buildList {
-                while (pendingInserts.isNotEmpty()) pendingInserts.poll()?.let { add(it) }
-            }
-            if (batch.isNotEmpty()) {
-                ownEventArchive.writeBatch(batch)
+        // launchReplacing (not a plain launch + getAndSet(...).cancel()) guarantees the previous
+        // debounce job is cancelled strictly before this one starts running — a plain eager
+        // launch here let the new job's delay begin before the old job was cancelled, leaving a
+        // narrow window where both were alive at once and could each independently flush their
+        // own ownEventArchive.writeBatch() instead of the one coalesced batch this debounce exists
+        // to produce (LOG-40).
+        insertDebounceJob.launchReplacing(repoScope) {
+            withContext(Dispatchers.IO) {
+                delay(INSERT_DEBOUNCE_MS)
+                val batch = buildList {
+                    while (pendingInserts.isNotEmpty()) pendingInserts.poll()?.let { add(it) }
+                }
+                if (batch.isNotEmpty()) {
+                    ownEventArchive.writeBatch(batch)
+                }
             }
         }
-        insertDebounceJob.getAndSet(newJob)?.cancel()
     }
 
     /** Cancels any in-flight [scheduleInsert] debounce and drops its queued-but-not-yet-written

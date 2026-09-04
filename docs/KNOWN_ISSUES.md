@@ -718,9 +718,14 @@ anonymous-session relay restriction" } }` after the `runCatching` block, matchin
 shape.
 
 ### LOG-40 — EventIngestCache.scheduleInsert's cancel-and-replace ordering lets the old and new debounce jobs run concurrently
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-09-04
 - **Where:** `data/repository/EventIngestCache.kt:513-531` (`scheduleInsert`)
+- **Fix:** `scheduleInsert` now routes through `AtomicJobScheduling.launchReplacing` (already used
+  elsewhere in this file/package), which builds the replacement job lazily and only `start()`s it
+  after the previous job is cancelled — restoring the cancel-strictly-before-start ordering this
+  method's hand-rolled version got backwards. `Dispatchers.IO` moved inside the block via
+  `withContext` since `launchReplacing` launches on `repoScope` directly.
 
 Found during Phase 2's code review, comparing `scheduleInsert` against the same file's
 `scheduleSnapshotEmit` and `AtomicJobScheduling.launchReplacing`, both of which guarantee the old
