@@ -51,9 +51,21 @@ internal fun AtomicReference<Job?>.launchIfIdle(
  * held is cancelled.
  *
  * The candidate is created lazily and only `start()`ed after the displaced job has been
- * cancelled, preserving the cancel-the-old-before-the-new-runs ordering every existing call site
- * already depends on. A non-lazy launch would let the replacement begin executing concurrently
- * with its predecessor's cancellation instead of strictly after it.
+ * cancelled, so within a single call to this function the cancel-the-old-before-the-new-runs
+ * ordering holds: a non-lazy launch would let the replacement begin executing concurrently with
+ * its own predecessor's cancellation instead of strictly after it.
+ *
+ * That ordering guarantee is per-call, not per-reference. `getAndSet` is the only atomic step;
+ * the cancel and the subsequent `start()` are two separate, unsynchronized statements. If two
+ * threads call this function on the same [AtomicReference] with no external synchronization, the
+ * job installed by the first call can legitimately still be running (cooperative cancellation
+ * only takes effect at its next suspension point) at the moment the second call's `start()`
+ * executes, so the two bodies can execute concurrently for a window. Every current call site
+ * (`EventIngestCache.insertDebounceJob`, `NostrSessionManager.userBackfillJob`/
+ * `ownProfileBootstrapWatcherJob`) tolerates that window because the displaced work is itself
+ * idempotent/re-derivable, not because this function prevents the overlap. A caller that cannot
+ * tolerate the overlap must serialize its own calls to this function (e.g. via its own `Mutex`)
+ * rather than relying on this function alone.
  */
 internal fun AtomicReference<Job?>.launchReplacing(
     scope: CoroutineScope,
