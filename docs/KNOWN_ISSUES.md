@@ -789,3 +789,67 @@ add/edit dialog typically has focus while open, but it's still an unguarded writ
 records the rest of this class treats as needing per-relay serialization. Fix: either document why
 the UI genuinely can't produce this race (dialog exclusivity), or route `saveRelay`/`deleteRelay`'s
 persistence calls through the same `relayRoleMutexes[relayId]` guard.
+
+### LOG-46 — InteractionActionsCoordinator.mirrorMuteIntoActiveFilter used stdlib runCatching, swallowing CancellationException
+- **Status:** fix applied — needs on-device validation
+- **Found:** 2026-09-04
+- **Where:** `ui/common/InteractionActionsCoordinator.kt:135-149` (`mirrorMuteIntoActiveFilter`)
+- **Fix:** Migrated to `runCatchingCancellable` (the same helper LOG-43's fix introduced), so a
+  `CancellationException` thrown while suspended in `resolveActiveFilter()` or
+  `feedRepository.updateMutedAuthors(...)` now propagates instead of being silently captured into
+  an ordinary `Result.failure`.
+
+Found during Phase 2's iteration-2 code re-review, as the one leftover call site LOG-43's
+systemic `runCatchingCancellable` migration missed. Both callers (`FeedViewModel.muteUser`,
+`ProfileViewModel.toggleMute`) invoke `mirrorMuteIntoActiveFilter` from inside
+`requestSignAndPublish`'s `scope.launch { ... }` — a genuinely cancellable coroutine (e.g.
+cancelled when the owning ViewModel is cleared mid-mute) — so this was the exact bug class LOG-43
+was meant to close, left open in this one file.
+
+### LOG-47 — RelayCrudCoordinator.saveRelay's merge branch based its OR-merged write on a stale pre-lock snapshot
+- **Status:** fix applied — needs on-device validation
+- **Found:** 2026-09-04
+- **Where:** `ui/relay/RelayCrudCoordinator.kt:82-124` (`saveRelay`, existing-relay merge branch)
+- **Fix:** The merge branch now re-reads the base relay from
+  `relayRepository.getRelayById(existingRelay.id)` (falling back to `existingRelay` only if that
+  lookup returns null) *inside* the per-relay-id `withLock` block, the same pattern
+  `updateRelayRole` already uses, before computing the OR-merged result.
+
+Found during Phase 2's iteration-2 code re-review, as a residual gap in LOG-42's fix. LOG-42
+correctly added the per-relay-id mutex to this merge branch, but the merge itself still computed
+its OR-merged write (`existingRelay.X || sanitizedRelay.X` — every flag only ever turns a role on)
+against `existingRelay`, captured from the throttled `state.relays` UI mirror *before* the lock
+was acquired. A concurrent role-disable landing in that window was silently reverted by the
+stale-based OR merge even though the mutex prevented the two writes from corrupting each other —
+the lock serialized the writes but did nothing to prevent one of them from being computed from
+already-stale data.
+
+### LOG-49 — NostrSessionManager.maybeBootstrapOwnProfile's check-then-act guard wasn't atomic under reconcile()'s two concurrent entry points
+- **Status:** fix applied — needs on-device validation
+- **Found:** 2026-09-04
+- **Where:** `data/nostr/NostrSessionManager.kt:427-452` (`maybeBootstrapOwnProfile`)
+- **Fix:** Wrapped the method's full check-then-act body (the `ownProfileBootstrapPubkey != pubkey`
+  guard through `bootstrapOwnProfileUseCase.start(pubkey)`) in a dedicated `ownProfileBootstrapMutex`,
+  so `reconcile()`'s two documented concurrent entry points (the `bootstrapJob` collect loop and
+  `retryJob`'s delayed relaunch) can interleave their scheduling but not their compound decisions.
+
+Found during Phase 2's iteration-2 code re-review. `@Volatile` on `ownProfileBootstrapPubkey` only
+guarantees each individual read/write is visible across threads — it does not make the
+read-decide-write sequence in `maybeBootstrapOwnProfile` exclusive. Two overlapping `reconcile()`
+calls for the same pubkey could both observe the stale (pre-write) value and both call
+`bootstrapOwnProfileUseCase.start(pubkey)`, a duplicate channel start whose safety otherwise
+depended on that use case tolerating a double `start()` — outside this file's own scope to
+guarantee.
+
+### LOG-51 — NostrSessionManager's onFailure handlers logged a scrubbed message instead of the throwable
+- **Status:** fix applied — needs on-device validation
+- **Found:** 2026-09-04
+- **Where:** `data/nostr/NostrSessionManager.kt` (`disableDeadRelay`'s and `reconcile`'s
+  `.onFailure` handlers)
+- **Fix:** Both sites now call `logger.e(e) { ... }` / `logger.e(error) { ... }` instead of
+  `logger.d { ... }`, keeping the same scrubbed message text as the log line's content — matching
+  `RelayConfigViewModel`'s existing correct pattern (see LOG-39's fix).
+
+Found during Phase 2's iteration-2 code re-review. Both handlers routed their caught throwable
+through `.d { "... ${scrubThrowableMessageForLogs(e)}" }`, discarding the stack trace that would
+otherwise be available for on-device debugging, instead of `.e(e) { ... }`.

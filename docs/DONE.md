@@ -202,3 +202,45 @@ racing in for the now-deleted id right after gets a fresh, unlocked `Mutex` from
 nothing — same as any other unknown `relayId`.
 **Completed:** 2026-09-04
 **From:** TODO LOG-45
+
+### LOG-48 — AtomicJobScheduling.launchReplacing's docstring overstated its cancel-before-start ordering guarantee under concurrent unsynchronized callers
+- **Status:** backlog
+- **Added:** 2026-09-04
+- **Why:** Found during Phase 2's iteration-2 code re-review — the guarantee only holds within a
+  single caller's own three-step sequence, not across genuinely concurrent unsynchronized callers
+  on the same `AtomicReference`, but practical impact for both current call sites is low (the
+  displaced work is itself idempotent/re-derivable), so a docstring correction was preferred over
+  a structural fix in this second fixer pass to avoid compounding risk.
+
+`launchReplacing`'s docstring claimed the displaced job is always fully cancelled before the
+replacement starts. Only the `getAndSet` on the `AtomicReference` is atomic — the cancel and the
+subsequent `start()` are two separate, unsynchronized statements. Under two genuinely concurrent
+callers on the same reference with no external synchronization, the first candidate can still be
+running when the second's `start()` executes (cooperative cancellation only takes effect at the
+next suspension point), so both bodies can execute concurrently for a window — exactly what the
+docstring claimed couldn't happen.
+
+Docstring rewritten to state the guarantee accurately: cancel-before-start ordering holds
+per-call, not per-reference; a caller that cannot tolerate the overlap must serialize its own
+calls to this function. Both current call sites (`EventIngestCache.insertDebounceJob`,
+`NostrSessionManager.userBackfillJob`/`ownProfileBootstrapWatcherJob`) already tolerate the
+overlap for the reasons noted above, so no structural change was needed.
+**Completed:** 2026-09-04
+**From:** TODO LOG-48
+
+### LOG-50 — No dedicated unit test for runCatchingCancellable
+- **Status:** backlog
+- **Added:** 2026-09-04
+- **Why:** Found during Phase 2's iteration-2 code re-review — `runCatchingCancellable` is now
+  shared, load-bearing infrastructure (`NostrSessionManager`, `RelayConfigViewModel`, and per
+  LOG-46 now `InteractionActionsCoordinator`), but had no direct regression coverage of its own.
+
+`CancellableRunCatching.kt` had no `CancellableRunCatchingTest.kt` asserting its two behaviors
+directly: a thrown `CancellationException` propagates instead of being captured, and any other
+`Throwable` is captured into `Result.failure` exactly like the stdlib version.
+
+Added `app/src/test/java/com/umbra/app/util/coroutines/CancellableRunCatchingTest.kt` with three
+cases: `CancellationException` propagates, a plain exception becomes `Result.failure`, and a
+normal return value is wrapped into `Result.success`.
+**Completed:** 2026-09-04
+**From:** TODO LOG-50
