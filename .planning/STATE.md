@@ -22,10 +22,10 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-09-03)
+See: .planning/PROJECT.md (updated 2026-09-04)
 
 **Core value:** A trustworthy, stable first public release that upholds Umbra's TOR-only and Amber-only guarantees without regressions
-**Current focus:** Phase 02 — Concurrency & State Correctness
+**Current focus:** Phase 3 — Fix Validation & Test Coverage
 
 ## Current Position
 
@@ -93,15 +93,18 @@ Recent decisions affecting current work:
 - [Phase 02]: [Phase 02] Plan 02-02 (LOG-21/BUG-05 snapshotEmitJob CAS-scheduled AtomicReference; LOG-19/BUG-03 a-tag deletions resolve against the in-memory cache too) closed out after an interrupted prior executor run left both task commits done but doc/state work unfinished -- verified against acceptance_criteria (fresh 31/31 test pass, compileDebugKotlin/lintDebug clean) rather than re-implemented
 - [Phase 02]: [Phase 02] Plan 02-03 (LOG-22/BUG-06): deleteEvent's onOptimisticApply renamed onDeleteConfirmed and moved inside requestSignAndPublish's onSigned callback, alongside the cache/archive removal -- no pending-action/rollback machinery added since nothing is applied before confirmation; FeedViewModel.kt untouched (only ever passed onCacheRemoveFailure)
 - [Phase 02]: [Phase 02] Plan 02-04 (LOG-30/BUG-13): audited all six NostrSessionManager job fields; retryJob/userBackfillJob/ownProfileBootstrapWatcherJob converted to AtomicReference<Job?> scheduled through two new non-blocking helpers (launchIfIdle/launchReplacing in new AtomicJobScheduling.kt); bootstrapJob/autoDisableRelayJob/torCircuitRecoveryJob stay plain, documented with an inline start()/stop()-serialization invariant. The 200-iteration real-thread concurrency test itself caught a compareAndSet-ordering race in the plan's literal launchIfIdle spec (isActive-keyed check left a window before start() landed) -- fixed by keying the idle check on isCompleted instead (Rule 1 auto-fix)
-- [Phase 02]: [Phase 02] Plan 02-05 (LOG-23/BUG-07, LOG-24/BUG-08): FeedViewModel.muteUser's dead mute mirror now resolves via feedRepository.getActiveFilters().first().firstOrNull() (matching ProfileViewModel.toggleMute) instead of a by-id lookup against mergeActiveFeedFilters's fixed synthetic id; muteUser/togglePin's onSigned callbacks now capture and map their write's Result via two new top-level muteWriteResultMessage/pinWriteResultMessage functions reusing ProfileViewModel's exact error vocabulary (D-04). TDD RED/GREEN followed for Task 2. Phase 2 (all 5 plans) now complete.
+- [Phase 02]: [Phase 02] Plan 02-05 (LOG-23/BUG-07, LOG-24/BUG-08): FeedViewModel.muteUser's dead mute mirror now resolves via feedRepository.getActiveFilters().first().firstOrNull() (matching ProfileViewModel.toggleMute) instead of a by-id lookup against mergeActiveFeedFilters's fixed synthetic id; muteUser/togglePin's onSigned callbacks now capture and map their write's Result via two new top-level muteWriteResultMessage/pinWriteResultMessage functions reusing ProfileViewModel's exact error vocabulary. TDD RED/GREEN followed for Task 2. Phase 2 (all 5 plans) now complete.
+- [Phase 02]: Post-execution code review ran a 3-iteration auto-fix chain (user-directed: fix findings within the same phase rather than deferring to backlog). Iteration 1 found 3 Critical + 5 Warning + 1 Info — including two sibling methods (`RelayCrudCoordinator.removeRelayRole`, `saveRelay`/`deleteRelay`) that reintroduced Plan 02-01's exact lost-update race, and `NostrSessionManager`'s `reconcile()`-reachable plain fields still racing despite its Job-field fix. Iterations 2-3 each caught new, narrowing-severity residuals in the prior iteration's own fixes (a leftover `runCatching` call site, a still-stale-mirror existence check, an unguarded `stopOwnProfileBootstrap`) — genuine convergence, not diminishing returns, though the loop hit its 3-pass cap before a final clean re-review. 20 fix commits total; LOG-37 through LOG-55 logged. One item (LOG-44, missing NostrSessionManager/RelayConfigViewModel test coverage) deliberately left open — no mocking framework, no interface seam, real architectural change out of scope for a fix pass. Two separate session rate-limit interruptions during this chain were recovered by verifying already-landed commits before resuming, never redoing completed work.
+- [Phase 02]: Phase verification found one non-functional gap: three source comments embedded GSD decision ids (`D-06`, `D-04`), violating CLAUDE.md's explicit rule. Fixed directly (one commit, comment-only, no behavior change) and re-verified clean rather than routing through the full `/gsd-plan-phase --gaps` cycle for a trivial compliance fix.
 
 ### Pending Todos
 
-None yet. (Project bug/backlog tracking lives in docs/KNOWN_ISSUES.md, docs/TODO.md, docs/DONE.md under the shared LOG-N counter, currently at LOG-36.)
+None yet. (Project bug/backlog tracking lives in docs/KNOWN_ISSUES.md, docs/TODO.md, docs/DONE.md under the shared LOG-N counter, currently at LOG-55.)
 
 ### Blockers/Concerns
 
 - Phase 4 REL-02: `assembleRelease` may not be runnable locally if release signing keys are absent — the R8-shaped `assembleBenchmark` is the documented fallback and the substitution must be recorded explicitly.
+- LOG-44 (open, docs/TODO.md): `NostrSessionManager`/`RelayConfigViewModel` have no dedicated unit test for the concurrency behavior Phase 2 changed — deliberately deferred, not forgotten; revisit if a mocking framework or interface seam is ever introduced.
 
 ## Deferred Items
 
@@ -113,6 +116,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-04T06:50:34.939Z
-Stopped at: Phase 02 complete, ready to plan Phase 3
+Last session: 2026-09-04T16:53:36.000Z
+Stopped at: Phase 02 complete (incl. 3-iteration code-review fix chain), ready to plan Phase 3
 Resume file: None
