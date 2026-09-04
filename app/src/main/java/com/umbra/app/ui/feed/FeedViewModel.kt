@@ -150,7 +150,7 @@ internal fun shouldShowFeedInitialLoading(uiState: FeedState, computedEvents: Li
 
 /**
  * Maps the local mute-list write's [result] to what the feed shows the user, matching
- * ProfileViewModel.toggleMute's error vocabulary exactly (D-04) — muteUser only ever mutes, so
+ * ProfileViewModel.toggleMute's error vocabulary exactly — muteUser only ever mutes, so
  * there is no unmute branch here.
  */
 internal fun muteWriteResultMessage(result: Result<Unit>): UiMessage =
@@ -163,7 +163,7 @@ internal fun muteWriteResultMessage(result: Result<Unit>): UiMessage =
 /**
  * Maps the local pin-list write's [result] to what the feed shows the user, branching on
  * [wasPinned] (the pre-toggle state) exactly as togglePin already computes it, and matching
- * ProfileViewModel.togglePin's error vocabulary exactly (D-04).
+ * ProfileViewModel.togglePin's error vocabulary exactly.
  */
 internal fun pinWriteResultMessage(result: Result<Unit>, wasPinned: Boolean): UiMessage =
     if (result.isSuccess) {

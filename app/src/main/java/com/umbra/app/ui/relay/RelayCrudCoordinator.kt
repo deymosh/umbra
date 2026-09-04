@@ -45,7 +45,7 @@ internal class RelayCrudCoordinator(
     private val scope: CoroutineScope
 ) {
 
-    // Per-relay-id lock for updateRelayRole (LOG-29/BUG-12/D-06): two concurrent role toggles on
+    // Per-relay-id lock for updateRelayRole: two concurrent role toggles on
     // the SAME relay must serialize so neither one's write is silently lost, while toggles on
     // DIFFERENT relays keep running concurrently instead of waiting on an unrelated relay's write.
     private val relayRoleMutexes = ConcurrentHashMap<String, Mutex>()
