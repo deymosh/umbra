@@ -37,9 +37,9 @@ import org.junit.Test
 /**
  * Regression coverage for [InteractionActionsCoordinator]'s extraction of the near-identical
  * like/repost/mute/pin/delete/share/get-JSON plumbing duplicated across FeedViewModel and
- * ProfileViewModel — the highest-risk cluster in this coordinator (each ViewModel's genuinely different
- * optimistic-update timing lives entirely in the callers, not here; see `mirrorMuteIntoActiveFilter`
- * for why its filter-resolution strategy is caller-supplied rather than fixed). Structure follows
+ * ProfileViewModel — the highest-risk cluster in this coordinator (both callers commit only after
+ * Amber confirms the signature; see `mirrorMuteIntoActiveFilter` for why its filter-resolution
+ * strategy is caller-supplied rather than fixed). Structure follows
  * RelayIssueBannerCoordinatorTest/ProfileObserversCoordinatorTest: a `subject()` factory, nested
  * private Fake test doubles implementing only the members this coordinator actually calls
  * (`NotImplementedError` for the rest), plain JUnit assertions, no Mockito.
@@ -77,16 +77,17 @@ class InteractionActionsCoordinatorTest {
         feedRepository: RecordingFeedRepository = RecordingFeedRepository(),
         amberSignerGateway: FakeAmberSignerGateway = FakeAmberSignerGateway(fakeSignedEventJson),
         broadcastRepository: RecordingBroadcastRepository = RecordingBroadcastRepository(),
-        deleteNoteUseCase: DeleteNoteUseCase = DeleteNoteUseCase()
+        deleteNoteUseCase: DeleteNoteUseCase = DeleteNoteUseCase(),
+        eventRepository: FakeEventRepository = FakeEventRepository()
     ): InteractionActionsCoordinator = InteractionActionsCoordinator(
         userPreferences = userPreferences,
         muteListRepository = muteListRepository,
         pinListRepository = pinListRepository,
         feedRepository = feedRepository,
         amberSignerGateway = amberSignerGateway,
-        publishSignedEventUseCase = PublishSignedEventUseCase(FakeEventRepository(), broadcastRepository, NoOpUmbraLogger),
+        publishSignedEventUseCase = PublishSignedEventUseCase(eventRepository, broadcastRepository, NoOpUmbraLogger),
         deleteNoteUseCase = deleteNoteUseCase,
-        removeDeletedNoteFromCacheUseCase = RemoveDeletedNoteFromCacheUseCase(FakeEventRepository()),
+        removeDeletedNoteFromCacheUseCase = RemoveDeletedNoteFromCacheUseCase(eventRepository),
         buildEventShareUrlUseCase = BuildEventShareUrlUseCase(),
         scope = scope
     )
@@ -310,44 +311,75 @@ class InteractionActionsCoordinatorTest {
         assertTrue(pinListRepository.pinCalls.isEmpty())
     }
 
-    // ── Test 6: deleteEvent ordering ──
+    // ── Test 6: deleteEvent commits only after Amber confirms ──
 
     @Test
-    fun `given deleteEvent runs then onOptimisticApply fires synchronously before the async cache removal resolves`() = runTest {
-        val callOrder = mutableListOf<String>()
+    fun `given amber signs the delete when deleteEvent runs then onDeleteConfirmed and the cache removal fire only after the sign resolves`() = runTest {
         val event = sampleEvent(pubkey = "a".repeat(64))
-        val coordinator = subject(scope = this, deleteNoteUseCase = DeleteNoteUseCase())
+        val eventRepository = FakeEventRepository()
+        val coordinator = subject(scope = this, eventRepository = eventRepository)
+        var deleteConfirmedCalled = false
 
         coordinator.deleteEvent(
             event = event,
             currentUserHex = "a".repeat(64),
-            onOptimisticApply = { callOrder += "optimisticApply" },
-            onCacheRemoveFailure = { callOrder += "cacheRemoveFailure" }
+            onDeleteConfirmed = { deleteConfirmedCalled = true }
         )
-        // onOptimisticApply must already be recorded before the coordinator's own launched
-        // coroutines (sign/publish, cache removal) have had a chance to run at all.
-        assertEquals(listOf("optimisticApply"), callOrder)
+        // Nothing is applied ahead of the async sign round trip resolving.
+        assertFalse(deleteConfirmedCalled)
+        assertNull(eventRepository.deletedEventId)
 
         advanceUntilIdle()
-        // FakeEventRepository's deleteEvent succeeds by default, so onCacheRemoveFailure never fires.
-        assertEquals(listOf("optimisticApply"), callOrder)
+        awaitRealDispatch()
+        advanceUntilIdle()
+
+        assertTrue(deleteConfirmedCalled)
+        assertEquals(event.id, eventRepository.deletedEventId)
     }
 
     @Test
-    fun `given deleteEvent's owner check fails then neither the sign round trip nor onOptimisticApply fire`() = runTest {
+    fun `given amber rejects the delete when deleteEvent runs then onDeleteConfirmed never fires and the cache and archive are untouched`() = runTest {
+        val gateway = FakeAmberSignerGateway(signedEventJson = null)
+        val broadcastRepository = RecordingBroadcastRepository()
+        val eventRepository = FakeEventRepository()
+        val event = sampleEvent(pubkey = "a".repeat(64))
+        val coordinator = subject(
+            scope = this,
+            amberSignerGateway = gateway,
+            broadcastRepository = broadcastRepository,
+            eventRepository = eventRepository
+        )
+        var deleteConfirmedCalled = false
+
+        coordinator.deleteEvent(
+            event = event,
+            currentUserHex = "a".repeat(64),
+            onDeleteConfirmed = { deleteConfirmedCalled = true }
+        )
+        advanceUntilIdle()
+        awaitRealDispatch()
+        advanceUntilIdle()
+
+        assertFalse(deleteConfirmedCalled)
+        assertNull(eventRepository.deletedEventId)
+        assertEquals(0, broadcastRepository.trackPublishCalls)
+    }
+
+    @Test
+    fun `given deleteEvent's owner check fails then neither the sign round trip nor onDeleteConfirmed fire`() = runTest {
         val gateway = FakeAmberSignerGateway(fakeSignedEventJson)
-        var optimisticApplyCalled = false
+        var deleteConfirmedCalled = false
         val event = sampleEvent(pubkey = "someoneElse")
         val coordinator = subject(scope = this, amberSignerGateway = gateway)
 
         coordinator.deleteEvent(
             event = event,
             currentUserHex = "a".repeat(64),
-            onOptimisticApply = { optimisticApplyCalled = true }
+            onDeleteConfirmed = { deleteConfirmedCalled = true }
         )
         advanceUntilIdle()
 
-        assertFalse(optimisticApplyCalled)
+        assertFalse(deleteConfirmedCalled)
         assertEquals(0, gateway.signEventCalls.size)
     }
 
