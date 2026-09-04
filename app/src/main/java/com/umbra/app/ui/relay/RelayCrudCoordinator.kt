@@ -14,6 +14,7 @@ import com.umbra.app.ui.common.UiMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -80,7 +81,20 @@ internal class RelayCrudCoordinator(
                 }).copy(isDiscovered = false)
 
                 if (relay.id.isEmpty()) {
-                    val existingRelay = state.value.relays.firstOrNull {
+                    // Resolve existence against a fresh repository read, not just the throttled
+                    // state.value.relays UI mirror (RelayConfigViewModel.observeRelays()'s
+                    // 300ms-throttled collector) — a relay added moments earlier (e.g. a
+                    // double-tap on the add-relay dialog's save button, or a concurrent NIP-65
+                    // sync path adding the same URL) can already exist in the repository without
+                    // yet being reflected in state.value.relays, which would otherwise route this
+                    // call into the unguarded "add new" branch below and produce a duplicate-URL
+                    // relay row — neither addRelayUseCase nor RelayRepository.addRelay enforces
+                    // URL uniqueness. The state.value.relays fallback stays as a belt-and-braces
+                    // check in case the repository read itself races an in-flight write.
+                    val freshRelays = relayRepository.getAllRelays().first()
+                    val existingRelay = freshRelays.firstOrNull {
+                        it.url.equals(sanitizedRelay.url, ignoreCase = true)
+                    } ?: state.value.relays.firstOrNull {
                         it.url.equals(sanitizedRelay.url, ignoreCase = true)
                     }
 
