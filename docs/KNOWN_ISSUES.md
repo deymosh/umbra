@@ -742,10 +742,17 @@ through the existing `AtomicJobScheduling.launchReplacing` helper (adjusted for 
 `Dispatchers.IO` context), or manually cancel-then-lazily-start to match.
 
 ### LOG-41 — EventIngestCache.cacheRepostTarget skips the replaceable-event supersede bookkeeping ingest() enforces for the same slot
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-09-04
 - **Where:** `data/repository/EventIngestCache.kt:278-283`, `:492-498` (`cacheRepostTarget`,
   `cacheVerifiedRepostTarget`)
+- **Fix:** extracted `storeEventLocked` (the replaceable-key-aware `latestReplaceableEventId`/
+  `winsReplaceableRace` logic `ingest()` already ran) as a shared private helper both `ingest()`
+  and `cacheRepostTarget` now call while holding `cachedEventsMutex`, so a repost-embedded
+  replaceable/parameterized-replaceable event participates in the same one-revision-per-slot
+  invariant as a directly-ingested one. Two new `EventIngestCacheTest` cases cover both directions
+  (a repost-cached older revision superseded by a later direct ingest, and a direct-ingested newer
+  revision correctly rejecting an older one arriving via `cacheRepostTarget`).
 
 Found during Phase 2's code review. `ingest()` maintains `latestReplaceableEventId` and runs
 `winsReplaceableRace()` so only one revision per `ReplaceableEventKey` slot is ever retrievable

@@ -222,6 +222,42 @@ class EventIngestCacheTest {
     }
 
     @Test
+    fun `given a replaceable event cached via cacheRepostTarget when a newer direct-ingest revision arrives then the repost-cached older one is superseded`() = runTest {
+        val cache = subject(this)
+        val pubkey = "b".repeat(64)
+        val repostCachedOlder = metadataRevision(id = "aaa1", pubkey = pubkey, createdAt = 100L)
+        val directNewer = metadataRevision(id = "bbb2", pubkey = pubkey, createdAt = 200L)
+
+        // Simulates a NIP-18 repost embedding an older revision of a kind-0/replaceable slot,
+        // cached via cacheRepostTarget rather than ingest() -- LOG-41's bug was that this path
+        // never updated latestReplaceableEventId, so a subsequent direct ingest of a newer
+        // revision for the same slot wouldn't know to evict this one.
+        cache.cacheRepostTarget(repostCachedOlder)
+        val outcomeNewer = cache.ingest(directNewer, relayA, currentUserPubkey = null)
+
+        assertTrue(outcomeNewer.storedInMemoryCache)
+        assertEquals(directNewer, cache.getCached(directNewer.id))
+        assertNull(cache.getCached(repostCachedOlder.id))
+    }
+
+    @Test
+    fun `given a newer replaceable revision already ingested when an older revision arrives via cacheRepostTarget then it is dropped instead of coexisting`() = runTest {
+        val cache = subject(this)
+        val pubkey = "b".repeat(64)
+        val directNewer = metadataRevision(id = "bbb2", pubkey = pubkey, createdAt = 200L)
+        val repostCachedOlder = metadataRevision(id = "aaa1", pubkey = pubkey, createdAt = 100L)
+
+        cache.ingest(directNewer, relayA, currentUserPubkey = null)
+        // Before LOG-41's fix, cacheRepostTarget did an unconditional id-keyed put with no
+        // race check at all, so this older revision would silently coexist alongside the
+        // already-ingested newer one instead of being dropped.
+        cache.cacheRepostTarget(repostCachedOlder)
+
+        assertEquals(directNewer, cache.getCached(directNewer.id))
+        assertNull(cache.getCached(repostCachedOlder.id))
+    }
+
+    @Test
     fun `given the same event id ingested then re-delivered from a second relay when recordRelayForSeenEvent is called then cache size is unchanged and both relays are recorded`() = runTest {
         val cache = subject(this)
         val event = textNote("1")

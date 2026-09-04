@@ -226,40 +226,55 @@ internal class EventIngestCache(
     suspend fun ingest(event: Event, relayUrl: String, currentUserPubkey: String?): IngestOutcome {
         return if (shouldStoreInMemoryCache(event.pubkey, currentUserPubkey)) {
             cachedEventsMutex.withLock {
-                val replaceableKey = event.replaceableKey()
-                val supersededId = replaceableKey?.let { latestReplaceableEventId[it] }
-                val superseded = supersededId?.let(cachedEvents::get)
-                if (superseded != null && !event.winsReplaceableRace(superseded)) {
-                    // A stale/losing revision of an already-cached replaceable slot (e.g.
-                    // an older kind-0) — id-keyed storage would let it coexist alongside
-                    // the newer revision until the LRU happens to reclaim it, so it's
-                    // dropped here instead. Still validly received/verified this session
-                    // (dedup/verification bookkeeping already ran upstream).
-                    IngestOutcome(cacheSize = cachedEvents.size, storedInMemoryCache = false)
-                } else {
-                    if (replaceableKey != null) {
-                        if (supersededId != null && supersededId != event.id) {
-                            // Evict the superseded revision now rather than waiting for
-                            // the LRU to reclaim it. EventEngagementIndex only tracks
-                            // kind 1/6/7 (see EventEngagementIndex.add), never the
-                            // replaceable kinds this branch handles, so no
-                            // cachedEngagementIndex.remove() is needed for it.
-                            cachedEvents.remove(supersededId)
-                        }
-                        latestReplaceableEventId[replaceableKey] = event.id
-                    }
-                    // Order matters: index the new event before it's inserted, so if this
-                    // put() evicts an older entry, EventLruCache's onEvicted callback removing
-                    // that entry from the index can't race the new entry's own indexing.
-                    cachedEngagementIndex.add(event)
-                    cachedEvents.put(event)
+                val stored = storeEventLocked(event)
+                if (stored) {
                     cachedEvents.recordRelay(event.id, relayUrl)
-                    IngestOutcome(cacheSize = cachedEvents.size, storedInMemoryCache = true)
                 }
+                IngestOutcome(cacheSize = cachedEvents.size, storedInMemoryCache = stored)
             }
         } else {
             IngestOutcome(cacheSize = cachedEventsMutex.withLock { cachedEvents.size }, storedInMemoryCache = false)
         }
+    }
+
+    /**
+     * The replaceable-key-aware half of [ingest]: resolves NIP-01/33 replaceable-event superseding
+     * (LOG-1/LOG-6) against [latestReplaceableEventId] and either stores [event] (indexing it into
+     * [cachedEngagementIndex] and [cachedEvents]) or drops it as a losing revision, returning which
+     * happened. Must only be called while already holding [cachedEventsMutex] — shared by [ingest]
+     * and [cacheRepostTarget] so a replaceable/parameterized-replaceable event cached via a NIP-18
+     * repost participates in the exact same one-revision-per-slot invariant as a directly-ingested
+     * one (LOG-41), rather than bypassing it via a plain id-keyed `cachedEvents.put`.
+     */
+    private fun storeEventLocked(event: Event): Boolean {
+        val replaceableKey = event.replaceableKey()
+        val supersededId = replaceableKey?.let { latestReplaceableEventId[it] }
+        val superseded = supersededId?.let(cachedEvents::get)
+        if (superseded != null && !event.winsReplaceableRace(superseded)) {
+            // A stale/losing revision of an already-cached replaceable slot (e.g.
+            // an older kind-0) — id-keyed storage would let it coexist alongside
+            // the newer revision until the LRU happens to reclaim it, so it's
+            // dropped here instead. Still validly received/verified this session
+            // (dedup/verification bookkeeping already ran upstream).
+            return false
+        }
+        if (replaceableKey != null) {
+            if (supersededId != null && supersededId != event.id) {
+                // Evict the superseded revision now rather than waiting for
+                // the LRU to reclaim it. EventEngagementIndex only tracks
+                // kind 1/6/7 (see EventEngagementIndex.add), never the
+                // replaceable kinds this branch handles, so no
+                // cachedEngagementIndex.remove() is needed for it.
+                cachedEvents.remove(supersededId)
+            }
+            latestReplaceableEventId[replaceableKey] = event.id
+        }
+        // Order matters: index the new event before it's inserted, so if this
+        // put() evicts an older entry, EventLruCache's onEvicted callback removing
+        // that entry from the index can't race the new entry's own indexing.
+        cachedEngagementIndex.add(event)
+        cachedEvents.put(event)
+        return true
     }
 
     /** Records that [relayUrl] also delivered an already-seen, already-processed [eventId] —
@@ -274,13 +289,15 @@ internal class EventIngestCache(
      * the same way it resolves any other externally-authored event, instead of re-parsing +
      * re-verifying the repost's embedded JSON on every feed emission. Callers are responsible for
      * parsing/verifying [target] and checking [shouldStoreInMemoryCache] first — this method is
-     * only the cache-write half.
+     * only the cache-write half. Routes through [storeEventLocked] (the same replaceable-key-aware
+     * logic [ingest] uses) rather than an unconditional id-keyed put, so a repost-embedded
+     * replaceable/parameterized-replaceable event (a long-form article, list, or live-status
+     * event) participates in the same one-revision-per-slot invariant as a directly-ingested
+     * revision instead of silently coexisting alongside it (LOG-41). No relay provenance is
+     * recorded here — unlike [ingest], this event wasn't delivered by any specific relay.
      */
     suspend fun cacheRepostTarget(target: Event) {
-        cachedEventsMutex.withLock {
-            cachedEngagementIndex.add(target)
-            cachedEvents.put(target)
-        }
+        cachedEventsMutex.withLock { storeEventLocked(target) }
     }
 
     suspend fun getCached(id: String): Event? = cachedEventsMutex.withLock { cachedEvents.get(id) }
