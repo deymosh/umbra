@@ -628,16 +628,12 @@ class ProfileViewModel @Inject constructor(
         interactionActionsCoordinator.publishSignedEvent(signedEventJson)
     }
 
-    // NOTE: deletion is preserved exactly as-is below — the notes-list removal is unconditional
-    // (not gated on Amber confirming the delete signature) and never rolled back on a
-    // rejected/failed sign, unlike toggleMute/togglePin/toggleFollow's pending-action-plus-
-    // rollback pattern on this same ViewModel. Tracked as a known bug, not fixed here.
     fun deleteEvent(event: Event) {
         val currentUserPubkey = userPreferences.getPublicKey()?.lowercase() ?: return
         interactionActionsCoordinator.deleteEvent(
             event = event,
             currentUserHex = currentUserPubkey,
-            onOptimisticApply = {
+            onDeleteConfirmed = {
                 _state.update { state -> state.copy(notes = state.notes.filter { it.id != event.id }) }
             },
             onCacheRemoveFailure = {
