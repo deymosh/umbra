@@ -148,6 +148,31 @@ internal fun shouldShowFeedInitialLoading(uiState: FeedState, computedEvents: Li
     return uiState.isLoading && computedEvents.isEmpty()
 }
 
+/**
+ * Maps the local mute-list write's [result] to what the feed shows the user, matching
+ * ProfileViewModel.toggleMute's error vocabulary exactly (D-04) — muteUser only ever mutes, so
+ * there is no unmute branch here.
+ */
+internal fun muteWriteResultMessage(result: Result<Unit>): UiMessage =
+    if (result.isSuccess) {
+        UiMessage.Res(R.string.user_muted_success)
+    } else {
+        UiMessage.ResWithArgs(R.string.error_mute_author, result.exceptionOrNull()?.message ?: "")
+    }
+
+/**
+ * Maps the local pin-list write's [result] to what the feed shows the user, branching on
+ * [wasPinned] (the pre-toggle state) exactly as togglePin already computes it, and matching
+ * ProfileViewModel.togglePin's error vocabulary exactly (D-04).
+ */
+internal fun pinWriteResultMessage(result: Result<Unit>, wasPinned: Boolean): UiMessage =
+    if (result.isSuccess) {
+        if (wasPinned) UiMessage.Res(R.string.note_unpinned_success) else UiMessage.Res(R.string.note_pinned_success)
+    } else {
+        val errorRes = if (wasPinned) R.string.error_unpin_note else R.string.error_pin_note
+        UiMessage.ResWithArgs(errorRes, result.exceptionOrNull()?.message ?: "")
+    }
+
 internal data class LoadOlderFeedDecision(val shouldFetch: Boolean, val isExhausted: Boolean)
 
 /**
@@ -809,12 +834,12 @@ class FeedViewModel @Inject constructor(
                 },
                 currentUserHex = userPreferences.getPublicKey(),
                 onSigned = {
-                    interactionActionsCoordinator.applyMuteChange(target, mute = true)
+                    val result = interactionActionsCoordinator.applyMuteChange(target, mute = true)
                     interactionActionsCoordinator.mirrorMuteIntoActiveFilter(target, mute = true) {
                         feedRepository.getActiveFilters().first().firstOrNull()
                     }
                     _uiState.update {
-                        it.copy(errorMessage = UiMessage.Res(R.string.user_muted_success), errorRelayId = null)
+                        it.copy(errorMessage = muteWriteResultMessage(result), errorRelayId = null)
                     }
                 }
             )
@@ -842,14 +867,9 @@ class FeedViewModel @Inject constructor(
                 },
                 currentUserHex = userPreferences.getPublicKey(),
                 onSigned = {
-                    interactionActionsCoordinator.applyPinChange(eventId, pin = !wasPinned)
+                    val result = interactionActionsCoordinator.applyPinChange(eventId, pin = !wasPinned)
                     _uiState.update {
-                        it.copy(
-                            errorMessage = UiMessage.Res(
-                                if (wasPinned) R.string.note_unpinned_success else R.string.note_pinned_success
-                            ),
-                            errorRelayId = null
-                        )
+                        it.copy(errorMessage = pinWriteResultMessage(result, wasPinned), errorRelayId = null)
                     }
                 }
             )
