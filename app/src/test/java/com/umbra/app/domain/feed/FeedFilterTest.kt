@@ -43,4 +43,18 @@ class FeedFilterTest {
 
         assertEquals(DefaultFeedFilters.DEFAULT.excludedContentPrefixes, merged.excludedContentPrefixes)
     }
+
+    @Test
+    fun `given a filter with a persisted-looking id when merging then the merged id is the fixed synthetic id, never the input's`() {
+        val persisted = DefaultFeedFilters.create(name = "Persisted").copy(id = "filter_1700000000000_1234")
+
+        val merged = mergeActiveFeedFilters(listOf(persisted))
+
+        // The merged result always carries the fixed synthetic id, regardless of what was merged
+        // in — a lookup keyed on this id against a real, persisted filter table can never match.
+        assertEquals("merged_active", merged.id)
+        assertTrue(merged.id != persisted.id)
+        // The single-filter case still carries the input's name through, just not its id.
+        assertEquals(persisted.name, merged.name)
+    }
 }

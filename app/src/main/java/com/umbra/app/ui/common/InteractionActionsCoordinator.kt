@@ -123,10 +123,11 @@ internal class InteractionActionsCoordinator(
      * `mutedPubkeys`, so the Room-backed feed query reflects it immediately (offline-safe) instead
      * of waiting on the NIP-51 mute-list publish to round-trip.
      *
-     * [resolveActiveFilter] is caller-supplied rather than a single fixed lookup here because the
-     * two callers resolve "the" active filter differently: one by its own already-computed merged
-     * filter's id, the other by the first entry of the live active-filters list. That difference
-     * predates this extraction and is preserved as-is rather than converged onto one strategy.
+     * [resolveActiveFilter] is caller-supplied rather than a single fixed lookup here so this
+     * coordinator never has to decide what "active" means for a given screen — that stays the
+     * caller's call. Both current callers happen to supply the same resolution today (the first
+     * entry of the live active-filters list), but the parameter still exists to let a future
+     * caller resolve differently without changing this signature.
      */
     suspend fun mirrorMuteIntoActiveFilter(
         target: String,

@@ -811,7 +811,7 @@ class FeedViewModel @Inject constructor(
                 onSigned = {
                     interactionActionsCoordinator.applyMuteChange(target, mute = true)
                     interactionActionsCoordinator.mirrorMuteIntoActiveFilter(target, mute = true) {
-                        feedRepository.getFilterById(activeFeedFilter.id)
+                        feedRepository.getActiveFilters().first().firstOrNull()
                     }
                     _uiState.update {
                         it.copy(errorMessage = UiMessage.Res(R.string.user_muted_success), errorRelayId = null)
