@@ -171,51 +171,44 @@ internal class RelayCrudCoordinator(
         }
     }
 
+    /**
+     * Functionally a sixth role-mutating setter alongside the five set*Enabled methods below — it
+     * clears one role's enable/active flags the same way those do — so it routes through the same
+     * [updateRelayRole] chokepoint rather than its own independent read-map-persist sequence. That
+     * chokepoint acquires the per-relay-id [relayRoleMutexes] lock and re-reads the relay fresh
+     * from [relayRepository] rather than the throttled `state.relays` mirror; a call here that
+     * bypassed it (as this method's own previous implementation did) could silently lose a
+     * concurrent role change to the same relay id (LOG-37/LOG-29).
+     */
     fun removeRelayRole(relayId: String, role: RelayRole) {
-        scope.launch {
-            val relay = state.value.relays.find { it.id == relayId } ?: return@launch
-
-            if ((role == RelayRole.INBOX || role == RelayRole.DM) && userPreferences.isAnonymousSession()) {
-                state.update {
-                    it.copy(
-                        errorMessage = UiMessage.Res(
-                            if (role == RelayRole.INBOX) R.string.error_inbox_anonymous_disabled else R.string.error_dm_anonymous_disabled
-                        )
+        if ((role == RelayRole.INBOX || role == RelayRole.DM) && userPreferences.isAnonymousSession()) {
+            state.update {
+                it.copy(
+                    errorMessage = UiMessage.Res(
+                        if (role == RelayRole.INBOX) R.string.error_inbox_anonymous_disabled else R.string.error_dm_anonymous_disabled
                     )
-                }
-                return@launch
+                )
             }
+            return
+        }
 
-            val updatedRelay = when (role) {
+        state.update {
+            when (role) {
+                RelayRole.OUTBOX, RelayRole.INBOX -> it.copy(relayListDirty = true)
+                RelayRole.DM -> it.copy(dmRelayListDirty = true)
+                RelayRole.SEARCH -> it.copy(searchListDirty = true)
+                RelayRole.INDEX -> it.copy(indexListDirty = true)
+            }
+        }
+
+        updateRelayRole(relayId) { relay ->
+            when (role) {
                 RelayRole.OUTBOX -> relay.copy(isWriteEnabled = false, isWriteActive = false)
                 RelayRole.INBOX -> relay.copy(isReadEnabled = false, isReadActive = false)
                 RelayRole.DM -> relay.copy(isDmEnabled = false, isDmActive = false, dmRequiresAuth = false)
                 RelayRole.SEARCH -> relay.copy(isSearchEnabled = false, isSearchActive = false)
                 RelayRole.INDEX -> relay.copy(isIndexEnabled = false, isIndexActive = false)
-            }.let {
-                it.copy(isEnabled = it.hasAnyActiveRole())
-            }
-
-            state.update {
-                when (role) {
-                    RelayRole.OUTBOX, RelayRole.INBOX -> it.copy(relayListDirty = true)
-                    RelayRole.DM -> it.copy(dmRelayListDirty = true)
-                    RelayRole.SEARCH -> it.copy(searchListDirty = true)
-                    RelayRole.INDEX -> it.copy(indexListDirty = true)
-                }
-            }
-
-            try {
-                // Always update the relay - don't delete it when disabled
-                updateRelayUseCase(updatedRelay)
-                if (relay.isEnabled && !updatedRelay.isEnabled) {
-                    eventRepository.disconnectRelay(relay.url)
-                }
-            } catch (e: Exception) {
-                state.update {
-                    it.copy(errorMessage = UiMessage.Res(R.string.error_delete_relay, listOf(e.message ?: "")))
-                }
-            }
+            }.let { it.copy(isEnabled = it.hasAnyActiveRole()) }
         }
     }
 

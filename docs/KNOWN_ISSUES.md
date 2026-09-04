@@ -638,9 +638,14 @@ the `dmRelayListDirty = true` update inside the mapper, conditioned on the mappe
 producing a changed `Relay`, so the dirty flag only flips on a real DM-role change.
 
 ### LOG-37 — RelayCrudCoordinator.removeRelayRole bypasses the per-relay Mutex LOG-29 added for its sibling setters
-- **Status:** open
+- **Status:** fix applied — needs on-device validation
 - **Found:** 2026-09-04
 - **Where:** `ui/relay/RelayCrudCoordinator.kt:174-220` (`removeRelayRole`)
+- **Fix:** `removeRelayRole` no longer runs its own independent read-map-persist sequence — it now
+  calls `updateRelayRole` (the same chokepoint the five `set*Enabled` setters route through) with a
+  mapper that clears the target role's enable/active flags, so it picks up the per-relay-id `Mutex`
+  and the fresh `relayRepository.getRelayById` read for free. `RelayCrudCoordinatorTest`'s existing
+  two overlapping-role-toggle cases continue to pass unmodified.
 
 Found during Phase 2's code review of the LOG-29 fix. `removeRelayRole` is functionally a sixth
 role-mutating setter — it clears one role's enable/active flags, exactly like the five setters
