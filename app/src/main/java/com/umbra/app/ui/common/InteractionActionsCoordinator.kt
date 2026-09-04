@@ -94,7 +94,7 @@ internal class InteractionActionsCoordinator(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                logger.d { "Error requesting signed event: ${scrubThrowableMessageForLogs(e)}" }
+                logger.e(e) { "Error requesting signed event: ${scrubThrowableMessageForLogs(e)}" }
                 null
             }
             if (signedEvent != null) {
@@ -113,7 +113,7 @@ internal class InteractionActionsCoordinator(
     fun publishSignedEvent(signedEventJson: String, onFailure: suspend (Throwable) -> Unit = {}) {
         scope.launch {
             publishSignedEventUseCase(signedEventJson).onFailure { e ->
-                logger.d { "Error publishing event: ${scrubThrowableMessageForLogs(e)}" }
+                logger.e(e) { "Error publishing event: ${scrubThrowableMessageForLogs(e)}" }
                 onFailure(e)
             }
         }
