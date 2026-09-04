@@ -12,6 +12,7 @@ import com.umbra.app.domain.usecase.DeleteNoteUseCase
 import com.umbra.app.domain.usecase.PublishSignedEventUseCase
 import com.umbra.app.domain.usecase.RemoveDeletedNoteFromCacheUseCase
 import com.umbra.app.domain.util.JsonUtils
+import com.umbra.app.util.coroutines.runCatchingCancellable
 import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.logging.UmbraLog
 import kotlinx.coroutines.CancellationException
@@ -137,8 +138,8 @@ internal class InteractionActionsCoordinator(
         mute: Boolean,
         resolveActiveFilter: suspend () -> FeedFilter?
     ) {
-        runCatching {
-            val currentFilter = resolveActiveFilter() ?: return@runCatching
+        runCatchingCancellable {
+            val currentFilter = resolveActiveFilter() ?: return@runCatchingCancellable
             val updated = if (mute) {
                 currentFilter.mutedPubkeys + target
             } else {
