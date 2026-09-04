@@ -164,6 +164,13 @@ internal class RelayCrudCoordinator(
                 relayRoleMutexes.computeIfAbsent(relayId) { Mutex() }.withLock {
                     removeRelayUseCase(relayId)
                 }
+                // Pruned only once the removal above has fully completed and the lock is
+                // released (LOG-45) — relayRoleMutexes otherwise grows one entry per distinct
+                // relay id ever toggled, for this coordinator's whole lifetime. A caller that
+                // races in for this now-deleted id right after this line gets a fresh, unlocked
+                // Mutex from computeIfAbsent and no-ops harmlessly once updateRelayRole's own
+                // getRelayById lookup finds nothing, same as any other unknown relayId.
+                relayRoleMutexes.remove(relayId)
                 // Same conservative all-four-dirty marking as saveRelay — the deleted relay may
                 // have held any combination of roles.
                 state.update {

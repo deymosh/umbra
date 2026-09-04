@@ -83,14 +83,3 @@ invocation paths (or extract the plain-field decision logic into a smaller pure 
 be tested deterministically without constructing the full class, which takes eleven injected
 dependencies and has no mocking framework on the test classpath).
 
-### LOG-45 — RelayCrudCoordinator.relayRoleMutexes is never pruned
-- **Status:** backlog
-- **Added:** 2026-09-04
-- **Why:** Found during Phase 2's code review — explicitly flagged by the reviewer as low priority
-  and not urgent; logged for the record rather than fixed immediately.
-
-`ConcurrentHashMap<String, Mutex>()` gains one entry per distinct relay id ever toggled through
-`updateRelayRole`, for the coordinator's lifetime (i.e. the `RelayConfigViewModel`'s lifecycle).
-Practically bounded by the number of relays a user ever interacts with in one screen session, so
-unlikely to matter in practice — an unbounded-growth structure with no removal path. Fix (not
-urgent): an LRU-bounded map, or remove an entry once a relay is deleted (`deleteRelay`).

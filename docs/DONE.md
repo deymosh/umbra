@@ -182,3 +182,23 @@ it: the four plain `try`/`catch (e: Exception)` sites (`InteractionActionsCoordi
 each of the four call sites.
 **Completed:** 2026-09-04
 **From:** TODO LOG-43
+
+### LOG-45 — RelayCrudCoordinator.relayRoleMutexes is never pruned
+- **Status:** backlog
+- **Added:** 2026-09-04
+- **Why:** Found during Phase 2's code review — explicitly flagged by the reviewer as low priority
+  and not urgent; logged for the record rather than fixed immediately.
+
+`ConcurrentHashMap<String, Mutex>()` gains one entry per distinct relay id ever toggled through
+`updateRelayRole`, for the coordinator's lifetime (i.e. the `RelayConfigViewModel`'s lifecycle).
+Practically bounded by the number of relays a user ever interacts with in one screen session, so
+unlikely to matter in practice — an unbounded-growth structure with no removal path. Fix (not
+urgent): an LRU-bounded map, or remove an entry once a relay is deleted (`deleteRelay`).
+
+Turned out straightforward: `deleteRelay` now calls `relayRoleMutexes.remove(relayId)` once its
+own `removeRelayUseCase` call (and the per-relay lock guarding it, see WR-03) completes. A caller
+racing in for the now-deleted id right after gets a fresh, unlocked `Mutex` from
+`computeIfAbsent` and no-ops harmlessly once `updateRelayRole`'s own `getRelayById` lookup finds
+nothing — same as any other unknown `relayId`.
+**Completed:** 2026-09-04
+**From:** TODO LOG-45
