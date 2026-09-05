@@ -1,6 +1,6 @@
 # KNOWN ISSUES
 
-Local, session-found bug log. See [`.claude/CLAUDE.md`](../.claude/CLAUDE.md)'s "Bug tracking" section for the full convention — locally sequential numbers shared with [TODO.md](TODO.md) and [DONE.md](DONE.md), independent of GitHub issue numbers, statuses of `open` or `fix applied — needs on-device validation`. Once a fix is validated on-device (or otherwise confirmed working), its entry moves to [DONE.md](DONE.md).
+Local, session-found bug log. See [`.claude/CLAUDE.md`](../.claude/CLAUDE.md)'s "Bug tracking" section for the full convention — locally sequential numbers shared with [TODO.md](TODO.md) and [DONE.md](DONE.md), independent of GitHub issue numbers, statuses of `open` or `fix applied — needs on-device validation`. Once a fix is validated on-device (or otherwise confirmed working), its entry moves to [DONE.md](DONE.md). Every remaining entry at `fix applied` status now carries a `**Validation:**` bullet naming what is blocking its closure — either the user's own device pass or an architectural test-seam gap.
 
 ### LOG-2 — Image sometimes never loads until scrolled away/back or opened fullscreen
 - **Status:** fix applied — needs on-device validation
@@ -11,6 +11,11 @@ Local, session-found bug log. See [`.claude/CLAUDE.md`](../.claude/CLAUDE.md)'s 
   single `LaunchedEffect` with a real `try`/`finally`, replacing the prior 3-effect split
   (separate `LaunchedEffect` for acquire, `DisposableEffect` for teardown-release, another
   `LaunchedEffect` for terminal-state release). See `claude/bugs-y-features` branch.
+- **Validation:** Awaiting the user's own on-device pass (via the `run-umbra`
+  skill) — the fix is Compose `LaunchedEffect` lifecycle wiring in
+  `NostrImageComponents.kt` with no pure-function extraction possible;
+  `ImageLoadGateTest.kt` is cited as adjacent bonus coverage of the underlying
+  `ImageLoadGate` only, not as proof this entry's actual regression is fixed.
 
 Reported by the user: an image in a note sometimes doesn't load even though it's already
 downloaded/cached; scrolling the note out of view and back, or opening the image fullscreen,
@@ -30,6 +35,12 @@ avoiding it.
 - **Fix:** threaded `VideoSize.pixelWidthHeightRatio` through `SimplePlayer.Listener.
   onVideoSizeChanged` (previously discarded) into `InlineVideoAttachment`'s aspect-ratio
   calculation. See `claude/bugs-y-features` branch.
+- **Validation:** Awaiting the user's own on-device pass (via the `run-umbra`
+  skill) for the rendered-frame behavior. Bonus logic coverage already exists
+  and is sufficient: `VideoPlayerControllerTest.kt`'s `` `given anamorphic
+  pixel ratio when computing aspect ratio then pixelWidthHeightRatio is
+  applied` `` case directly exercises the pure aspect-ratio computation behind
+  this fix — no new test needed.
 
 Reported by the user: a video's player view adopts the correct size for the video's
 dimensions, but the video content itself (first frame and playback) doesn't fill the whole
@@ -96,6 +107,11 @@ second Fix entry above for the actual TOCTOU race behind this.
   every distinct `ReplaceableEventKey` in a batch, right after that batch's tags are persisted.
   Reuses the same `domain/nip01/ReplaceableEventKey`/`winsReplaceableRace()` helpers LOG-1's
   `EventLruCache` fix already introduced. See `claude/umbra-relay-feed-fixes` branch.
+- **Validation:** Awaiting the user's own on-device pass (via the `run-umbra`
+  skill) — this is a Room DAO SQL statement with no JVM-testable path in this
+  project (no Robolectric, no Room in-memory test harness, no instrumented DAO
+  test); the ingestion integration test's fake DAO stubs this method to a
+  constant `0` and never executes the real query.
 
 Follow-up to LOG-1: that fix covers the in-memory `EventLruCache` (deduped at ingest time via
 `ReplaceableEventKey`/`winsReplaceableRace()`), but the encrypted Room DB had no equivalent —
@@ -119,6 +135,10 @@ igual que en caché ya se comprueba esto."
   `ImageLoadGate`/Blossom-fallback machinery — an avatar/banner is a single always-visible request,
   not one of a feed's many concurrent attachment loads, so it shouldn't queue behind a concurrency
   limiter sized for bulk feed image loading. See `claude/fix-relay-dial-race` branch.
+- **Validation:** Awaiting the user's own on-device pass (via the `run-umbra`
+  skill) — the retry schedule is inline Compose-local state with no pure
+  function to extract without a production-code change; no bonus test is
+  attempted for this entry.
 
 Investigated alongside LOG-12 at the user's request. The profile metadata (URL) itself is not
 delayed — `UserRepository.observeProfile()`/`ProfileViewModel`/`FeedViewModel.observeCurrentUserProfile()`
@@ -142,6 +162,10 @@ at all, so LOG-2's bug and fix both bypassed them entirely.
   before navigating to the login screen, matching the fix already shipped for `FeedScreen.kt`'s
   independent logout entry point (LOG-25). Navigation to the login screen still happens
   unconditionally regardless of whether logout succeeded, exactly as before.
+- **Validation:** Awaiting the user's own on-device pass (via the `run-umbra`
+  skill) — the fix is Compose click-handler code with no ViewModel seam and
+  this project has no Compose UI test / Robolectric infrastructure to assert
+  it.
 
 Found by the whole-codebase bug-hunt sweep, specifically its empty-catch-
 block grep pass. `SettingsScreen.kt` has its own, independent logout entry point (Settings ->
