@@ -5,16 +5,16 @@ milestone_name: Hardening & First Public Release
 current_phase: 03
 current_phase_name: Fix Validation & Test Coverage
 status: executing
-stopped_at: Completed 03-04-PLAN.md
-last_updated: "2026-09-05T12:59:54.955Z"
+stopped_at: Completed 03-05-PLAN.md
+last_updated: "2026-09-05T13:05:26.539Z"
 last_activity: 2026-09-05
 last_activity_desc: Phase 03 execution started
-state_head: f1ed28524cdc68c77d16e85caf25d2bc151d18fb
+state_head: a076d8af5e49e32b503177ac056622631c7ed48d
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 16
-  completed_plans: 12
+  completed_plans: 13
   percent: 50
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-09-04)
 ## Current Position
 
 Phase: 03 (Fix Validation & Test Coverage) — EXECUTING
-Plan: 5 of 8
+Plan: 6 of 8
 Status: Ready to execute
 Last activity: 2026-09-05 — Phase 03 execution started
 
@@ -73,6 +73,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P02 | ~30min | 3 tasks | 1 files |
 | Phase 03 P03 | ~35min | 3 tasks | 2 files |
 | Phase 03 P04 | ~15min | 3 tasks | 1 files |
+| Phase 03 P05 | ~20min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -105,6 +106,7 @@ Recent decisions affecting current work:
 - [Phase 03]: LOG-23 and LOG-47 citations kept verdict TEST with an explicit caveat rather than downgraded to INSUFFICIENT, since the cited tests provide genuine but indirect/shared evidence rather than a fully isolated regression test. — The plan's instructions required citing these tests explicitly; documenting the caveat in the ledger avoids misleading a future reader of docs/DONE.md without discarding valid partial evidence.
 - [Phase 03]: [Phase 03] Plan 03-03 (16 non-test-closable entries): re-derived NostrSessionManager's blocker from source rather than trusting research -- found 4 concrete (non-interface) constructor dependencies, not the 2 research named, but confirmed the irreducible blocker is specifically TorRuntimeManager/BackfillAnchorStore requiring a live Android Context. LOG-4 verified separately: its UserRepositoryImpl half is blocked too (requires ImagePrefetcher, itself needing Context + Coil ImageLoader); a repo-wide grep found zero JVM tests constructing android.content.Context, so LOG-4 recorded BLOCKED not TESTABLE. Six Group D logging fixes (LOG-18/20/28/39/51/54) confirmed present and correctly scrubbed at their current source lines, recorded as source-read-verified per D-09.
 - [Phase 03]: [Phase 03] Plan 03-04 (LOG-14/VALID-10, LOG-37/VALID-25, LOG-42/VALID-30): added five RelayCrudCoordinatorTest cases against already-shipped fixes -- no production diff. Plan's predicted pre-existing count (5) was off by one (actual 6, confirmed by full file read); final totals are 8/9/11 tests across the three tasks rather than the plan's predicted 7/8/10 -- a documentation-arithmetic mismatch only, all instructed method names/assertions/prohibitions followed exactly.
+- [Phase 03]: [Phase 03] Plan 03-05 (LOG-12/VALID-08): new UmbraNostrClientTest.kt pins both halves of the same-relay dial-race fix -- the onWebSocketOpen superseded-socket identity check (two cases) and the per-relay dialingRelays in-flight guard, the latter forced with a real java.util.Thread + CountDownLatch pair (not a coroutine test dispatcher, since connect() is fully synchronous with no suspension point). No production diff; both tasks committed separately despite sharing one new file to preserve per-task atomic commits.
 
 ### Pending Todos
 
@@ -125,6 +127,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-05T12:59:54.916Z
-Stopped at: Completed 03-04-PLAN.md
+Last session: 2026-09-05T13:05:26.502Z
+Stopped at: Completed 03-05-PLAN.md
 Resume file: None

@@ -33,7 +33,7 @@ For each: determine whether the fix is verifiable by automated test alone, or ge
 - [x] **VALID-05**: Validate LOG-6 — stale replaceable-event revisions in the encrypted Room DB
 - [ ] **VALID-06**: Validate LOG-7 — future-dated events filter / recheck ticker
 - [ ] **VALID-07**: Validate LOG-11 — ticker's immediate-first-emission regression fix
-- [ ] **VALID-08**: Validate LOG-12 — same-relay concurrent dial race
+- [x] **VALID-08**: Validate LOG-12 — same-relay concurrent dial race
 - [x] **VALID-09**: Validate LOG-13 — avatar/banner retry-on-Tor-cold-start fix
 - [x] **VALID-10**: Validate LOG-14 — promoting a discovered relay to an owned role
 - [x] **VALID-11**: Validate LOG-18 — Three unscrubbed log messages survive the logging migration (EventRepositoryImpl.kt x2, NegentropySyncOrchestrator.kt x1)
@@ -118,7 +118,7 @@ None — this milestone is deliberately scoped to stability + release, not new f
 | VALID-05 | Phase 3 | Complete |
 | VALID-06 | Phase 3 | Pending |
 | VALID-07 | Phase 3 | Pending |
-| VALID-08 | Phase 3 | Pending |
+| VALID-08 | Phase 3 | Complete |
 | VALID-09 | Phase 3 | Complete |
 | VALID-10 | Phase 3 | Complete |
 | VALID-11 | Phase 3 | Complete |
