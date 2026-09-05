@@ -67,8 +67,8 @@ For each: determine whether the fix is verifiable by automated test alone, or ge
 
 ### Version Consistency
 
-- [ ] **VERS-01**: Enable Gradle `buildConfig` and read `BuildConfig.VERSION_NAME` in `SettingsScreen.kt` instead of the hardcoded `strings.xml` value, making `app/build.gradle.kts`'s `versionName` the single source of truth
-- [ ] **VERS-02**: Retire the now-redundant `settings_version_value` string resource ("0.1.0-beta", currently drifted from the real `0.1.0`) once `BuildConfig` wiring lands
+- [x] **VERS-01**: Enable Gradle `buildConfig` and read `BuildConfig.VERSION_NAME` in `SettingsScreen.kt` instead of the hardcoded `strings.xml` value, making `app/build.gradle.kts`'s `versionName` the single source of truth
+- [x] **VERS-02**: Retire the now-redundant `settings_version_value` string resource ("0.1.0-beta", currently drifted from the real `0.1.0`) once `BuildConfig` wiring lands
 
 ### Release
 
@@ -149,8 +149,8 @@ None — this milestone is deliberately scoped to stability + release, not new f
 | VALID-36 | Phase 3 | Complete |
 | VALID-37 | Phase 3 | Complete |
 | VALID-38 | Phase 3 | Complete |
-| VERS-01 | Phase 4 | Pending |
-| VERS-02 | Phase 4 | Pending |
+| VERS-01 | Phase 4 | Complete |
+| VERS-02 | Phase 4 | Complete |
 | REL-01 | Phase 4 | Pending |
 | REL-02 | Phase 4 | Pending |
 | REL-03 | Phase 4 | Pending |
