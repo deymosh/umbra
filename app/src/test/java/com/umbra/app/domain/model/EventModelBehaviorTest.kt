@@ -195,6 +195,36 @@ class EventModelBehaviorTest {
     }
 
     @Test
+    fun `given_noExplicitTolerance_when_checkingFuture_then_theDefaultBehavesAsZeroTolerance`() {
+        val nowSecs = System.currentTimeMillis() / 1000L
+
+        // The no-argument form must agree with the explicit-zero form at every offset — this is
+        // what pins the default to exactly zero rather than merely some unspecified value, and it
+        // holds regardless of clock timing since both calls read "now" independently but compare
+        // against the same createdAt.
+        listOf(-60L, 0L, 5L, 60L).forEach { offsetSeconds ->
+            val event = eventWithCreatedAt(nowSecs + offsetSeconds)
+            val explicitZero = event.isFromFuture(0L)
+            val noArgument = event.isFromFuture()
+            assertEquals(explicitZero, noArgument)
+        }
+
+        // Direct true/false pins at a full minute's offset — far enough from the freshly-read
+        // clock that a scheduling pause between reading it and asserting can never flip the
+        // expected result, while still failing immediately if the default were ever widened to a
+        // real clock-drift allowance.
+        val oneMinuteAhead = eventWithCreatedAt(nowSecs + 60L)
+        val oneMinuteBehind = eventWithCreatedAt(nowSecs - 60L)
+        assertTrue(oneMinuteAhead.isFromFuture())
+        assertFalse(oneMinuteBehind.isFromFuture())
+
+        // Same two direct pins repeated against the bare-timestamp free function, so its own
+        // independently-declared default is pinned too, not just Event.isFromFuture()'s.
+        assertTrue(isTimestampFromFuture(nowSecs + 60L))
+        assertFalse(isTimestampFromFuture(nowSecs - 60L))
+    }
+
+    @Test
     fun `given_bareTimestampsAtVariousOffsetsFromNow_when_checkingFuture_then_onlyFlagsBeyondTolerance`() {
         val nowSecs = System.currentTimeMillis() / 1000L
         val tolerance = 120L

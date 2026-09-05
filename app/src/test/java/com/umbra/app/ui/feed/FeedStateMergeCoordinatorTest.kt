@@ -113,12 +113,17 @@ class FeedStateMergeCoordinatorTest {
         sig = "c".repeat(128)
     )
 
-    private fun noteView(id: String): NoteView = NoteView(
-        event = event(id),
+    private fun noteView(
+        id: String,
+        createdAt: Long = 1L,
+        repostedAt: Long? = null
+    ): NoteView = NoteView(
+        event = event(id, createdAt = createdAt),
         authorProfile = null,
         reactionCount = 0,
         replyCount = 0,
-        repostCount = 0
+        repostCount = 0,
+        repostedAt = repostedAt
     )
 
     /** [notesFlow] is `.flowOn(Dispatchers.IO)` and [FeedStateMergeCoordinator.computedFeedFlow]'s
@@ -224,6 +229,42 @@ class FeedStateMergeCoordinatorTest {
         job.cancel()
 
         assertEquals(profile, first.currentUserProfile)
+    }
+
+    @Test
+    fun `given a future dated note in notesFlow when computedFeedFlow computes the visible set then it is excluded while a past dated note is kept`() = runTest {
+        // The merge stage combines the notes flow, the active filters flow, and the recheck
+        // ticker; combine() cannot produce a single snapshot until every one of its sources has
+        // emitted at least once, so a computed snapshot arriving here at all is itself proof the
+        // ticker is a live, subscribed source of this flow rather than a dangling call wired to
+        // nothing.
+        val notesChannel = MutableSharedFlow<FeedNotesResult>(replay = 1)
+        val calls = mutableListOf<List<String>>()
+        val coordinator = subject(
+            scope = backgroundScope,
+            eventRepository = ObservableFeedEventRepository(notesChannel),
+            onVisibleNotesComputed = { notes -> calls.add(notes.map { it.event.id }) }
+        )
+
+        val job = launch { coordinator.computedFeedFlow.collect {} }
+        advanceUntilIdle()
+
+        val nowSecs = System.currentTimeMillis() / 1000L
+        val pastNote = noteView("past-note", createdAt = nowSecs - 3600L)
+        val futureNote = noteView("future-note", createdAt = nowSecs + 3600L)
+        val pastNoteWithFutureRepost = noteView(
+            "past-note-future-repost",
+            createdAt = nowSecs - 3600L,
+            repostedAt = nowSecs + 3600L
+        )
+        notesChannel.emit(FeedNotesResult(notes = listOf(pastNote, futureNote, pastNoteWithFutureRepost)))
+        awaitRealDispatch()
+        advanceUntilIdle()
+
+        assertEquals(listOf("past-note"), calls.last())
+        assertEquals(listOf("past-note"), coordinator.computedFeedFlow.value.events.map { it.id })
+
+        job.cancel()
     }
 
     @Test
