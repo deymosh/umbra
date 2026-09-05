@@ -293,4 +293,52 @@ class RelayCrudCoordinatorTest {
         assertFalse(stored?.isSearchEnabled == true)
         assertFalse(stored?.isSearchActive == true)
     }
+
+    @Test
+    fun `given saveRelay overlapping a role setter on the same relay id when both resolve then the second write waits for the first`() = runTest {
+        val relay = sampleRelay(id = "relayA", url = "wss://relay.example")
+        val repository = RecordingRelayRepository()
+        val (coordinator, _) = subject(scope = this, relays = listOf(relay), relayRepository = repository)
+        val gate = repository.gateInvocation(0)
+
+        coordinator.setOutboxEnabled("relayA", enabled = true)
+        coordinator.saveRelay(
+            sampleRelay(id = "relayA", url = "wss://relay.example").copy(isSearchEnabled = true, isSearchActive = true)
+        )
+        advanceUntilIdle()
+
+        assertEquals(listOf("enter:relayA"), repository.callLog)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        // Ordering only -- the non-empty-id save branch writes the caller's relay wholesale
+        // rather than merging, so the setter's flag is legitimately overwritten by the later
+        // save; a no-lost-update assertion on the final state would be wrong here.
+        assertEquals(
+            listOf("enter:relayA", "exit:relayA", "enter:relayA", "exit:relayA"),
+            repository.callLog
+        )
+    }
+
+    @Test
+    fun `given deleteRelay overlapping a role setter on the same relay id when both resolve then the removal waits for the role write`() = runTest {
+        val relay = sampleRelay(id = "relayA", url = "wss://relay.example")
+        val repository = RecordingRelayRepository()
+        val (coordinator, _) = subject(scope = this, relays = listOf(relay), relayRepository = repository)
+        val gate = repository.gateInvocation(0)
+
+        coordinator.setOutboxEnabled("relayA", enabled = true)
+        coordinator.deleteRelay("relayA")
+        advanceUntilIdle()
+
+        // The removal is waiting on the lock -- the row must still exist.
+        assertTrue(repository.get("relayA") != null)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertNull(repository.get("relayA"))
+        assertEquals(listOf("enter:relayA", "exit:relayA"), repository.callLog)
+    }
 }
