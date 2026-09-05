@@ -62,6 +62,17 @@ since it never resizes its container from video size at all.
   re-validation immediately after acquiring `relayConfigMutex` so an already-superseded list
   can't clobber a newer one that won the race after it was scheduled. See
   `claude/umbra-relay-feed-fixes` branch.
+- **Validation:** Both fixes are present in current source at the quoted lines
+  (`NostrSessionManager.kt:255` for the reactive fourth combine input,
+  `UserRepositoryImpl.kt:265-267` for the atomic staleness check-and-write). The
+  real-race test this phase intended for LOG-4 (D-02) is not currently possible:
+  `NostrSessionManager` requires `TorRuntimeManager`/`BackfillAnchorStore` (both
+  need a live `android.content.Context`), and `UserRepositoryImpl` requires
+  `ImagePrefetcher` (needs both a live `Context` and a Coil `ImageLoader`) — none
+  of the three has an interface seam, a fake, or a Robolectric/mocking dependency
+  available in this project, and no existing JVM unit test anywhere in the suite
+  constructs an Android `Context`. This entry stays in `docs/KNOWN_ISSUES.md`
+  alongside LOG-30/38/49/52.
 
 Reported by the user: on login, the app visibly fetches the profile and NIP-65 relay list
 (subscription card shows all events received, private/outbox/inbox relays appear) but doesn't
@@ -163,6 +174,18 @@ silently. Fix: apply the same scrubbed-throwable logging `FeedScreen.kt` already
   as an inline comment above the three fields rather than left unaudited. The no-lost-schedule and
   no-orphan guarantees are covered by a unit test that races eight genuinely parallel coroutines on a
   real `Dispatchers.Default` thread pool per scenario, not a single-threaded approximation.
+- **Validation:** A unit test for this fix is currently impossible:
+  `NostrSessionManager`'s constructor requires `TorRuntimeManager` and
+  `BackfillAnchorStore`, both concrete classes needing a live
+  `android.content.Context` with no interface seam and no fake in
+  `app/src/test/java/com/umbra/app/testutil/fakes/`, and this project has no
+  Robolectric or mocking dependency to supply one. This is the identical
+  architectural gap LOG-44 (`docs/TODO.md`) was deferred over. This entry
+  stays in `docs/KNOWN_ISSUES.md` at `fix applied — needs on-device
+  validation` — the fix itself is real, deployed, working code; only its
+  automated test coverage is blocked. Do not attempt an isolated
+  `NostrSessionManagerTest.kt` for this entry before LOG-44's interface-seam
+  work lands.
 
 Found by the whole-codebase bug-hunt sweep's TOCTOU and unsynchronized-shared-state grep
 passes. `NostrSessionManager` runs its own `CoroutineScope(SupervisorJob() + Dispatchers.IO)` — a
@@ -216,6 +239,18 @@ string) before it reaches `UiMessage.Res`. The same raw-`e.message`-in-UI patter
   much larger, higher-risk restructuring for a class with no dedicated unit test (see LOG-44) to
   catch a regression. No dedicated concurrency test exists for this fix; flagged for manual
   verification.
+- **Validation:** A unit test for this fix is currently impossible:
+  `NostrSessionManager`'s constructor requires `TorRuntimeManager` and
+  `BackfillAnchorStore`, both concrete classes needing a live
+  `android.content.Context` with no interface seam and no fake in
+  `app/src/test/java/com/umbra/app/testutil/fakes/`, and this project has no
+  Robolectric or mocking dependency to supply one. This is the identical
+  architectural gap LOG-44 (`docs/TODO.md`) was deferred over. This entry
+  stays in `docs/KNOWN_ISSUES.md` at `fix applied — needs on-device
+  validation` — the fix itself is real, deployed, working code; only its
+  automated test coverage is blocked. Do not attempt an isolated
+  `NostrSessionManagerTest.kt` for this entry before LOG-44's interface-seam
+  work lands.
 
 Found during Phase 2's code review of the LOG-30 fix. LOG-30 converted `retryJob`,
 `userBackfillJob`, and `ownProfileBootstrapWatcherJob` to `AtomicReference<Job?>`, correctly
@@ -245,6 +280,18 @@ others.
   guard through `bootstrapOwnProfileUseCase.start(pubkey)`) in a dedicated `ownProfileBootstrapMutex`,
   so `reconcile()`'s two documented concurrent entry points (the `bootstrapJob` collect loop and
   `retryJob`'s delayed relaunch) can interleave their scheduling but not their compound decisions.
+- **Validation:** A unit test for this fix is currently impossible:
+  `NostrSessionManager`'s constructor requires `TorRuntimeManager` and
+  `BackfillAnchorStore`, both concrete classes needing a live
+  `android.content.Context` with no interface seam and no fake in
+  `app/src/test/java/com/umbra/app/testutil/fakes/`, and this project has no
+  Robolectric or mocking dependency to supply one. This is the identical
+  architectural gap LOG-44 (`docs/TODO.md`) was deferred over. This entry
+  stays in `docs/KNOWN_ISSUES.md` at `fix applied — needs on-device
+  validation` — the fix itself is real, deployed, working code; only its
+  automated test coverage is blocked. Do not attempt an isolated
+  `NostrSessionManagerTest.kt` for this entry before LOG-44's interface-seam
+  work lands.
 
 Found during Phase 2's iteration-2 code re-review. `@Volatile` on `ownProfileBootstrapPubkey` only
 guarantees each individual read/write is visible across threads — it does not make the
@@ -272,6 +319,18 @@ guarantee.
   now also unconditionally resets `ownProfileBootstrapPubkey` to `null`, so a lost race in `stop()`
   can at worst leave a bootstrap channel running slightly longer than intended but can never cause a
   same-pubkey re-login to silently skip re-bootstrapping.
+- **Validation:** A unit test for this fix is currently impossible:
+  `NostrSessionManager`'s constructor requires `TorRuntimeManager` and
+  `BackfillAnchorStore`, both concrete classes needing a live
+  `android.content.Context` with no interface seam and no fake in
+  `app/src/test/java/com/umbra/app/testutil/fakes/`, and this project has no
+  Robolectric or mocking dependency to supply one. This is the identical
+  architectural gap LOG-44 (`docs/TODO.md`) was deferred over. This entry
+  stays in `docs/KNOWN_ISSUES.md` at `fix applied — needs on-device
+  validation` — the fix itself is real, deployed, working code; only its
+  automated test coverage is blocked. Do not attempt an isolated
+  `NostrSessionManagerTest.kt` for this entry before LOG-44's interface-seam
+  work lands.
 
 Found during Phase 2's iteration-3 (final) code re-review, as a residual gap in LOG-49's fix.
 LOG-49 correctly serialized `maybeBootstrapOwnProfile`'s own check-then-act sequence, but
