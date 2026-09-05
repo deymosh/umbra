@@ -83,3 +83,35 @@ invocation paths (or extract the plain-field decision logic into a smaller pure 
 be tested deterministically without constructing the full class, which takes eleven injected
 dependencies and has no mocking framework on the test classpath).
 
+### LOG-56 — `FeedStateMergeCoordinatorTest`'s real-dispatcher bridge is a fixed-delay timing heuristic, not a deterministic wait
+- **Status:** backlog
+- **Added:** 2026-09-05
+- **Why:** Found during Phase 3's code review of the new future-dated-events wiring test — a
+  CI-flakiness risk in test infrastructure, not a production bug.
+
+`FeedStateMergeCoordinatorTest.awaitRealDispatch()` (lines 138-141, used at 167/175/179/226/261)
+bridges the gap between `runTest`'s virtual-time scheduler and the real `Dispatchers.IO`/
+`Dispatchers.Default` hops the coordinator's flows actually run on by calling a fixed
+`delay(300)` before `advanceUntilIdle()`. This is correct in principle but is a wall-clock guess
+rather than a signal tied to the hop actually completing — under a CPU-contended CI runner, 300ms
+may not be enough, producing an intermittent, non-reproducible failure unrelated to the behavior
+under test. Fix: replace the fixed delay with a polling wait (e.g. repeatedly check the expected
+condition with a short sleep and a bounded timeout) or a synchronization primitive tied to the
+actual dispatcher hop completing, rather than a duration guess.
+
+### LOG-57 — `UmbraNostrClientTest`'s blocking background thread isn't released if an assertion fails mid-test
+- **Status:** backlog
+- **Added:** 2026-09-05
+- **Why:** Found during Phase 3's code review of the new dial-race coverage test — a test-hygiene
+  gap, not a production bug.
+
+`LatchBlockingWebSocket` (lines 72-86) spawns a real, non-daemon `Thread` that blocks inside
+`WebSocket.close()` until the test calls `release.countDown()` (line 163) in the dial-in-flight
+test at lines 132-174. If an assertion between `entered.await()` succeeding and that
+`release.countDown()` call throws (e.g. the `relayIssueFlow.replayCache` assertion at lines
+159-161), the latch is never released and the background thread blocks for its own 5-second
+timeout before self-aborting, adding up to 5 seconds of hung teardown time and obscuring the real
+assertion failure behind an unrelated `MarkerAbortException` printed later on a different thread.
+Fix: wrap the body from `entered.await()` through the final assertions in a `try`/`finally` that
+always calls `release.countDown()`.
+
