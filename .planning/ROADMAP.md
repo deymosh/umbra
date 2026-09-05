@@ -93,7 +93,28 @@ Plans:
   4. `testDebugUnitTest` passes with the added tests and `lintDebug` is clean.
   5. No entry reached `DONE.md` on the strength of an emulator or device run — device validation stayed opt-in per `.claude/CLAUDE.md`, and nothing in this phase launched one.
 
-**Plans**: TBD
+**Plans**: 8 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — One entry end to end as the tracer (cite, run, move, date) plus the expanded-scope requirement ids
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-02-PLAN.md — Citation ledger: exact, executed, revert-tested test citations for the 15 already-covered entries
+- [ ] 03-03-PLAN.md — Disposition ledger: source-read verifications, architectural blockers, and device-pass entries
+- [ ] 03-04-PLAN.md — Extend the relay-coordinator test with the discovered-flag and per-relay-lock coverage three fixes never got
+- [ ] 03-05-PLAN.md — New relay-client test file covering both halves of the same-relay dial-race fix
+- [ ] 03-06-PLAN.md — The ten remaining injected-logger cleanup catches, plus the future-dated-events default and its feed wiring
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 03-07-PLAN.md — Move the 27 closed entries into the completed log with test or source-read citations
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 03-08-PLAN.md — Annotate the ten entries that stay, complete all 38 requirement rows, and run the phase gate
 
 ### Phase 4: Version Consistency & v0.1.0 Release Prep
 
@@ -132,7 +153,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Error Visibility & Log Hygiene | 3/3 | Complete    | 2026-09-03 |
 | 2. Concurrency & State Correctness | 5/5 | Complete    | 2026-09-04 |
-| 3. Fix Validation & Test Coverage | 0/TBD | Not started | - |
+| 3. Fix Validation & Test Coverage | 0/8 | Not started | - |
 | 4. Version Consistency & v0.1.0 Release Prep | 0/TBD | Not started | - |
 
 ---
