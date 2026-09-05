@@ -5,16 +5,16 @@ milestone_name: Hardening & First Public Release
 current_phase: 03
 current_phase_name: Fix Validation & Test Coverage
 status: executing
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-09-05T12:47:02.534Z"
+stopped_at: Completed 03-03-PLAN.md
+last_updated: "2026-09-05T12:55:37.153Z"
 last_activity: 2026-09-05
 last_activity_desc: Phase 03 execution started
-state_head: c2a532ce5810da50b64d92cd3cd17adefab80998
+state_head: 916340c0268232a4cd198ca2c6643e4b495641bb
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 16
-  completed_plans: 10
+  completed_plans: 11
   percent: 50
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-09-04)
 ## Current Position
 
 Phase: 03 (Fix Validation & Test Coverage) — EXECUTING
-Plan: 3 of 8
+Plan: 4 of 8
 Status: Ready to execute
 Last activity: 2026-09-05 — Phase 03 execution started
 
@@ -71,6 +71,7 @@ Progress: [█████░░░░░] 50%
 | Phase 02 P05 | ~3min | 3 tasks | 5 files |
 | Phase 03 P01 | ~10min | 2 tasks | 3 files |
 | Phase 03 P02 | ~30min | 3 tasks | 1 files |
+| Phase 03 P03 | ~35min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -101,6 +102,7 @@ Recent decisions affecting current work:
 - [Phase 03]: [Phase 03] Plan 03-01 (tracer): moved LOG-55 to DONE.md with test-evidence bullets, proving the move template; minted VALID-11..VALID-38 requirement ids for all 27 remaining D-08 expanded-scope entries plus LOG-55 itself, recomputing REQUIREMENTS.md totals to 58 v1 requirements (Phase 3 = 38)
 - [Phase 03]: LOG-1 explicitly documents rejecting EventLruCacheTest.kt as a citation (verified by grep: zero references to ReplaceableEventKey/winsReplaceableRace in that file) in favor of EventRepositoryIngestionIntegrationTest's two ordering cases. — A plausibly-named test file (EventLruCacheTest) does not exercise the fix at all; citing it would falsely claim coverage in docs/DONE.md.
 - [Phase 03]: LOG-23 and LOG-47 citations kept verdict TEST with an explicit caveat rather than downgraded to INSUFFICIENT, since the cited tests provide genuine but indirect/shared evidence rather than a fully isolated regression test. — The plan's instructions required citing these tests explicitly; documenting the caveat in the ledger avoids misleading a future reader of docs/DONE.md without discarding valid partial evidence.
+- [Phase 03]: [Phase 03] Plan 03-03 (16 non-test-closable entries): re-derived NostrSessionManager's blocker from source rather than trusting research -- found 4 concrete (non-interface) constructor dependencies, not the 2 research named, but confirmed the irreducible blocker is specifically TorRuntimeManager/BackfillAnchorStore requiring a live Android Context. LOG-4 verified separately: its UserRepositoryImpl half is blocked too (requires ImagePrefetcher, itself needing Context + Coil ImageLoader); a repo-wide grep found zero JVM tests constructing android.content.Context, so LOG-4 recorded BLOCKED not TESTABLE. Six Group D logging fixes (LOG-18/20/28/39/51/54) confirmed present and correctly scrubbed at their current source lines, recorded as source-read-verified per D-09.
 
 ### Pending Todos
 
@@ -121,6 +123,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-05T12:46:55.850Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-09-05T12:55:37.115Z
+Stopped at: Completed 03-03-PLAN.md
 Resume file: None
