@@ -31,7 +31,7 @@ For each: determine whether the fix is verifiable by automated test alone, or ge
 - [x] **VALID-03**: Validate LOG-3 — inline video player aspect-ratio mismatch
 - [x] **VALID-04**: Validate LOG-4 — relay list TOCTOU race on save/apply
 - [x] **VALID-05**: Validate LOG-6 — stale replaceable-event revisions in the encrypted Room DB
-- [ ] **VALID-06**: Validate LOG-7 — future-dated events filter / recheck ticker
+- [x] **VALID-06**: Validate LOG-7 — future-dated events filter / recheck ticker
 - [ ] **VALID-07**: Validate LOG-11 — ticker's immediate-first-emission regression fix
 - [x] **VALID-08**: Validate LOG-12 — same-relay concurrent dial race
 - [x] **VALID-09**: Validate LOG-13 — avatar/banner retry-on-Tor-cold-start fix
@@ -44,7 +44,7 @@ For each: determine whether the fix is verifiable by automated test alone, or ge
 - [ ] **VALID-16**: Validate LOG-23 — FeedViewModel.muteUser's local-filter mute mirror is dead code
 - [ ] **VALID-17**: Validate LOG-24 — FeedViewModel.muteUser/togglePin discard the mute/pin write's success/failure result
 - [x] **VALID-18**: Validate LOG-26 — SettingsScreen's logout flow has the same swallowed-exception bug FeedScreen's just had fixed
-- [ ] **VALID-19**: Validate LOG-27 — LogoutUseCase's (and TrimMemoryCachesUseCase's) per-step cleanup catches discard every failure with zero logging
+- [x] **VALID-19**: Validate LOG-27 — LogoutUseCase's (and TrimMemoryCachesUseCase's) per-step cleanup catches discard every failure with zero logging
 - [x] **VALID-20**: Validate LOG-28 — LoginViewModel's session-activation failures are swallowed with zero logging during both anonymous and Amber login
 - [ ] **VALID-21**: Validate LOG-29 — RelayCrudCoordinator's per-role enable-flag setters can lose a concurrent update to the same relay
 - [x] **VALID-22**: Validate LOG-30 — NostrSessionManager's retry-scheduling and job-bookkeeping fields are plain vars racing across concurrent IO-dispatcher coroutines
@@ -116,7 +116,7 @@ None — this milestone is deliberately scoped to stability + release, not new f
 | VALID-03 | Phase 3 | Complete |
 | VALID-04 | Phase 3 | Complete |
 | VALID-05 | Phase 3 | Complete |
-| VALID-06 | Phase 3 | Pending |
+| VALID-06 | Phase 3 | Complete |
 | VALID-07 | Phase 3 | Pending |
 | VALID-08 | Phase 3 | Complete |
 | VALID-09 | Phase 3 | Complete |
@@ -129,7 +129,7 @@ None — this milestone is deliberately scoped to stability + release, not new f
 | VALID-16 | Phase 3 | Pending |
 | VALID-17 | Phase 3 | Pending |
 | VALID-18 | Phase 3 | Complete |
-| VALID-19 | Phase 3 | Pending |
+| VALID-19 | Phase 3 | Complete |
 | VALID-20 | Phase 3 | Complete |
 | VALID-21 | Phase 3 | Pending |
 | VALID-22 | Phase 3 | Complete |
