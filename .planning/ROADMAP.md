@@ -129,7 +129,7 @@ Plans:
   4. A `v0.1.0` git tag exists locally and is confirmed absent from the remote (`git ls-remote --tags origin` shows no `v0.1.0`); pushing it is left as an explicit user action.
   5. `.claude/skills/umbra-release/SKILL.md` exists, follows the existing `umbra-*` skill convention, and documents the full release path — version bump, changelog, tag, CI signing, GitHub Release — including the mandatory explicit-confirmation gate before the tag push.
 
-**Plans**: 1/3 plans executed
+**Plans**: 2/3 plans executed
 
 Plans:
 **Wave 1**
@@ -138,7 +138,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 04-02-PLAN.md — Dated 0.1.0 changelog section with the milestone's hardening summary, plus a new release-readiness checklist recording the observed lint/test/R8-build/signing-secret results (REL-01, REL-02)
+- [x] 04-02-PLAN.md — Dated 0.1.0 changelog section with the milestone's hardening summary, plus a new release-readiness checklist recording the observed lint/test/R8-build/signing-secret results (REL-01, REL-02)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -167,7 +167,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Error Visibility & Log Hygiene | 3/3 | Complete    | 2026-09-03 |
 | 2. Concurrency & State Correctness | 5/5 | Complete    | 2026-09-04 |
 | 3. Fix Validation & Test Coverage | 8/8 | Complete    | 2026-09-05 |
-| 4. Version Consistency & v0.1.0 Release Prep | 1/3 | In Progress|  |
+| 4. Version Consistency & v0.1.0 Release Prep | 2/3 | In Progress|  |
 
 ---
 *Roadmap created: 2026-09-02*

@@ -72,8 +72,8 @@ For each: determine whether the fix is verifiable by automated test alone, or ge
 
 ### Release
 
-- [ ] **REL-01**: Update `CHANGELOG.md` — convert the `[Unreleased]` section into a dated `[0.1.0]` section (Keep a Changelog format already in use)
-- [ ] **REL-02**: Verify release readiness end-to-end — lint/unit tests/`assembleRelease` succeed, signing config present, `android-release.yml` inputs correct — before asking for the tag push
+- [x] **REL-01**: Update `CHANGELOG.md` — convert the `[Unreleased]` section into a dated `[0.1.0]` section (Keep a Changelog format already in use)
+- [x] **REL-02**: Verify release readiness end-to-end — lint/unit tests/`assembleRelease` succeed, signing config present, `android-release.yml` inputs correct — before asking for the tag push
 - [ ] **REL-03**: Prepare the `v0.1.0` git tag locally, ready for the user to push and trigger `android-release.yml`'s signed build + GitHub Release
 
 ### Release Skill
@@ -151,8 +151,8 @@ None — this milestone is deliberately scoped to stability + release, not new f
 | VALID-38 | Phase 3 | Complete |
 | VERS-01 | Phase 4 | Complete |
 | VERS-02 | Phase 4 | Complete |
-| REL-01 | Phase 4 | Pending |
-| REL-02 | Phase 4 | Pending |
+| REL-01 | Phase 4 | Complete |
+| REL-02 | Phase 4 | Complete |
 | REL-03 | Phase 4 | Pending |
 | SKILL-01 | Phase 4 | Pending |
 

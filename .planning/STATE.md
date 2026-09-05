@@ -5,16 +5,16 @@ milestone_name: Hardening & First Public Release
 current_phase: 04
 current_phase_name: Version Consistency & v0.1.0 Release Prep
 status: executing
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-09-05T23:04:33.095Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-09-05T23:12:59.728Z"
 last_activity: 2026-09-05
 last_activity_desc: Phase 04 execution started
-state_head: f38487f81e1cea0bccd284f261653600cb40599c
+state_head: b9692d7eac2061c077c6428520bd034fa08e3818
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 19
-  completed_plans: 17
+  completed_plans: 18
   percent: 75
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-09-05)
 ## Current Position
 
 Phase: 04 (Version Consistency & v0.1.0 Release Prep) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-09-05 — Phase 04 execution started
 
@@ -79,6 +79,7 @@ Progress: [████████░░] 75% (3/4 phases)
 | Phase 03 P07 | ~20min | 2 tasks | 2 files |
 | Phase 03 P08 | ~30min | 3 tasks | 2 files |
 | Phase 04 P01 | ~10min | 2 tasks | 3 files |
+| Phase 04 P02 | ~15min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -117,6 +118,7 @@ Recent decisions affecting current work:
 - [Phase 03]: LOG-4's Validation bullet records the BLOCKED disposition exactly as 03-DISPOSITIONS.md recorded it, matching the ledger rather than re-deriving a rationale. — The ledger's own recorded outcome is the source of truth for whether LOG-4's real-race test is currently possible; no unplanned gap was warranted since the ledger did not record a constructible-path alternative.
 - [Phase 03]: Verified the 38-id reconciliation (28 closed to DONE.md + 0 held-back + 10 annotated = 38) independently before trusting that every REQUIREMENTS.md checkbox/row already read complete going into this plan's Task 3. — An earlier sibling plan's shared-id readiness-gate automation had already flipped the checkboxes as other plans in this phase completed; accepting that state without independent verification would risk marking a held-back entry complete, which the plan explicitly forbids.
 - [Phase 04]: [Phase 04] Plan 04-01: Fixed versionName drift by enabling AGP buildConfig and reading BuildConfig.VERSION_NAME in SettingsScreen; deleted the now-dead settings_version_value string resource. Applied Task 2's resource deletion before running Task 1's own gate to satisfy AGP lint's UnusedResources check, while still splitting commits by file scope exactly per the plan (Rule 3 auto-fix, documented in 04-01-SUMMARY.md).
+- [Phase 04]: [Phase 04] Plan 04-02: split CHANGELOG.md's Unreleased content into a dated 0.1.0 release with a new reader-facing hardening summary under Fixed (error-visibility, concurrency/race, deletion/state-correctness, retroactive test coverage), sourced from docs/DONE.md with no LOG-N identifiers carried over; created docs/RELEASE_CHECKLIST.md recording this session's actual lintDebug/testDebugUnitTest/assembleRelease results (930 tests passing, unsigned R8 APK produced) plus confirmed CI signing secret names and unclaimed remote tag.
 
 ### Pending Todos
 
@@ -138,6 +140,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-05T23:04:33.038Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-09-05T23:12:59.671Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
