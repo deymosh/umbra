@@ -232,4 +232,36 @@ class RelayCrudCoordinatorTest {
         // blank relay created by the unguarded "add new" branch.
         assertTrue(merged?.isReadEnabled == true)
     }
+
+    @Test
+    fun `given a discovered relay when saveRelay assigns it an owned role then the persisted relay is no longer discovered`() = runTest {
+        val relay = sampleRelay(id = "r1", url = "wss://relay.example").copy(isDiscovered = true)
+        val repository = RecordingRelayRepository()
+        val (coordinator, _) = subject(scope = this, relays = listOf(relay), relayRepository = repository)
+
+        coordinator.saveRelay(relay.copy(isWriteEnabled = true, isWriteActive = true))
+        advanceUntilIdle()
+
+        val stored = repository.get("r1")
+        assertTrue(stored?.isDiscovered == false)
+        assertTrue(stored?.isWriteActive == true)
+    }
+
+    @Test
+    fun `given a discovered relay already in the repository when saveRelay is called with a blank id and the same url then the merged row is no longer discovered`() = runTest {
+        val existing = sampleRelay(id = "existing1", url = "wss://relay.example").copy(isDiscovered = true)
+        val repository = RecordingRelayRepository()
+        repository.seed(existing)
+        val (coordinator, _) = subject(scope = this, relays = emptyList(), relayRepository = repository)
+
+        coordinator.saveRelay(
+            Relay(id = "", url = "wss://relay.example", isEnabled = false, isReadEnabled = false, isWriteEnabled = true)
+        )
+        advanceUntilIdle()
+
+        assertEquals(1, repository.snapshot().size)
+        val merged = repository.get("existing1")
+        assertTrue(merged?.isDiscovered == false)
+        assertTrue(merged?.isWriteEnabled == true)
+    }
 }
