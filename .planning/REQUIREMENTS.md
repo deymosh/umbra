@@ -24,7 +24,7 @@
 
 ### Fix Validation (currently `fix applied — needs on-device validation` in docs/KNOWN_ISSUES.md)
 
-For each: determine whether the fix is verifiable by automated test alone, or genuinely needs visual/on-device confirmation. Add/confirm test coverage and move to `docs/DONE.md` for the former; leave as-is in `docs/KNOWN_ISSUES.md` for the user's own on-device validation for the latter. IDs VALID-11 onward cover the Phase 1/2 fixes that were never moved to `docs/DONE.md`; LOG-35 (still `open`, no fix landed) and LOG-44 (deferred in `docs/TODO.md`, needs an architectural change rather than an audit-and-cite pass) are deliberately excluded and have no id.
+For each: determine whether the fix is verifiable by automated test alone, or genuinely needs visual/on-device confirmation. Add/confirm test coverage and move to `docs/DONE.md` for the former; leave as-is in `docs/KNOWN_ISSUES.md` for the user's own on-device validation for the latter. IDs VALID-11 onward cover the Phase 1/2 fixes that were never moved to `docs/DONE.md`; LOG-35 (still `open`, no fix landed) and LOG-44 (deferred in `docs/TODO.md`, needs an architectural change rather than an audit-and-cite pass) are deliberately excluded and have no id. Of the 38 entries in scope, 22 closed into the completed log on an executed test, 6 closed into the completed log on a direct source read, and 10 remain in the issues file, each now carrying its own note naming whether it awaits the user's own device pass or an architectural test-seam gap.
 
 - [x] **VALID-01**: Validate LOG-1 — stale kind-0/replaceable-event revisions lingering in `EventLruCache`
 - [x] **VALID-02**: Validate LOG-2 — `ImageLoadGate` permit acquire/release race
@@ -166,4 +166,4 @@ None — this milestone is deliberately scoped to stability + release, not new f
 
 ---
 *Requirements defined: 2026-09-02*
-*Last updated: 2026-09-05 after Phase 3 Plan 03-01 minted VALID-11..VALID-38 for the D-08 scope expansion*
+*Last updated: 2026-09-05 after all 38 Fix Validation entries received a recorded determination, closing Phase 3*
