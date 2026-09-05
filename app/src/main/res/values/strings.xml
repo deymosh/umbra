@@ -356,7 +356,6 @@ No tracking. No analytics. No ads.</string>
     <string name="media_upload_dialog_upload_action">Upload</string>
     <string name="settings_about_umbra">About Umbra</string>
     <string name="settings_version">Version</string>
-    <string name="settings_version_value">0.1.0-beta</string>
     <string name="settings_privacy">Privacy</string>
     <string name="settings_privacy_value">🧅 TOR routing • No tracking • Non-custodial keys</string>
     <string name="settings_architecture">Architecture</string>
