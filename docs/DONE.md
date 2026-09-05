@@ -824,3 +824,131 @@ dialog's save button, or a concurrent NIP-65 sync path adding the same URL) that
 reflected in that mirror routed into the unguarded "add new" branch, and since neither
 `AddRelayUseCase` nor `RelayRepository.addRelay` enforces URL uniqueness, this could produce two
 `Relay` rows with the same normalized URL and different ids.
+
+
+### LOG-18 — Three unscrubbed log messages survive the logging migration (EventRepositoryImpl.kt x2, NegentropySyncOrchestrator.kt x1)
+- **Status:** fix applied — needs on-device validation
+- **Found:** 2026-08-24
+- **Where:** `data/repository/EventRepositoryImpl.kt:428` (`"FEED_NOTES EOSE from relay $relayUrl reported MORE — not advancing since watermark"`), `:486` (`"Re-applied ${channelFilters.size} channels to relay $relayUrl"`), and `data/repository/NegentropySyncOrchestrator.kt:118` (`"NIP-77 sync with relay failed: ${e.message}"`) — line numbers for the first two updated 2026-08-27 after `EventRepositoryImpl.kt` extractions shifted them from :493/:551; same unfixed sites, reconfirmed during code review
+- **Fix:** `EventRepositoryImpl.kt`'s two relay-URL interpolations (the feed-EOSE and channel-reapply
+  debug logs) now wrap `relayUrl` in `LogScrubber.scrubUrlForLogs()` before logging; `NegentropySyncOrchestrator.kt`'s
+  NIP-77 per-relay sync-failure log now wraps the caught exception's message in
+  `LogScrubber.scrubThrowableMessageForLogs()` instead of interpolating `e.message` raw. Log level
+  is unchanged at all three sites — this was a scrubbing-only fix.
+- **Validated:** 2026-09-05 — by direct source read, not by a test
+- **Evidence:** "Verified by direct source read — `logger` is not constructor-injected in `EventRepositoryImpl`/`NegentropySyncOrchestrator`, so no unit test can assert the logging call; confirmed by inspection of `EventRepositoryImpl.kt:429`, `EventRepositoryImpl.kt:487`, and `NegentropySyncOrchestrator.kt:119` — all three relay-URL/throwable interpolations are routed through `LogScrubber` at their current call sites."
+
+The first two sites were found during the logging-migration closeout's `find-non-lambda-logs`
+audit. The third (`NegentropySyncOrchestrator.kt:118`) was missed by that same
+sweep and instead caught by a related code review — the `catch`
+block wraps a per-relay NIP-77 sync call, so `e` is plausibly a network/IO exception whose `.message`
+commonly embeds the target hostname/URL. All three sites interpolate raw, unscrubbed content into a
+`logger.d { }` message without routing it through `LogScrubber.scrubUrlForLogs()` /
+`scrubThrowableMessageForLogs()`, which AUDIT.md §1.3 and the `find-non-lambda-logs` skill's Check 1
+both require. Confirmed pre-existing rather than introduced by the logging migration: all three sites
+already interpolated the same raw, unscrubbed content before the logging migration — the 1:1 migration correctly preserved a defect that predates
+it rather than introducing a new one. All three sites are debug-level, so release builds already
+filter them today, but AUDIT.md's scrubbing rule applies independent of level. Fix: wrap both
+`$relayUrl` interpolations in `LogScrubber.scrubUrlForLogs(relayUrl)` (matching every other relay-URL
+log site in `EventRepositoryImpl.kt`), and wrap the `NegentropySyncOrchestrator.kt` `e.message` in
+`LogScrubber.scrubThrowableMessageForLogs(e)`.
+
+### LOG-20 — Silent empty catch block during `clearAllData()`'s wipe sequence
+- **Status:** fix applied — needs on-device validation
+- **Found:** 2026-08-27
+- **Where:** `data/repository/EventRepositoryImpl.kt:498-500` (`clearAllData`)
+- **Fix:** `clearAllData()`'s `disconnectFromAll()` catch no longer discards its exception silently
+  — it now logs the throwable at error level via `logger.e(e) { "disconnectFromAll failed during
+  clearAllData; continuing wipe" }`, naming only the failed step (no relay list, no pubkey, no row
+  count). The wipe sequence still runs its remaining steps afterward exactly as before.
+- **Validated:** 2026-09-05 — by direct source read, not by a test
+- **Evidence:** "Verified by direct source read — `logger` is not constructor-injected in `EventRepositoryImpl`, so no unit test can assert the logging call; confirmed by inspection of `EventRepositoryImpl.kt:502` — the previously-empty `catch` now logs the throwable at error level before the wipe continues."
+
+Found during review of the repository extraction. Confirmed pre-existing
+(present before the extractions began). `try { disconnectFromAll() } catch (_: Exception) { }` — any
+failure in `disconnectFromAll()` during a full data wipe (logout/account switch/factory reset) is
+swallowed with zero logging. This is on a security/privacy-relevant path: if disconnect genuinely
+fails, sockets could remain open and still deliver events while the rest of the wipe proceeds, and
+nobody would know from the logs why. Fix: log the exception via `logger.e(e) { "disconnectFromAll
+failed during clearAllData; continuing wipe" }` instead of swallowing it silently.
+
+### LOG-28 — LoginViewModel's session-activation failures are swallowed with zero logging during both anonymous and Amber login
+- **Status:** fix applied — needs on-device validation
+- **Found:** 2026-09-02
+- **Where:** `ui/auth/LoginViewModel.kt` (`loginAnonymously()`'s and `savePublicKey()`'s inner
+  `try { eventRepository.activateUserSession(...) } catch (_: Exception) { }`)
+- **Fix:** both inner `try/catch` blocks around `eventRepository.activateUserSession(...)` (in
+  `loginAnonymously()` and `savePublicKey()`) now log the caught exception at error level with the
+  static message "Session activation failed" instead of discarding it silently. The inner catch
+  itself is unchanged — a hydration failure still doesn't block login, and `nostrSessionController.start()`
+  plus the authenticated-state update still run right afterward, exactly as before.
+- **Validated:** 2026-09-05 — by direct source read, not by a test
+- **Evidence:** "Verified by direct source read — `logger` is not constructor-injected in `LoginViewModel`, so no unit test can assert the logging call; confirmed by inspection of `LoginViewModel.kt:85` and `LoginViewModel.kt:137` — both inner `activateUserSession(...)` catches now log the caught exception instead of discarding it."
+
+Found by the whole-codebase bug-hunt sweep's empty-catch-block grep pass. Both
+`loginAnonymously()` and `savePublicKey()` wrap their `eventRepository.activateUserSession(...)`
+call in its own inner `catch (_: Exception) { }`, nested inside the method's own outer
+`try`/`catch (e: Exception)` block that otherwise does correctly log a scrubbed failure message
+(`logger.d { "Anonymous login failed: ${scrubThrowableMessageForLogs(e)}" }` / the equivalent
+in `savePublicKey()`). Because the inner catch swallows `activateUserSession`'s exception before
+it can propagate, the outer catch's logging path can never fire for this specific failure — a
+session-activation failure (which is what actually triggers backfill/hydration for the freshly
+logged-in account) is completely invisible in the logs even though this exact method already has
+a working, scrubbed logging path one level up that a failure here should have reached. Net effect:
+a user who logs in successfully but never sees their feed populate has zero diagnostic trail
+explaining why. Fix: log the caught exception (scrubbed) inside the inner catch instead of
+discarding it silently, or let it propagate to the outer catch that already logs correctly.
+
+### LOG-39 — RelayConfigViewModel.enforceAnonymousRelayPolicyIfNeeded silently discards failures while enforcing the anonymous-session privacy restriction
+- **Status:** fix applied — needs on-device validation
+- **Found:** 2026-09-04
+- **Where:** `ui/relay/RelayConfigViewModel.kt:346-367`
+- **Fix:** `enforceAnonymousRelayPolicyIfNeeded`'s `runCatching { updateRelayUseCase(...) }` now
+  chains `.onFailure { e -> logger.e(e) { "Failed to enforce anonymous-session relay restriction" } }`,
+  matching LOG-20's fix shape. `RelayConfigViewModel` gained its own `TAG`/`logger` (it had neither
+  before).
+- **Validated:** 2026-09-05 — by direct source read, not by a test
+- **Evidence:** "Verified by direct source read — `logger` is not constructor-injected in `RelayConfigViewModel`, so no unit test can assert the logging call; confirmed by inspection of `RelayConfigViewModel.kt:369-370` — the previously-unchecked `runCatching` now chains `.onFailure` and logs the throwable."
+
+Found during Phase 2's code review. `enforceAnonymousRelayPolicyIfNeeded` turns off read/DM relay
+roles when a session is anonymous — a genuine privacy control meant to keep read/DM relay usage
+from being tied to an identity. The write is wrapped in an unchecked `runCatching { ... }` with no
+`.onFailure { }` and no logging: if `updateRelayUseCase` throws for any reason, the anonymous-session
+restriction silently fails to apply for that relay, with zero diagnostic trail and no way for the
+caller to know enforcement didn't take effect. Same class of silent-catch-on-a-privacy-relevant-path
+bug already fixed at LOG-20/LOG-27/LOG-28 elsewhere in this codebase, but this specific site was
+never covered by any of those fixes. Fix: add `.onFailure { e -> logger.e(e) { "Failed to enforce
+anonymous-session relay restriction" } }` after the `runCatching` block, matching LOG-20's fix
+shape.
+
+### LOG-51 — NostrSessionManager's onFailure handlers logged a scrubbed message instead of the throwable
+- **Status:** fix applied — needs on-device validation
+- **Found:** 2026-09-04
+- **Where:** `data/nostr/NostrSessionManager.kt` (`disableDeadRelay`'s and `reconcile`'s
+  `.onFailure` handlers)
+- **Fix:** Both sites now call `logger.e(e) { ... }` / `logger.e(error) { ... }` instead of
+  `logger.d { ... }`, keeping the same scrubbed message text as the log line's content — matching
+  `RelayConfigViewModel`'s existing correct pattern (see LOG-39's fix).
+- **Validated:** 2026-09-05 — by direct source read, not by a test
+- **Evidence:** "Verified by direct source read — `logger` is not constructor-injected in `NostrSessionManager`, so no unit test can assert the logging call; confirmed by inspection of `NostrSessionManager.kt:348-349` and `NostrSessionManager.kt:435,437` — both `onFailure` handlers now call `logger.e(...)` instead of `logger.d(...)`, preserving the stack trace."
+
+Found during Phase 2's iteration-2 code re-review. Both handlers routed their caught throwable
+through `.d { "... ${scrubThrowableMessageForLogs(e)}" }`, discarding the stack trace that would
+otherwise be available for on-device debugging, instead of `.e(e) { ... }`.
+
+### LOG-54 — InteractionActionsCoordinator still discarded the throwable in two logger.d catch/onFailure sites
+- **Status:** fix applied — needs on-device validation
+- **Found:** 2026-09-04
+- **Where:** `ui/common/InteractionActionsCoordinator.kt` (`requestSignAndPublish`'s `catch`,
+  `publishSignedEvent`'s `onFailure`)
+- **Fix:** Both sites now call `logger.e(e) { ... }` instead of `logger.d { ... }`, keeping the
+  same scrubbed message text as the log line's content — matching LOG-51's fix in
+  `NostrSessionManager` and `RelayConfigViewModel`'s existing correct pattern.
+- **Validated:** 2026-09-05 — by direct source read, not by a test
+- **Evidence:** "Verified by direct source read — `logger` is not constructor-injected in `InteractionActionsCoordinator`, so no unit test can assert the logging call; confirmed by inspection of `InteractionActionsCoordinator.kt:97` and `InteractionActionsCoordinator.kt:116` — both sites now call `logger.e(...)` instead of `logger.d(...)`."
+
+Found during Phase 2's iteration-3 (final) code re-review. This is the same throwable-discarding
+pattern LOG-51 fixed in `NostrSessionManager`, present unaddressed in the file this phase's own
+`runCatchingCancellable` migration (LOG-43/LOG-46) was actively editing — pre-existing from the
+initial commit rather than a regression, but the exact same bug class caught and fixed elsewhere
+in a file already under active review.
