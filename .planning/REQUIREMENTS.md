@@ -63,7 +63,7 @@ For each: determine whether the fix is verifiable by automated test alone, or ge
 - [ ] **VALID-35**: Validate LOG-52 — ownProfileBootstrapMutex only guarded maybeBootstrapOwnProfile's own body, not the other two call sites mutating the same fields
 - [ ] **VALID-36**: Validate LOG-53 — RelayCrudCoordinator.saveRelay's new-relay/URL-collision decision still read the throttled state.value.relays mirror
 - [ ] **VALID-37**: Validate LOG-54 — InteractionActionsCoordinator still discarded the throwable in two logger.d catch/onFailure sites
-- [ ] **VALID-38**: Validate LOG-55 — no regression test exercised RelayCrudCoordinator.saveRelay's merge-branch fresh-read fix
+- [x] **VALID-38**: Validate LOG-55 — no regression test exercised RelayCrudCoordinator.saveRelay's merge-branch fresh-read fix
 
 ### Version Consistency
 
@@ -148,7 +148,7 @@ None — this milestone is deliberately scoped to stability + release, not new f
 | VALID-35 | Phase 3 | Pending |
 | VALID-36 | Phase 3 | Pending |
 | VALID-37 | Phase 3 | Pending |
-| VALID-38 | Phase 3 | Pending |
+| VALID-38 | Phase 3 | Complete |
 | VERS-01 | Phase 4 | Pending |
 | VERS-02 | Phase 4 | Pending |
 | REL-01 | Phase 4 | Pending |

@@ -5,16 +5,16 @@ milestone_name: Hardening & First Public Release
 current_phase: 03
 current_phase_name: Fix Validation & Test Coverage
 status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-09-05T02:57:34.401Z"
-last_activity: 2026-09-04
-last_activity_desc: Phase 02 complete, transitioned to Phase 3
-state_head: bb031c066df257b1f60e8609601ff4aec65a3c64
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-09-05T03:15:01.641Z"
+last_activity: 2026-09-05
+last_activity_desc: Phase 03 execution started
+state_head: b51622c9450b88c9bbe951a4c2783b53e169cd5a
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 16
-  completed_plans: 8
+  completed_plans: 9
   percent: 50
 ---
 
@@ -25,16 +25,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-04)
 
 **Core value:** A trustworthy, stable first public release that upholds Umbra's TOR-only and Amber-only guarantees without regressions
-**Current focus:** Phase 3 — Fix Validation & Test Coverage
+**Current focus:** Phase 03 — Fix Validation & Test Coverage
 
 ## Current Position
 
-Phase: 03 (Fix Validation & Test Coverage) — READY TO EXECUTE
-Plan: Not started
+Phase: 03 (Fix Validation & Test Coverage) — EXECUTING
+Plan: 2 of 8
 Status: Ready to execute
-Last activity: 2026-09-04 — Phase 02 complete, transitioned to Phase 3
+Last activity: 2026-09-05 — Phase 03 execution started
 
-Progress: [███░░░░░░░] 25%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P03 | ~6min | 3 tasks | 4 files |
 | Phase 02 P04 | ~24min | 3 tasks | 4 files |
 | Phase 02 P05 | ~3min | 3 tasks | 5 files |
+| Phase 03 P01 | ~10min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,7 @@ Recent decisions affecting current work:
 - [Phase 02]: [Phase 02] Plan 02-05 (LOG-23/BUG-07, LOG-24/BUG-08): FeedViewModel.muteUser's dead mute mirror now resolves via feedRepository.getActiveFilters().first().firstOrNull() (matching ProfileViewModel.toggleMute) instead of a by-id lookup against mergeActiveFeedFilters's fixed synthetic id; muteUser/togglePin's onSigned callbacks now capture and map their write's Result via two new top-level muteWriteResultMessage/pinWriteResultMessage functions reusing ProfileViewModel's exact error vocabulary. TDD RED/GREEN followed for Task 2. Phase 2 (all 5 plans) now complete.
 - [Phase 02]: Post-execution code review ran a 3-iteration auto-fix chain (user-directed: fix findings within the same phase rather than deferring to backlog). Iteration 1 found 3 Critical + 5 Warning + 1 Info — including two sibling methods (`RelayCrudCoordinator.removeRelayRole`, `saveRelay`/`deleteRelay`) that reintroduced Plan 02-01's exact lost-update race, and `NostrSessionManager`'s `reconcile()`-reachable plain fields still racing despite its Job-field fix. Iterations 2-3 each caught new, narrowing-severity residuals in the prior iteration's own fixes (a leftover `runCatching` call site, a still-stale-mirror existence check, an unguarded `stopOwnProfileBootstrap`) — genuine convergence, not diminishing returns, though the loop hit its 3-pass cap before a final clean re-review. 20 fix commits total; LOG-37 through LOG-55 logged. One item (LOG-44, missing NostrSessionManager/RelayConfigViewModel test coverage) deliberately left open — no mocking framework, no interface seam, real architectural change out of scope for a fix pass. Two separate session rate-limit interruptions during this chain were recovered by verifying already-landed commits before resuming, never redoing completed work.
 - [Phase 02]: Phase verification found one non-functional gap: three source comments embedded GSD decision ids (`D-06`, `D-04`), violating CLAUDE.md's explicit rule. Fixed directly (one commit, comment-only, no behavior change) and re-verified clean rather than routing through the full `/gsd-plan-phase --gaps` cycle for a trivial compliance fix.
+- [Phase 03]: [Phase 03] Plan 03-01 (tracer): moved LOG-55 to DONE.md with test-evidence bullets, proving the move template; minted VALID-11..VALID-38 requirement ids for all 27 remaining D-08 expanded-scope entries plus LOG-55 itself, recomputing REQUIREMENTS.md totals to 58 v1 requirements (Phase 3 = 38)
 
 ### Pending Todos
 
@@ -116,6 +118,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-04T17:02:43.667Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-fix-validation-test-coverage/03-CONTEXT.md
+Last session: 2026-09-05T03:15:01.602Z
+Stopped at: Completed 03-01-PLAN.md
+Resume file: None

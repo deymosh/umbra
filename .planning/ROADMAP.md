@@ -93,12 +93,12 @@ Plans:
   4. `testDebugUnitTest` passes with the added tests and `lintDebug` is clean.
   5. No entry reached `DONE.md` on the strength of an emulator or device run — device validation stayed opt-in per `.claude/CLAUDE.md`, and nothing in this phase launched one.
 
-**Plans**: 8 plans
+**Plans**: 1/8 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 03-01-PLAN.md — One entry end to end as the tracer (cite, run, move, date) plus the expanded-scope requirement ids
+- [x] 03-01-PLAN.md — One entry end to end as the tracer (cite, run, move, date) plus the expanded-scope requirement ids
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -153,7 +153,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Error Visibility & Log Hygiene | 3/3 | Complete    | 2026-09-03 |
 | 2. Concurrency & State Correctness | 5/5 | Complete    | 2026-09-04 |
-| 3. Fix Validation & Test Coverage | 0/8 | Not started | - |
+| 3. Fix Validation & Test Coverage | 1/8 | In Progress|  |
 | 4. Version Consistency & v0.1.0 Release Prep | 0/TBD | Not started | - |
 
 ---
