@@ -2,7 +2,12 @@ package com.umbra.app.domain.usecase
 
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.model.NostrChannels
+import com.umbra.app.domain.nostr.NostrSessionController
+import com.umbra.app.domain.repository.ContactListRepository
 import com.umbra.app.domain.repository.EventRepository
+import com.umbra.app.domain.repository.MuteListRepository
+import com.umbra.app.domain.repository.PinListRepository
+import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.testutil.fakes.FakeContactListRepository
 import com.umbra.app.testutil.fakes.FakeEventRepository
 import com.umbra.app.testutil.fakes.FakeMuteListRepository
@@ -386,6 +391,142 @@ class BackfillDeleteLogoutUseCaseTest {
         assertSame(thrown, logger.errorCalls.first().throwable)
     }
 
+    @Test
+    fun `given_nostrSessionControllerStopThrows_when_logging_then_loggerRecordsErrorWithSameThrowable`() = runBlocking {
+        val thrown = IllegalStateException("session stop boom")
+        val sessionController = ThrowingStopNostrSessionController(FakeNostrSessionController(), thrown)
+        val logger = FakeUmbraLogger()
+        val useCase = LogoutUseCase(
+            FakeEventRepository(oldestAuthorTimestamp = null),
+            FakeUserRepository(),
+            FakeUserPreferences(),
+            FakeContactListRepository(),
+            FakeMuteListRepository(),
+            FakePinListRepository(),
+            sessionController,
+            logger
+        )
+
+        useCase()
+
+        assertEquals(1, logger.errorCalls.size)
+        assertSame(thrown, logger.errorCalls.first().throwable)
+    }
+
+    @Test
+    fun `given_userRepositoryClearAllThrows_when_logging_then_loggerRecordsErrorWithSameThrowable`() = runBlocking {
+        val thrown = IllegalStateException("user repository clear all boom")
+        val userRepo = ThrowingClearAllUserRepository(FakeUserRepository(), thrown)
+        val logger = FakeUmbraLogger()
+        val useCase = LogoutUseCase(
+            FakeEventRepository(oldestAuthorTimestamp = null),
+            userRepo,
+            FakeUserPreferences(),
+            FakeContactListRepository(),
+            FakeMuteListRepository(),
+            FakePinListRepository(),
+            FakeNostrSessionController(),
+            logger
+        )
+
+        useCase()
+
+        assertEquals(1, logger.errorCalls.size)
+        assertSame(thrown, logger.errorCalls.first().throwable)
+    }
+
+    @Test
+    fun `given_contactListRepositoryClearAllThrows_when_logging_then_loggerRecordsErrorWithSameThrowable`() = runBlocking {
+        val thrown = IllegalStateException("contact list clear all boom")
+        val contactListRepo = ThrowingClearAllContactListRepository(FakeContactListRepository(), thrown)
+        val logger = FakeUmbraLogger()
+        val useCase = LogoutUseCase(
+            FakeEventRepository(oldestAuthorTimestamp = null),
+            FakeUserRepository(),
+            FakeUserPreferences(),
+            contactListRepo,
+            FakeMuteListRepository(),
+            FakePinListRepository(),
+            FakeNostrSessionController(),
+            logger
+        )
+
+        useCase()
+
+        assertEquals(1, logger.errorCalls.size)
+        assertSame(thrown, logger.errorCalls.first().throwable)
+    }
+
+    @Test
+    fun `given_muteListRepositoryClearAllThrows_when_logging_then_loggerRecordsErrorWithSameThrowable`() = runBlocking {
+        val thrown = IllegalStateException("mute list clear all boom")
+        val muteListRepo = ThrowingClearAllMuteListRepository(FakeMuteListRepository(), thrown)
+        val logger = FakeUmbraLogger()
+        val useCase = LogoutUseCase(
+            FakeEventRepository(oldestAuthorTimestamp = null),
+            FakeUserRepository(),
+            FakeUserPreferences(),
+            FakeContactListRepository(),
+            muteListRepo,
+            FakePinListRepository(),
+            FakeNostrSessionController(),
+            logger
+        )
+
+        useCase()
+
+        assertEquals(1, logger.errorCalls.size)
+        assertSame(thrown, logger.errorCalls.first().throwable)
+    }
+
+    @Test
+    fun `given_pinListRepositoryClearAllThrows_when_logging_then_loggerRecordsErrorWithSameThrowable`() = runBlocking {
+        val thrown = IllegalStateException("pin list clear all boom")
+        val pinListRepo = ThrowingClearAllPinListRepository(FakePinListRepository(), thrown)
+        val logger = FakeUmbraLogger()
+        val useCase = LogoutUseCase(
+            FakeEventRepository(oldestAuthorTimestamp = null),
+            FakeUserRepository(),
+            FakeUserPreferences(),
+            FakeContactListRepository(),
+            FakeMuteListRepository(),
+            pinListRepo,
+            FakeNostrSessionController(),
+            logger
+        )
+
+        useCase()
+
+        assertEquals(1, logger.errorCalls.size)
+        assertSame(thrown, logger.errorCalls.first().throwable)
+    }
+
+    @Test
+    fun `given_clearBackfillAnchorsThrows_when_logging_then_loggerRecordsErrorWithSameThrowable`() = runBlocking {
+        val thrown = IllegalStateException("clear backfill anchors boom")
+        val repo = ThrowingClearBackfillAnchorsEventRepository(
+            FakeEventRepository(oldestAuthorTimestamp = null),
+            thrown
+        )
+        val prefs = FakeUserPreferences().apply { savePublicKey("d".repeat(64)) }
+        val logger = FakeUmbraLogger()
+        val useCase = LogoutUseCase(
+            repo,
+            FakeUserRepository(),
+            prefs,
+            FakeContactListRepository(),
+            FakeMuteListRepository(),
+            FakePinListRepository(),
+            FakeNostrSessionController(),
+            logger
+        )
+
+        useCase()
+
+        assertEquals(1, logger.errorCalls.size)
+        assertSame(thrown, logger.errorCalls.first().throwable)
+    }
+
     private fun parseObject(raw: String): JsonObject =
         kotlinx.serialization.json.Json.parseToJsonElement(raw).jsonObject
 }
@@ -400,6 +541,66 @@ private class ThrowingClearAllDataEventRepository(
     private val thrown: Throwable
 ) : EventRepository by delegate {
     override suspend fun clearAllData() {
+        throw thrown
+    }
+}
+
+/** Wraps a real fake so `stop()` throws a specific, caller-controlled instance. */
+private class ThrowingStopNostrSessionController(
+    delegate: NostrSessionController,
+    private val thrown: Throwable
+) : NostrSessionController by delegate {
+    override fun stop() {
+        throw thrown
+    }
+}
+
+/** Wraps a real fake so `clearAll()` throws a specific, caller-controlled instance. */
+private class ThrowingClearAllUserRepository(
+    delegate: UserRepository,
+    private val thrown: Throwable
+) : UserRepository by delegate {
+    override fun clearAll() {
+        throw thrown
+    }
+}
+
+/** Wraps a real fake so `clearAll()` throws a specific, caller-controlled instance. */
+private class ThrowingClearAllContactListRepository(
+    delegate: ContactListRepository,
+    private val thrown: Throwable
+) : ContactListRepository by delegate {
+    override fun clearAll() {
+        throw thrown
+    }
+}
+
+/** Wraps a real fake so `clearAll()` throws a specific, caller-controlled instance. */
+private class ThrowingClearAllMuteListRepository(
+    delegate: MuteListRepository,
+    private val thrown: Throwable
+) : MuteListRepository by delegate {
+    override fun clearAll() {
+        throw thrown
+    }
+}
+
+/** Wraps a real fake so `clearAll()` throws a specific, caller-controlled instance. */
+private class ThrowingClearAllPinListRepository(
+    delegate: PinListRepository,
+    private val thrown: Throwable
+) : PinListRepository by delegate {
+    override fun clearAll() {
+        throw thrown
+    }
+}
+
+/** Wraps a real fake so `clearBackfillAnchors()` throws a specific, caller-controlled instance. */
+private class ThrowingClearBackfillAnchorsEventRepository(
+    delegate: EventRepository,
+    private val thrown: Throwable
+) : EventRepository by delegate {
+    override fun clearBackfillAnchors(pubkey: String) {
         throw thrown
     }
 }
