@@ -4,17 +4,17 @@ milestone: v0.1.0
 milestone_name: Hardening & First Public Release
 current_phase: 03
 current_phase_name: Fix Validation & Test Coverage
-status: executing
-stopped_at: Completed 03-07-PLAN.md
-last_updated: "2026-09-05T13:20:41.139Z"
+status: verifying
+stopped_at: Completed 03-08-PLAN.md
+last_updated: "2026-09-05T17:43:11.211Z"
 last_activity: 2026-09-05
 last_activity_desc: Phase 03 execution started
-state_head: a12df91821cd405f10d04143b5f5e50f9b415bfe
+state_head: 8851ffb50f37c0e0cf1223d04b075953694cc08c
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 16
-  completed_plans: 15
+  completed_plans: 16
   percent: 50
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-09-04)
 
 Phase: 03 (Fix Validation & Test Coverage) — EXECUTING
 Plan: 8 of 8
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-05 — Phase 03 execution started
 
 Progress: [█████░░░░░] 50%
@@ -76,6 +76,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P05 | ~20min | 2 tasks | 1 files |
 | Phase 03 P06 | ~25min | 3 tasks | 4 files |
 | Phase 03 P07 | ~20min | 2 tasks | 2 files |
+| Phase 03 P08 | ~30min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -111,6 +112,8 @@ Recent decisions affecting current work:
 - [Phase 03]: [Phase 03] Plan 03-05 (LOG-12/VALID-08): new UmbraNostrClientTest.kt pins both halves of the same-relay dial-race fix -- the onWebSocketOpen superseded-socket identity check (two cases) and the per-relay dialingRelays in-flight guard, the latter forced with a real java.util.Thread + CountDownLatch pair (not a coroutine test dispatcher, since connect() is fully synchronous with no suspension point). No production diff; both tasks committed separately despite sharing one new file to preserve per-task atomic commits.
 - [Phase 03]: [Phase 03] Plan 03-06 (LOG-27/VALID-19, LOG-7/VALID-06): ten new logger-identity cases close every remaining LogoutUseCase/TrimMemoryCachesUseCase cleanup catch; two new cases pin isFromFuture()'s zero-tolerance default and prove FeedStateMergeCoordinator's three-source combine actually excludes future-dated notes/repost timestamps from the computed visible set. No production diff. ProfileViewModel/ThreadViewModel's two remaining ticker call sites recorded as source-read verified (too heavy to fixture).
 - [Phase 03]: [Phase 03] Plan 03-07: moved 27 audited entries (21 test-backed, 6 source-read-verified) verbatim from docs/KNOWN_ISSUES.md to docs/DONE.md via a Node.js cut-and-append script (no python3 in this sandbox), verified additions-only/deletions-only diffs and conserved cross-file heading count (51) before committing each task; docs/KNOWN_ISSUES.md now holds exactly the 11 headings (10 next-plan entries plus still-open LOG-35) Plan 03-08 is scoped against
+- [Phase 03]: LOG-4's Validation bullet records the BLOCKED disposition exactly as 03-DISPOSITIONS.md recorded it, matching the ledger rather than re-deriving a rationale. — The ledger's own recorded outcome is the source of truth for whether LOG-4's real-race test is currently possible; no unplanned gap was warranted since the ledger did not record a constructible-path alternative.
+- [Phase 03]: Verified the 38-id reconciliation (28 closed to DONE.md + 0 held-back + 10 annotated = 38) independently before trusting that every REQUIREMENTS.md checkbox/row already read complete going into this plan's Task 3. — An earlier sibling plan's shared-id readiness-gate automation had already flipped the checkboxes as other plans in this phase completed; accepting that state without independent verification would risk marking a held-back entry complete, which the plan explicitly forbids.
 
 ### Pending Todos
 
@@ -131,6 +134,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-05T13:20:41.098Z
-Stopped at: Completed 03-07-PLAN.md
+Last session: 2026-09-05T17:43:11.171Z
+Stopped at: Completed 03-08-PLAN.md
 Resume file: None
