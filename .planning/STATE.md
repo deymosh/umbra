@@ -5,16 +5,16 @@ milestone_name: Hardening & First Public Release
 current_phase: 03
 current_phase_name: Fix Validation & Test Coverage
 status: executing
-stopped_at: Completed 03-06-PLAN.md
-last_updated: "2026-09-05T13:11:22.754Z"
+stopped_at: Completed 03-07-PLAN.md
+last_updated: "2026-09-05T13:20:41.139Z"
 last_activity: 2026-09-05
 last_activity_desc: Phase 03 execution started
-state_head: eb82f22c1f176949e4faeb7f7a6b526118f678a6
+state_head: a12df91821cd405f10d04143b5f5e50f9b415bfe
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 16
-  completed_plans: 14
+  completed_plans: 15
   percent: 50
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-09-04)
 ## Current Position
 
 Phase: 03 (Fix Validation & Test Coverage) — EXECUTING
-Plan: 7 of 8
+Plan: 8 of 8
 Status: Ready to execute
 Last activity: 2026-09-05 — Phase 03 execution started
 
@@ -75,6 +75,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P04 | ~15min | 3 tasks | 1 files |
 | Phase 03 P05 | ~20min | 2 tasks | 1 files |
 | Phase 03 P06 | ~25min | 3 tasks | 4 files |
+| Phase 03 P07 | ~20min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -109,6 +110,7 @@ Recent decisions affecting current work:
 - [Phase 03]: [Phase 03] Plan 03-04 (LOG-14/VALID-10, LOG-37/VALID-25, LOG-42/VALID-30): added five RelayCrudCoordinatorTest cases against already-shipped fixes -- no production diff. Plan's predicted pre-existing count (5) was off by one (actual 6, confirmed by full file read); final totals are 8/9/11 tests across the three tasks rather than the plan's predicted 7/8/10 -- a documentation-arithmetic mismatch only, all instructed method names/assertions/prohibitions followed exactly.
 - [Phase 03]: [Phase 03] Plan 03-05 (LOG-12/VALID-08): new UmbraNostrClientTest.kt pins both halves of the same-relay dial-race fix -- the onWebSocketOpen superseded-socket identity check (two cases) and the per-relay dialingRelays in-flight guard, the latter forced with a real java.util.Thread + CountDownLatch pair (not a coroutine test dispatcher, since connect() is fully synchronous with no suspension point). No production diff; both tasks committed separately despite sharing one new file to preserve per-task atomic commits.
 - [Phase 03]: [Phase 03] Plan 03-06 (LOG-27/VALID-19, LOG-7/VALID-06): ten new logger-identity cases close every remaining LogoutUseCase/TrimMemoryCachesUseCase cleanup catch; two new cases pin isFromFuture()'s zero-tolerance default and prove FeedStateMergeCoordinator's three-source combine actually excludes future-dated notes/repost timestamps from the computed visible set. No production diff. ProfileViewModel/ThreadViewModel's two remaining ticker call sites recorded as source-read verified (too heavy to fixture).
+- [Phase 03]: [Phase 03] Plan 03-07: moved 27 audited entries (21 test-backed, 6 source-read-verified) verbatim from docs/KNOWN_ISSUES.md to docs/DONE.md via a Node.js cut-and-append script (no python3 in this sandbox), verified additions-only/deletions-only diffs and conserved cross-file heading count (51) before committing each task; docs/KNOWN_ISSUES.md now holds exactly the 11 headings (10 next-plan entries plus still-open LOG-35) Plan 03-08 is scoped against
 
 ### Pending Todos
 
@@ -129,6 +131,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-05T13:11:22.714Z
-Stopped at: Completed 03-06-PLAN.md
+Last session: 2026-09-05T13:20:41.098Z
+Stopped at: Completed 03-07-PLAN.md
 Resume file: None
