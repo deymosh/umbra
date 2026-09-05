@@ -36,46 +36,54 @@ private class RecordingEventRepository(
 }
 
 private class RecordingUserRepository(
-    delegate: UserRepository
+    delegate: UserRepository,
+    private val pruneStaleDataThrows: Throwable? = null
 ) : UserRepository by delegate {
     var pruneStaleDataCalls = 0
         private set
 
     override suspend fun pruneStaleData() {
         pruneStaleDataCalls++
+        pruneStaleDataThrows?.let { throw it }
     }
 }
 
 private class RecordingContactListRepository(
-    delegate: ContactListRepository
+    delegate: ContactListRepository,
+    private val trimMemoryThrows: Throwable? = null
 ) : ContactListRepository by delegate {
     var trimMemoryCalls = 0
         private set
 
     override fun trimMemory() {
         trimMemoryCalls++
+        trimMemoryThrows?.let { throw it }
     }
 }
 
 private class RecordingMuteListRepository(
-    delegate: MuteListRepository
+    delegate: MuteListRepository,
+    private val trimMemoryThrows: Throwable? = null
 ) : MuteListRepository by delegate {
     var trimMemoryCalls = 0
         private set
 
     override fun trimMemory() {
         trimMemoryCalls++
+        trimMemoryThrows?.let { throw it }
     }
 }
 
 private class RecordingPinListRepository(
-    delegate: PinListRepository
+    delegate: PinListRepository,
+    private val trimMemoryThrows: Throwable? = null
 ) : PinListRepository by delegate {
     var trimMemoryCalls = 0
         private set
 
     override fun trimMemory() {
         trimMemoryCalls++
+        trimMemoryThrows?.let { throw it }
     }
 }
 
@@ -144,5 +152,85 @@ class TrimMemoryCachesUseCaseTest {
         useCase(aggressive = false)
 
         assertTrue(logger.errorCalls.isEmpty())
+    }
+
+    @Test
+    fun `given_userRepositoryPruneStaleDataThrows_when_invoked_then_loggerRecordsErrorWithSameThrowable`() = runBlocking {
+        val thrown = IllegalStateException("prune stale data boom")
+        val userRepository = RecordingUserRepository(FakeUserRepository(), pruneStaleDataThrows = thrown)
+        val logger = FakeUmbraLogger()
+        val useCase = TrimMemoryCachesUseCase(
+            FakeEventRepository(),
+            userRepository,
+            FakeContactListRepository(),
+            FakeMuteListRepository(),
+            FakePinListRepository(),
+            logger
+        )
+
+        useCase(aggressive = false)
+
+        assertEquals(1, logger.errorCalls.size)
+        assertSame(thrown, logger.errorCalls.first().throwable)
+    }
+
+    @Test
+    fun `given_contactListRepositoryTrimMemoryThrows_when_invoked_then_loggerRecordsErrorWithSameThrowable`() = runBlocking {
+        val thrown = IllegalStateException("contact list trim memory boom")
+        val contactListRepository = RecordingContactListRepository(FakeContactListRepository(), trimMemoryThrows = thrown)
+        val logger = FakeUmbraLogger()
+        val useCase = TrimMemoryCachesUseCase(
+            FakeEventRepository(),
+            FakeUserRepository(),
+            contactListRepository,
+            FakeMuteListRepository(),
+            FakePinListRepository(),
+            logger
+        )
+
+        useCase(aggressive = false)
+
+        assertEquals(1, logger.errorCalls.size)
+        assertSame(thrown, logger.errorCalls.first().throwable)
+    }
+
+    @Test
+    fun `given_muteListRepositoryTrimMemoryThrows_when_invoked_then_loggerRecordsErrorWithSameThrowable`() = runBlocking {
+        val thrown = IllegalStateException("mute list trim memory boom")
+        val muteListRepository = RecordingMuteListRepository(FakeMuteListRepository(), trimMemoryThrows = thrown)
+        val logger = FakeUmbraLogger()
+        val useCase = TrimMemoryCachesUseCase(
+            FakeEventRepository(),
+            FakeUserRepository(),
+            FakeContactListRepository(),
+            muteListRepository,
+            FakePinListRepository(),
+            logger
+        )
+
+        useCase(aggressive = false)
+
+        assertEquals(1, logger.errorCalls.size)
+        assertSame(thrown, logger.errorCalls.first().throwable)
+    }
+
+    @Test
+    fun `given_pinListRepositoryTrimMemoryThrows_when_invoked_then_loggerRecordsErrorWithSameThrowable`() = runBlocking {
+        val thrown = IllegalStateException("pin list trim memory boom")
+        val pinListRepository = RecordingPinListRepository(FakePinListRepository(), trimMemoryThrows = thrown)
+        val logger = FakeUmbraLogger()
+        val useCase = TrimMemoryCachesUseCase(
+            FakeEventRepository(),
+            FakeUserRepository(),
+            FakeContactListRepository(),
+            FakeMuteListRepository(),
+            pinListRepository,
+            logger
+        )
+
+        useCase(aggressive = false)
+
+        assertEquals(1, logger.errorCalls.size)
+        assertSame(thrown, logger.errorCalls.first().throwable)
     }
 }
