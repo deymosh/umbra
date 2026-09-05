@@ -264,4 +264,33 @@ class RelayCrudCoordinatorTest {
         assertTrue(merged?.isDiscovered == false)
         assertTrue(merged?.isWriteEnabled == true)
     }
+
+    @Test
+    fun `given removeRelayRole overlapping a role setter on the same relay when both resolve then neither the removal nor the flag flip is lost`() = runTest {
+        val relay = sampleRelay(id = "relayA", url = "wss://relay.example")
+            .copy(isSearchEnabled = true, isSearchActive = true)
+        val repository = RecordingRelayRepository()
+        val (coordinator, _) = subject(scope = this, relays = listOf(relay), relayRepository = repository)
+        // Only the first updateRelay call is gated — the removal must still be blocked by the
+        // per-relay Mutex itself, not merely queued behind this gate.
+        val gate = repository.gateInvocation(0)
+
+        coordinator.setOutboxEnabled("relayA", enabled = true)
+        coordinator.removeRelayRole("relayA", RelayRole.SEARCH)
+        advanceUntilIdle()
+
+        assertEquals(listOf("enter:relayA"), repository.callLog)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("enter:relayA", "exit:relayA", "enter:relayA", "exit:relayA"),
+            repository.callLog
+        )
+        val stored = repository.get("relayA")
+        assertTrue(stored?.isWriteActive == true)
+        assertFalse(stored?.isSearchEnabled == true)
+        assertFalse(stored?.isSearchActive == true)
+    }
 }
