@@ -35,7 +35,7 @@ For each: determine whether the fix is verifiable by automated test alone, or ge
 - [ ] **VALID-07**: Validate LOG-11 — ticker's immediate-first-emission regression fix
 - [ ] **VALID-08**: Validate LOG-12 — same-relay concurrent dial race
 - [x] **VALID-09**: Validate LOG-13 — avatar/banner retry-on-Tor-cold-start fix
-- [ ] **VALID-10**: Validate LOG-14 — promoting a discovered relay to an owned role
+- [x] **VALID-10**: Validate LOG-14 — promoting a discovered relay to an owned role
 - [x] **VALID-11**: Validate LOG-18 — Three unscrubbed log messages survive the logging migration (EventRepositoryImpl.kt x2, NegentropySyncOrchestrator.kt x1)
 - [ ] **VALID-12**: Validate LOG-19 — NIP-09 "a"-tag deletions never take effect for a non-owned author's cached addressable event
 - [x] **VALID-13**: Validate LOG-20 — Silent empty catch block during `clearAllData()`'s wipe sequence
@@ -50,12 +50,12 @@ For each: determine whether the fix is verifiable by automated test alone, or ge
 - [x] **VALID-22**: Validate LOG-30 — NostrSessionManager's retry-scheduling and job-bookkeeping fields are plain vars racing across concurrent IO-dispatcher coroutines
 - [ ] **VALID-23**: Validate LOG-31 — RelayCrudCoordinator.setDmEnabled marks the DM relay list dirty even when the enable is rejected
 - [ ] **VALID-24**: Validate LOG-34 — Logger.e() leaks the raw, unscrubbed Throwable via Android's own stack-trace formatting, bypassing LogScrubber entirely
-- [ ] **VALID-25**: Validate LOG-37 — RelayCrudCoordinator.removeRelayRole bypasses the per-relay Mutex LOG-29 added for its sibling setters
+- [x] **VALID-25**: Validate LOG-37 — RelayCrudCoordinator.removeRelayRole bypasses the per-relay Mutex LOG-29 added for its sibling setters
 - [x] **VALID-26**: Validate LOG-38 — NostrSessionManager's plain instance fields are still unsynchronized across the two coroutines LOG-30's own fix comment says race each other
 - [x] **VALID-27**: Validate LOG-39 — RelayConfigViewModel.enforceAnonymousRelayPolicyIfNeeded silently discards failures while enforcing the anonymous-session privacy restriction
 - [ ] **VALID-28**: Validate LOG-40 — EventIngestCache.scheduleInsert's cancel-and-replace ordering lets the old and new debounce jobs run concurrently
 - [ ] **VALID-29**: Validate LOG-41 — EventIngestCache.cacheRepostTarget skips the replaceable-event supersede bookkeeping ingest() enforces for the same slot
-- [ ] **VALID-30**: Validate LOG-42 — RelayCrudCoordinator.saveRelay/deleteRelay mutate a relay's persisted record without the per-relay Mutex updateRelayRole uses
+- [x] **VALID-30**: Validate LOG-42 — RelayCrudCoordinator.saveRelay/deleteRelay mutate a relay's persisted record without the per-relay Mutex updateRelayRole uses
 - [ ] **VALID-31**: Validate LOG-46 — InteractionActionsCoordinator.mirrorMuteIntoActiveFilter used stdlib runCatching, swallowing CancellationException
 - [ ] **VALID-32**: Validate LOG-47 — RelayCrudCoordinator.saveRelay's merge branch based its OR-merged write on a stale pre-lock snapshot
 - [x] **VALID-33**: Validate LOG-49 — NostrSessionManager.maybeBootstrapOwnProfile's check-then-act guard wasn't atomic under reconcile()'s two concurrent entry points
@@ -120,7 +120,7 @@ None — this milestone is deliberately scoped to stability + release, not new f
 | VALID-07 | Phase 3 | Pending |
 | VALID-08 | Phase 3 | Pending |
 | VALID-09 | Phase 3 | Complete |
-| VALID-10 | Phase 3 | Pending |
+| VALID-10 | Phase 3 | Complete |
 | VALID-11 | Phase 3 | Complete |
 | VALID-12 | Phase 3 | Pending |
 | VALID-13 | Phase 3 | Complete |
@@ -135,12 +135,12 @@ None — this milestone is deliberately scoped to stability + release, not new f
 | VALID-22 | Phase 3 | Complete |
 | VALID-23 | Phase 3 | Pending |
 | VALID-24 | Phase 3 | Pending |
-| VALID-25 | Phase 3 | Pending |
+| VALID-25 | Phase 3 | Complete |
 | VALID-26 | Phase 3 | Complete |
 | VALID-27 | Phase 3 | Complete |
 | VALID-28 | Phase 3 | Pending |
 | VALID-29 | Phase 3 | Pending |
-| VALID-30 | Phase 3 | Pending |
+| VALID-30 | Phase 3 | Complete |
 | VALID-31 | Phase 3 | Pending |
 | VALID-32 | Phase 3 | Pending |
 | VALID-33 | Phase 3 | Complete |
