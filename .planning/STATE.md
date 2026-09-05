@@ -22,10 +22,10 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-09-04)
+See: .planning/PROJECT.md (updated 2026-09-05)
 
 **Core value:** A trustworthy, stable first public release that upholds Umbra's TOR-only and Amber-only guarantees without regressions
-**Current focus:** Phase 03 — Fix Validation & Test Coverage
+**Current focus:** Phase 4 — Version Consistency & v0.1.0 Release Prep
 
 ## Current Position
 
@@ -34,7 +34,7 @@ Plan: Not started
 Status: Ready to plan
 Last activity: 2026-09-05 — Phase 03 complete, transitioned to Phase 4
 
-Progress: [█████░░░░░] 50%
+Progress: [███████████████░] 75% (3/4 phases)
 
 ## Performance Metrics
 
@@ -123,7 +123,8 @@ None yet. (Project bug/backlog tracking lives in docs/KNOWN_ISSUES.md, docs/TODO
 ### Blockers/Concerns
 
 - Phase 4 REL-02: `assembleRelease` may not be runnable locally if release signing keys are absent — the R8-shaped `assembleBenchmark` is the documented fallback and the substitution must be recorded explicitly.
-- LOG-44 (open, docs/TODO.md): `NostrSessionManager`/`RelayConfigViewModel` have no dedicated unit test for the concurrency behavior Phase 2 changed — deliberately deferred, not forgotten; revisit if a mocking framework or interface seam is ever introduced.
+- LOG-44 (open, docs/TODO.md): `NostrSessionManager`/`RelayConfigViewModel` have no dedicated unit test for the concurrency behavior Phase 2 changed — deliberately deferred, not forgotten; revisit if a mocking framework or interface seam is ever introduced. Phase 3 re-confirmed this blocker from source and found it also blocks LOG-4/30/38/49/52 from getting their own tests until it's resolved.
+- LOG-56/LOG-57 (backlog, docs/TODO.md): two CI-flakiness risks in Phase 3's new test infrastructure (a fixed-delay real-dispatcher bridge, a background thread not released on assertion failure) — found by Phase 3's code review, not blocking, low priority.
 
 ## Deferred Items
 
