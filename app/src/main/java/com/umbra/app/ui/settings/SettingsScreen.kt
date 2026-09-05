@@ -20,6 +20,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.navigation.NavController
+import com.umbra.app.BuildConfig
 import com.umbra.app.R
 import com.umbra.app.ui.Screen
 import com.umbra.app.ui.auth.LoginViewModel
@@ -169,7 +170,7 @@ fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel)
             item {
                 SettingInfoItem(
                     title = stringResource(R.string.settings_version),
-                    value = stringResource(R.string.settings_version_value)
+                    value = BuildConfig.VERSION_NAME
                 )
             }
 
