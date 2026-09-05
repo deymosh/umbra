@@ -231,3 +231,38 @@ none of the three has an interface seam, a fake, or a Robolectric/mocking
 dependency available in this project, and no existing JVM unit test anywhere
 in the suite constructs an Android `Context`. This entry stays in
 `docs/KNOWN_ISSUES.md` alongside LOG-30/38/49/52."
+
+---
+
+## Section 3 — Needs the user's own device pass (stays in KNOWN_ISSUES.md)
+
+| LOG-N | Requirement | Reason (what cannot be asserted without a running app) | Restatement sentence for the tracker |
+|---|---|---|---|
+| LOG-2 | VALID-02 | The fix is the consolidation of the `ImageLoadGate` permit's acquire/await/release lifecycle into a single Compose `LaunchedEffect` inside `NostrImageComponents.kt`'s composable wiring — whether the window between `DisposableEffect`'s `onDispose` and coroutine cancellation is actually closed can only be observed by watching real image loads on a device. `ImageLoadGateTest.kt` (`app/src/test/java/com/umbra/app/util/ImageLoadGateTest.kt`, 9 `@Test` methods, e.g. `` `given a released permit when acquiring again then it is reusable` `` and `` `given an acquire inside try-finally when cancelled mid-suspend then the permit is still released exactly once` ``) covers the gate's own acquire/release/cancel-safety in isolation — this is adjacent bonus coverage only, proving the gate itself is safe, never proof that the Compose-level rendering bug is fixed. It is not grounds for closing this entry. | "Awaiting the user's own on-device pass (via the `run-umbra` skill) — the fix is Compose `LaunchedEffect` lifecycle wiring in `NostrImageComponents.kt` with no pure-function extraction possible; `ImageLoadGateTest.kt` is cited as adjacent bonus coverage of the underlying `ImageLoadGate` only, not as proof this entry's actual regression is fixed." |
+| LOG-3 | VALID-03 | The fix threads `VideoSize.pixelWidthHeightRatio` through to `InlineVideoAttachment`'s aspect-ratio calculation — whether the rendered frame actually fills the sized container for anamorphic content can only be confirmed by playing a real anamorphic video on a device. The pure `computeVideoAspectRatio` logic behind this fix already has a passing case: `app/src/test/java/com/umbra/app/ui/components/media/VideoPlayerControllerTest.kt:17` — `` `given anamorphic pixel ratio when computing aspect ratio then pixelWidthHeightRatio is applied` ``. This satisfies D-01's bonus-test half with no new work needed; the rendered-frame behavior itself still needs eyes. | "Awaiting the user's own on-device pass (via the `run-umbra` skill) for the rendered-frame behavior. Bonus logic coverage already exists and is sufficient: `VideoPlayerControllerTest.kt`'s `` `given anamorphic pixel ratio when computing aspect ratio then pixelWidthHeightRatio is applied` `` case directly exercises the pure aspect-ratio computation behind this fix — no new test needed." |
+| LOG-6 | VALID-05 | The fix is `EventDao.deleteSupersededReplaceableEvents()` (`app/src/main/java/com/umbra/app/data/db/dao/EventDao.kt:120`), a Room/SQLCipher DAO `@Query` delete statement. Dependency-absence check executed this session: `grep -in "robolectric\|room.*test\|room-testing" gradle/libs.versions.toml app/build.gradle.kts` returns only the unrelated "no Robolectric/Mockito-static dependency" comment at `app/build.gradle.kts:70` — no Robolectric, no Room in-memory test harness, and no instrumented DAO test exists anywhere in this repository. `FakeEventDao.deleteSupersededReplaceableEvents` in `app/src/test/java/com/umbra/app/data/repository/EventRepositoryIngestionIntegrationTest.kt:184` reads `override suspend fun deleteSupersededReplaceableEvents(kind: Int, pubkey: String, identifier: String): Int = 0` — a constant stub that never executes SQL. Only a real database (real Room, real SQLite/SQLCipher engine) can prove this delete statement actually deletes the right rows. | "Awaiting the user's own on-device pass (via the `run-umbra` skill) — this is a Room DAO SQL statement with no JVM-testable path in this project (no Robolectric, no Room in-memory test harness, no instrumented DAO test); the ingestion integration test's fake DAO stubs this method to a constant `0` and never executes the real query." |
+| LOG-13 | VALID-09 | The retry schedule (`MAX_IMAGE_LOAD_RETRIES` at `app/src/main/java/com/umbra/app/ui/components/media/GatedImagePainter.kt:36`, `IMAGE_RETRY_DELAYS_MS`) is invoked entirely inline inside `UserAvatar.kt`'s `LaunchedEffect(pictureUrl, retryAttempt)` block (`app/src/main/java/com/umbra/app/ui/components/media/UserAvatar.kt:242-245`) using composable-local `remember`/`mutableIntStateOf` state (`:171`) — there is no pure function to extract without a production-code change, which is out of this validation-only phase's scope. No bonus test is recommended. | "Awaiting the user's own on-device pass (via the `run-umbra` skill) — the retry schedule is inline Compose-local state with no pure function to extract without a production-code change; no bonus test is attempted for this entry." |
+| LOG-26 | VALID-18 | The fixed catch (`app/src/main/java/com/umbra/app/ui/settings/SettingsScreen.kt:201-213`, logout `onClick`) is pure Compose UI code with no ViewModel and no extractable pure logic — confirmed by inspection: the try/catch wraps `loginViewModel.logout()` directly inside the composable's click handler. This project has no Compose UI test / Robolectric infrastructure (same gap already established for LOG-2/3/13). | "Awaiting the user's own on-device pass (via the `run-umbra` skill) — the fix is Compose click-handler code with no ViewModel seam and this project has no Compose UI test / Robolectric infrastructure to assert it." |
+
+---
+
+## Summary
+
+**Total entries recorded: 16**, across three sections, no entry appearing
+twice (LOG-51 is recorded once, in Section 1, under its source-read
+disposition — it also touches the `NostrSessionManager` blocker class, but
+per the plan's ordering rule its disposition is the one its own decision
+assigned it).
+
+- Section 1 (Source-read verified, moves to `docs/DONE.md`): 6 — LOG-18,
+  LOG-20, LOG-28, LOG-39, LOG-51, LOG-54.
+- Section 2 (Blocked by an untestable class, stays in `docs/KNOWN_ISSUES.md`):
+  5 — LOG-4, LOG-30, LOG-38, LOG-49, LOG-52.
+- Section 3 (Needs the user's own device pass, stays in
+  `docs/KNOWN_ISSUES.md`): 5 — LOG-2, LOG-3, LOG-6, LOG-13, LOG-26.
+
+**Closing statement:** no emulator or device run was performed by this
+phase. Every Section 3 entry is explicitly handed to the user's own opt-in
+`run-umbra` pass; nothing in Section 1 or Section 2 required or attempted
+one either — all evidence above was gathered by reading current source
+files and running read-only `grep`/`ls` commands.
