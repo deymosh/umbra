@@ -36,6 +36,7 @@ For each: determine whether the fix is verifiable by automated test alone, or ge
 - [ ] **VALID-08**: Validate LOG-12 — same-relay concurrent dial race
 - [ ] **VALID-09**: Validate LOG-13 — avatar/banner retry-on-Tor-cold-start fix
 - [ ] **VALID-10**: Validate LOG-14 — promoting a discovered relay to an owned role
+- [ ] **VALID-38**: Validate LOG-55 — no regression test exercised RelayCrudCoordinator.saveRelay's merge-branch fresh-read fix
 
 ### Version Consistency
 
@@ -93,6 +94,7 @@ None — this milestone is deliberately scoped to stability + release, not new f
 | VALID-08 | Phase 3 | Pending |
 | VALID-09 | Phase 3 | Pending |
 | VALID-10 | Phase 3 | Pending |
+| VALID-38 | Phase 3 | Pending |
 | VERS-01 | Phase 4 | Pending |
 | VERS-02 | Phase 4 | Pending |
 | REL-01 | Phase 4 | Pending |

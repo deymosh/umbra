@@ -244,3 +244,21 @@ cases: `CancellationException` propagates, a plain exception becomes `Result.fai
 normal return value is wrapped into `Result.success`.
 **Completed:** 2026-09-04
 **From:** TODO LOG-50
+
+### LOG-55 — No regression test exercised RelayCrudCoordinator.saveRelay's merge-branch fresh-read fix
+- **Status:** fix applied — needs on-device validation
+- **Found:** 2026-09-04
+- **Where:** `test/.../ui/relay/RelayCrudCoordinatorTest.kt`
+- **Fix:** Added a test that seeds a relay directly into `RecordingRelayRepository` while leaving
+  it out of the `state.value.relays` passed to `subject()` (simulating the throttled UI mirror not
+  having caught up yet), then calls `saveRelay` with a blank id and the same URL, and asserts the
+  repository still holds exactly one row for that URL with both the pre-existing and newly-merged
+  flags set — proving the merge path resolves `existingRelay` via a fresh repository read rather
+  than the stale mirror (LOG-53's fix).
+- **Validated:** 2026-09-05
+- **Evidence:** `app/src/test/java/com/umbra/app/ui/relay/RelayCrudCoordinatorTest.kt` —
+  `given a relay already in the repository but not yet reflected in the throttled state mirror when saveRelay is called with a blank id then it merges into the existing row instead of creating a duplicate`
+
+Found during Phase 2's iteration-3 (final) code re-review. `RelayCrudCoordinatorTest` had strong
+concurrency coverage for `updateRelayRole`'s per-relay-id lock, but nothing called `saveRelay` at
+all, so the LOG-47/LOG-53 merge-branch fixes had zero test coverage in either direction.
