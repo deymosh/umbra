@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-05
+
 ### Added
 
 - Feed display with chronological notes
@@ -64,6 +66,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   of events from other relays — event verification and caching now run with bounded concurrency
   instead of one at a time on a single coroutine, so a hint relay's response is no longer
   head-of-line-blocked by whatever else happened to be streaming in at the same time
+- Exceptions in publish, login/logout, cache-cleanup, and relay-transport code that were
+  previously discarded silently, or logged without the underlying exception, now surface at
+  error level with the exception attached and its content scrubbed, instead of vanishing without
+  a trace
+- Closed a set of concurrency and race-condition bugs across relay configuration, session
+  management, and event ingestion, where unsynchronized shared state let a relay-role toggle,
+  connection retry, or scheduled background job silently overwrite or duplicate another one's
+  effect — the affected state now updates through atomic references and per-resource locks
+  instead of unguarded read-modify-write sequences
+- Fixed several state-correctness gaps: a deletion request for another author's cached
+  addressable content (e.g. a long-form post or list) now actually removes it instead of leaving
+  a retracted item visible; optimistic mute, pin, and delete actions in the UI now either reflect
+  what was actually saved or are rolled back on failure, instead of silently disagreeing with
+  what was actually published; and a background write that fails after signing now surfaces to
+  the user instead of being discarded
+- Retroactively added regression test coverage for a number of the relay-handling,
+  event-caching, and session-cleanup fixes above that had previously shipped without a dedicated
+  test of their own
 
 ### Security
 
