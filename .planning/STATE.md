@@ -5,16 +5,16 @@ milestone_name: Hardening & First Public Release
 current_phase: 03
 current_phase_name: Fix Validation & Test Coverage
 status: executing
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-09-05T03:15:01.641Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-09-05T12:47:02.534Z"
 last_activity: 2026-09-05
 last_activity_desc: Phase 03 execution started
-state_head: b51622c9450b88c9bbe951a4c2783b53e169cd5a
+state_head: c2a532ce5810da50b64d92cd3cd17adefab80998
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 16
-  completed_plans: 9
+  completed_plans: 10
   percent: 50
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-09-04)
 ## Current Position
 
 Phase: 03 (Fix Validation & Test Coverage) — EXECUTING
-Plan: 2 of 8
+Plan: 3 of 8
 Status: Ready to execute
 Last activity: 2026-09-05 — Phase 03 execution started
 
@@ -70,6 +70,7 @@ Progress: [█████░░░░░] 50%
 | Phase 02 P04 | ~24min | 3 tasks | 4 files |
 | Phase 02 P05 | ~3min | 3 tasks | 5 files |
 | Phase 03 P01 | ~10min | 2 tasks | 3 files |
+| Phase 03 P02 | ~30min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,8 @@ Recent decisions affecting current work:
 - [Phase 02]: Post-execution code review ran a 3-iteration auto-fix chain (user-directed: fix findings within the same phase rather than deferring to backlog). Iteration 1 found 3 Critical + 5 Warning + 1 Info — including two sibling methods (`RelayCrudCoordinator.removeRelayRole`, `saveRelay`/`deleteRelay`) that reintroduced Plan 02-01's exact lost-update race, and `NostrSessionManager`'s `reconcile()`-reachable plain fields still racing despite its Job-field fix. Iterations 2-3 each caught new, narrowing-severity residuals in the prior iteration's own fixes (a leftover `runCatching` call site, a still-stale-mirror existence check, an unguarded `stopOwnProfileBootstrap`) — genuine convergence, not diminishing returns, though the loop hit its 3-pass cap before a final clean re-review. 20 fix commits total; LOG-37 through LOG-55 logged. One item (LOG-44, missing NostrSessionManager/RelayConfigViewModel test coverage) deliberately left open — no mocking framework, no interface seam, real architectural change out of scope for a fix pass. Two separate session rate-limit interruptions during this chain were recovered by verifying already-landed commits before resuming, never redoing completed work.
 - [Phase 02]: Phase verification found one non-functional gap: three source comments embedded GSD decision ids (`D-06`, `D-04`), violating CLAUDE.md's explicit rule. Fixed directly (one commit, comment-only, no behavior change) and re-verified clean rather than routing through the full `/gsd-plan-phase --gaps` cycle for a trivial compliance fix.
 - [Phase 03]: [Phase 03] Plan 03-01 (tracer): moved LOG-55 to DONE.md with test-evidence bullets, proving the move template; minted VALID-11..VALID-38 requirement ids for all 27 remaining D-08 expanded-scope entries plus LOG-55 itself, recomputing REQUIREMENTS.md totals to 58 v1 requirements (Phase 3 = 38)
+- [Phase 03]: LOG-1 explicitly documents rejecting EventLruCacheTest.kt as a citation (verified by grep: zero references to ReplaceableEventKey/winsReplaceableRace in that file) in favor of EventRepositoryIngestionIntegrationTest's two ordering cases. — A plausibly-named test file (EventLruCacheTest) does not exercise the fix at all; citing it would falsely claim coverage in docs/DONE.md.
+- [Phase 03]: LOG-23 and LOG-47 citations kept verdict TEST with an explicit caveat rather than downgraded to INSUFFICIENT, since the cited tests provide genuine but indirect/shared evidence rather than a fully isolated regression test. — The plan's instructions required citing these tests explicitly; documenting the caveat in the ledger avoids misleading a future reader of docs/DONE.md without discarding valid partial evidence.
 
 ### Pending Todos
 
@@ -118,6 +121,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-05T03:15:01.602Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-09-05T12:46:55.850Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None

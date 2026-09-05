@@ -93,7 +93,7 @@ Plans:
   4. `testDebugUnitTest` passes with the added tests and `lintDebug` is clean.
   5. No entry reached `DONE.md` on the strength of an emulator or device run — device validation stayed opt-in per `.claude/CLAUDE.md`, and nothing in this phase launched one.
 
-**Plans**: 1/8 plans executed
+**Plans**: 2/8 plans executed
 
 Plans:
 **Wave 1**
@@ -102,7 +102,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 03-02-PLAN.md — Citation ledger: exact, executed, revert-tested test citations for the 15 already-covered entries
+- [x] 03-02-PLAN.md — Citation ledger: exact, executed, revert-tested test citations for the 15 already-covered entries
 - [ ] 03-03-PLAN.md — Disposition ledger: source-read verifications, architectural blockers, and device-pass entries
 - [ ] 03-04-PLAN.md — Extend the relay-coordinator test with the discovered-flag and per-relay-lock coverage three fixes never got
 - [ ] 03-05-PLAN.md — New relay-client test file covering both halves of the same-relay dial-race fix
@@ -153,7 +153,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Error Visibility & Log Hygiene | 3/3 | Complete    | 2026-09-03 |
 | 2. Concurrency & State Correctness | 5/5 | Complete    | 2026-09-04 |
-| 3. Fix Validation & Test Coverage | 1/8 | In Progress|  |
+| 3. Fix Validation & Test Coverage | 2/8 | In Progress|  |
 | 4. Version Consistency & v0.1.0 Release Prep | 0/TBD | Not started | - |
 
 ---
