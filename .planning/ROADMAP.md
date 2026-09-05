@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Error Visibility & Log Hygiene** - Every swallowed throwable surfaces at a scrubbed, visible level (completed 2026-09-03)
 - [x] **Phase 2: Concurrency & State Correctness** - Atomic job/relay mutations and optimistic UI that tells the truth (completed 2026-09-04)
-- [ ] **Phase 3: Fix Validation & Test Coverage** - Ten pending fixes closed out by test evidence or explicitly handed to the user
+- [x] **Phase 3: Fix Validation & Test Coverage** - Ten pending fixes closed out by test evidence or explicitly handed to the user (completed 2026-09-05)
 - [ ] **Phase 4: Version Consistency & v0.1.0 Release Prep** - One true version, a dated changelog, and a release one push away
 
 ## Phase Details
@@ -153,7 +153,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Error Visibility & Log Hygiene | 3/3 | Complete    | 2026-09-03 |
 | 2. Concurrency & State Correctness | 5/5 | Complete    | 2026-09-04 |
-| 3. Fix Validation & Test Coverage | 8/8 | In Progress|  |
+| 3. Fix Validation & Test Coverage | 8/8 | Complete    | 2026-09-05 |
 | 4. Version Consistency & v0.1.0 Release Prep | 0/TBD | Not started | - |
 
 ---
