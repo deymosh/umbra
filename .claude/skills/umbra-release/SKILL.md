@@ -72,10 +72,18 @@ below only as a worked example of a step already run once — it is not what thi
    publish something nobody intended.
 
 8. **Recovery.** If the release workflow fails partway, the first thing to try is re-running it
-   from the Actions UI or the GitHub CLI using its `workflow_dispatch` trigger, with the `version`
-   input set to the same tag name — the workflow resolves that input ahead of the ref name, so a
-   dispatched re-run reproduces the tag-push path's release metadata exactly. Deleting and
-   re-pushing the tag is not the first recovery option.
+   via `workflow_dispatch`, explicitly targeting the tag as the dispatch ref — not just as the
+   `version` input:
+
+   ```
+   gh workflow run android-release.yml --ref vX.Y.Z -f version=vX.Y.Z
+   ```
+
+   The `--ref` is what actually determines which commit gets checked out and built; the `version`
+   input only names the release and the built APK, it does not pin the checkout. Setting `version`
+   without `--ref` would check out whatever the default branch currently points to and publish
+   that under the `vX.Y.Z` name — the wrong bytes under the right label. Deleting and re-pushing
+   the tag is not the first recovery option.
 
 ## Signing and security
 
