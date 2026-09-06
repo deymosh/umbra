@@ -4,17 +4,17 @@ milestone: v0.1.0
 milestone_name: Hardening & First Public Release
 current_phase: 04
 current_phase_name: Version Consistency & v0.1.0 Release Prep
-status: executing
+status: verifying
 stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-09-05T23:16:47.015Z"
+last_updated: "2026-09-06T00:37:03.877Z"
 last_activity: 2026-09-05
 last_activity_desc: Phase 04 execution started
-state_head: 5518dda32d9c26bea7abaed4307ddce268bbd358
+state_head: 9abb9752cace4e78d799c6b1dce70b0c0bebe512
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 19
-  completed_plans: 18
+  completed_plans: 19
   percent: 75
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-09-05)
 
 Phase: 04 (Version Consistency & v0.1.0 Release Prep) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-05 — Phase 04 execution started
 
 Progress: [████████░░] 75% (3/4 phases)
@@ -129,7 +129,7 @@ None yet. (Project bug/backlog tracking lives in docs/KNOWN_ISSUES.md, docs/TODO
 - Phase 4 REL-02: `assembleRelease` may not be runnable locally if release signing keys are absent — the R8-shaped `assembleBenchmark` is the documented fallback and the substitution must be recorded explicitly.
 - LOG-44 (open, docs/TODO.md): `NostrSessionManager`/`RelayConfigViewModel` have no dedicated unit test for the concurrency behavior Phase 2 changed — deliberately deferred, not forgotten; revisit if a mocking framework or interface seam is ever introduced. Phase 3 re-confirmed this blocker from source and found it also blocks LOG-4/30/38/49/52 from getting their own tests until it's resolved.
 - LOG-56/LOG-57 (backlog, docs/TODO.md): two CI-flakiness risks in Phase 3's new test infrastructure (a fixed-delay real-dispatcher bridge, a background thread not released on assertion failure) — found by Phase 3's code review, not blocking, low priority.
-- Plan 04-03 Task 1 (umbra-release runbook skill) is committed. Task 2 (create local v0.1.0 tag) is paused pending explicit user go-ahead -- user chose to skip tagging for now when asked during phase 4 execution. Phase 4 is NOT complete; REL-03 and SKILL-01 remain open. Resume by re-running /gsd-execute-phase 4, or ask to create the v0.1.0 tag directly.
+- REL-03 (Prepare the v0.1.0 git tag locally): descoped from phase 4 by explicit user direction on 2026-09-06 -- the user will say when to create the tag as a separate, standalone action outside this phase. Plan 04-03's Task 1 (umbra-release runbook skill) is complete; Task 2 (tag creation) is intentionally not part of phase 4's completion. REL-03 stays unchecked in REQUIREMENTS.md until that separate action happens -- this is expected, not a gap.
 
 ## Deferred Items
 

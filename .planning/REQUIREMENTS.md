@@ -78,7 +78,7 @@ For each: determine whether the fix is verifiable by automated test alone, or ge
 
 ### Release Skill
 
-- [ ] **SKILL-01**: Author `.claude/skills/umbra-release/SKILL.md` documenting Umbra's release process (version bump, changelog, tag, CI signing, GitHub Release), matching the existing `umbra-*` skill catalog
+- [x] **SKILL-01**: Author `.claude/skills/umbra-release/SKILL.md` documenting Umbra's release process (version bump, changelog, tag, CI signing, GitHub Release), matching the existing `umbra-*` skill catalog
 
 ## v2 Requirements
 
@@ -154,7 +154,7 @@ None — this milestone is deliberately scoped to stability + release, not new f
 | REL-01 | Phase 4 | Complete |
 | REL-02 | Phase 4 | Complete |
 | REL-03 | Phase 4 | Pending |
-| SKILL-01 | Phase 4 | Pending |
+| SKILL-01 | Phase 4 | Complete |
 
 **Coverage:**
 
