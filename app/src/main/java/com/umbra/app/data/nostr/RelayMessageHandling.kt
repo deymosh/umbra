@@ -9,9 +9,8 @@ import com.umbra.app.domain.nip77.NegSignal
 import com.umbra.app.domain.relay.RelayIssueKind
 import com.umbra.app.domain.relay.RelayPublishResult
 import com.umbra.app.domain.util.JsonUtils
-import com.umbra.app.util.LogScrubber.scrubMessageForLogs
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
-import com.umbra.app.util.LogScrubber.scrubUrlForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubUrlForLogs
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
@@ -137,7 +136,7 @@ internal suspend fun UmbraNostrClient.onWebSocketMessage(relayUrl: String, text:
             else -> handleUnknownMessage(relayUrl, messageType)
         }
     } catch (e: Exception) {
-        logger.d { "Error processing message from ${scrubUrlForLogs(relayUrl)}: ${scrubThrowableMessageForLogs(e)}" }
+        logger.e(e) { "Error processing message from ${scrubUrlForLogs(relayUrl)}" }
     }
 }
 

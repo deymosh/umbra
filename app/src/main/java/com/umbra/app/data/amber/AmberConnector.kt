@@ -5,7 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.core.net.toUri
 import com.umbra.app.domain.nip19.Bech32Encoder
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.logging.UmbraLog
 
 /**

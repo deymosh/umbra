@@ -2,6 +2,7 @@ package com.umbra.app.data.repository
 
 import com.umbra.app.data.db.entities.EventEntity
 import com.umbra.app.data.db.entities.EventTagEntity
+import com.umbra.app.data.nostr.launchReplacing
 import com.umbra.app.data.repository.cache.EventLruCache
 import com.umbra.app.domain.crypto.EventCrypto
 import com.umbra.app.domain.feed.FeedFilter
@@ -16,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
@@ -200,7 +202,7 @@ internal class EventIngestCache(
      * membership out from under an already-built feed snapshot. */
     val feedRebuildSignals: SharedFlow<Unit> = _feedRebuildSignals.asSharedFlow()
 
-    private var snapshotEmitJob: Job? = null
+    private val snapshotEmitJob = AtomicReference<Job?>(null)
     private val pendingSnapshotEvents: MutableSet<Event> = ConcurrentHashMap.newKeySet()
     @Volatile
     private var snapshotEmitPending: Boolean = false
@@ -224,40 +226,55 @@ internal class EventIngestCache(
     suspend fun ingest(event: Event, relayUrl: String, currentUserPubkey: String?): IngestOutcome {
         return if (shouldStoreInMemoryCache(event.pubkey, currentUserPubkey)) {
             cachedEventsMutex.withLock {
-                val replaceableKey = event.replaceableKey()
-                val supersededId = replaceableKey?.let { latestReplaceableEventId[it] }
-                val superseded = supersededId?.let(cachedEvents::get)
-                if (superseded != null && !event.winsReplaceableRace(superseded)) {
-                    // A stale/losing revision of an already-cached replaceable slot (e.g.
-                    // an older kind-0) — id-keyed storage would let it coexist alongside
-                    // the newer revision until the LRU happens to reclaim it, so it's
-                    // dropped here instead. Still validly received/verified this session
-                    // (dedup/verification bookkeeping already ran upstream).
-                    IngestOutcome(cacheSize = cachedEvents.size, storedInMemoryCache = false)
-                } else {
-                    if (replaceableKey != null) {
-                        if (supersededId != null && supersededId != event.id) {
-                            // Evict the superseded revision now rather than waiting for
-                            // the LRU to reclaim it. EventEngagementIndex only tracks
-                            // kind 1/6/7 (see EventEngagementIndex.add), never the
-                            // replaceable kinds this branch handles, so no
-                            // cachedEngagementIndex.remove() is needed for it.
-                            cachedEvents.remove(supersededId)
-                        }
-                        latestReplaceableEventId[replaceableKey] = event.id
-                    }
-                    // Order matters: index the new event before it's inserted, so if this
-                    // put() evicts an older entry, EventLruCache's onEvicted callback removing
-                    // that entry from the index can't race the new entry's own indexing.
-                    cachedEngagementIndex.add(event)
-                    cachedEvents.put(event)
+                val stored = storeEventLocked(event)
+                if (stored) {
                     cachedEvents.recordRelay(event.id, relayUrl)
-                    IngestOutcome(cacheSize = cachedEvents.size, storedInMemoryCache = true)
                 }
+                IngestOutcome(cacheSize = cachedEvents.size, storedInMemoryCache = stored)
             }
         } else {
             IngestOutcome(cacheSize = cachedEventsMutex.withLock { cachedEvents.size }, storedInMemoryCache = false)
         }
+    }
+
+    /**
+     * The replaceable-key-aware half of [ingest]: resolves NIP-01/33 replaceable-event superseding
+     * (LOG-1/LOG-6) against [latestReplaceableEventId] and either stores [event] (indexing it into
+     * [cachedEngagementIndex] and [cachedEvents]) or drops it as a losing revision, returning which
+     * happened. Must only be called while already holding [cachedEventsMutex] — shared by [ingest]
+     * and [cacheRepostTarget] so a replaceable/parameterized-replaceable event cached via a NIP-18
+     * repost participates in the exact same one-revision-per-slot invariant as a directly-ingested
+     * one (LOG-41), rather than bypassing it via a plain id-keyed `cachedEvents.put`.
+     */
+    private fun storeEventLocked(event: Event): Boolean {
+        val replaceableKey = event.replaceableKey()
+        val supersededId = replaceableKey?.let { latestReplaceableEventId[it] }
+        val superseded = supersededId?.let(cachedEvents::get)
+        if (superseded != null && !event.winsReplaceableRace(superseded)) {
+            // A stale/losing revision of an already-cached replaceable slot (e.g.
+            // an older kind-0) — id-keyed storage would let it coexist alongside
+            // the newer revision until the LRU happens to reclaim it, so it's
+            // dropped here instead. Still validly received/verified this session
+            // (dedup/verification bookkeeping already ran upstream).
+            return false
+        }
+        if (replaceableKey != null) {
+            if (supersededId != null && supersededId != event.id) {
+                // Evict the superseded revision now rather than waiting for
+                // the LRU to reclaim it. EventEngagementIndex only tracks
+                // kind 1/6/7 (see EventEngagementIndex.add), never the
+                // replaceable kinds this branch handles, so no
+                // cachedEngagementIndex.remove() is needed for it.
+                cachedEvents.remove(supersededId)
+            }
+            latestReplaceableEventId[replaceableKey] = event.id
+        }
+        // Order matters: index the new event before it's inserted, so if this
+        // put() evicts an older entry, EventLruCache's onEvicted callback removing
+        // that entry from the index can't race the new entry's own indexing.
+        cachedEngagementIndex.add(event)
+        cachedEvents.put(event)
+        return true
     }
 
     /** Records that [relayUrl] also delivered an already-seen, already-processed [eventId] —
@@ -272,13 +289,15 @@ internal class EventIngestCache(
      * the same way it resolves any other externally-authored event, instead of re-parsing +
      * re-verifying the repost's embedded JSON on every feed emission. Callers are responsible for
      * parsing/verifying [target] and checking [shouldStoreInMemoryCache] first — this method is
-     * only the cache-write half.
+     * only the cache-write half. Routes through [storeEventLocked] (the same replaceable-key-aware
+     * logic [ingest] uses) rather than an unconditional id-keyed put, so a repost-embedded
+     * replaceable/parameterized-replaceable event (a long-form article, list, or live-status
+     * event) participates in the same one-revision-per-slot invariant as a directly-ingested
+     * revision instead of silently coexisting alongside it (LOG-41). No relay provenance is
+     * recorded here — unlike [ingest], this event wasn't delivered by any specific relay.
      */
     suspend fun cacheRepostTarget(target: Event) {
-        cachedEventsMutex.withLock {
-            cachedEngagementIndex.add(target)
-            cachedEvents.put(target)
-        }
+        cachedEventsMutex.withLock { storeEventLocked(target) }
     }
 
     suspend fun getCached(id: String): Event? = cachedEventsMutex.withLock { cachedEvents.get(id) }
@@ -349,12 +368,21 @@ internal class EventIngestCache(
      * `scheduleSnapshotEmit` calls inside one [SNAPSHOT_BATCH_MS] window collapses into exactly
      * one [cachedEventsFlow] emission (the full cache snapshot) and one [cachedEventBundles]
      * emission (just the events enqueued during the window), not one of each per event.
+     *
+     * [snapshotEmitJob]'s read-then-write is a single [AtomicReference.compareAndSet] because this
+     * is called from concurrent [EventRepositoryImpl.subscribeToEvents] `flatMapMerge` branches
+     * running on different real threads — a plain read-then-assign could let two branches both
+     * observe no active job and both launch one, leaking a second, unobserved coroutine. This
+     * keeps the existing skip-relaunch-if-active semantics (unlike [scheduleInsert]'s cancel-and-
+     * replace coalescing): the job is built lazily so a CAS loser can be cancelled before it ever
+     * starts, rather than cancelling and replacing a job that's already running.
      */
     fun scheduleSnapshotEmit() {
         snapshotEmitPending = true
-        if (snapshotEmitJob?.isActive == true) return
+        val observedJob = snapshotEmitJob.get()
+        if (observedJob?.isActive == true) return
 
-        snapshotEmitJob = repoScope.launch {
+        val newJob = repoScope.launch(start = CoroutineStart.LAZY) {
             delay(SNAPSHOT_BATCH_MS)
             if (!snapshotEmitPending) return@launch
             snapshotEmitPending = false
@@ -370,6 +398,14 @@ internal class EventIngestCache(
                 _cachedEventBundles.tryEmit(bundle)
             }
         }
+        if (snapshotEmitJob.compareAndSet(observedJob, newJob)) {
+            newJob.start()
+        } else {
+            // Lost the CAS to a concurrent caller that installed its own job between this call's
+            // get() and compareAndSet() -- cancel the unstarted loser so it never runs and is
+            // never left orphaned on repoScope.
+            newJob.cancel()
+        }
     }
 
     /** Queues [event] into the next coalesced [cachedEventBundles] emission — call alongside
@@ -382,8 +418,7 @@ internal class EventIngestCache(
      * for callers (e.g. [EventRepositoryImpl.clearAllData]) that are about to wipe all data and
      * must ensure no stale scheduled emit fires afterward. */
     fun cancelPendingSnapshotEmit() {
-        snapshotEmitJob?.cancel()
-        snapshotEmitJob = null
+        snapshotEmitJob.getAndSet(null)?.cancel()
         snapshotEmitPending = false
         pendingSnapshotEvents.clear()
     }
@@ -501,16 +536,23 @@ internal class EventIngestCache(
         if (isWiping()) return
         if (!isCurrentUserPubkey(entity.pubkey)) return
         pendingInserts.add(PendingEventInsert(entity = entity, tags = tags, replaceableKey = replaceableKey))
-        val newJob = repoScope.launch(Dispatchers.IO) {
-            delay(INSERT_DEBOUNCE_MS)
-            val batch = buildList {
-                while (pendingInserts.isNotEmpty()) pendingInserts.poll()?.let { add(it) }
-            }
-            if (batch.isNotEmpty()) {
-                ownEventArchive.writeBatch(batch)
+        // launchReplacing (not a plain launch + getAndSet(...).cancel()) guarantees the previous
+        // debounce job is cancelled strictly before this one starts running — a plain eager
+        // launch here let the new job's delay begin before the old job was cancelled, leaving a
+        // narrow window where both were alive at once and could each independently flush their
+        // own ownEventArchive.writeBatch() instead of the one coalesced batch this debounce exists
+        // to produce (LOG-40).
+        insertDebounceJob.launchReplacing(repoScope) {
+            withContext(Dispatchers.IO) {
+                delay(INSERT_DEBOUNCE_MS)
+                val batch = buildList {
+                    while (pendingInserts.isNotEmpty()) pendingInserts.poll()?.let { add(it) }
+                }
+                if (batch.isNotEmpty()) {
+                    ownEventArchive.writeBatch(batch)
+                }
             }
         }
-        insertDebounceJob.getAndSet(newJob)?.cancel()
     }
 
     /** Cancels any in-flight [scheduleInsert] debounce and drops its queued-but-not-yet-written
@@ -527,13 +569,19 @@ internal class EventIngestCache(
      * Only deletes notes authored by the same pubkey that signed the delete request.
      */
     suspend fun applyIncomingDeletion(deletionEvent: Event) {
+        // Holds just enough of either a cached Event or an archived EventEntity to pick a winner
+        // and issue the shared removal below, without the two source types needing a common
+        // interface -- a function-local value, not a new field or public type.
+        data class DeletionTarget(val id: String, val createdAt: Long)
+
         val eTagIds = deletionEvent.getTagValues("e")
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .distinct()
         // "a" tags reference addressable events as "kind:pubkey:d-identifier" rather than an
-        // id — resolved to concrete ids below (via the same getLatestAddressableEvent lookup
-        // ProfileViewModel/EventRepositoryImpl already use elsewhere), since the in-memory and
+        // id — resolved to concrete ids below against both the in-memory cache and the own-
+        // archive, since non-owned authors' events only ever live in the in-memory cache while
+        // the signed-in user's own addressable events live in the archive; the in-memory and
         // Room deletes below both key on event id.
         val aTagCoordinates = deletionEvent.getTagValues("a")
             .map { it.trim() }
@@ -542,6 +590,9 @@ internal class EventIngestCache(
         if (eTagIds.isEmpty() && aTagCoordinates.isEmpty()) return
 
         val resolvedAddressableIds = mutableListOf<String>()
+        // Taken once, before the per-coordinate loop below and before entering the IO dispatcher
+        // -- snapshot() acquires cachedEventsMutex, and must not be re-entered per coordinate.
+        val inMemorySnapshot = if (aTagCoordinates.isNotEmpty()) snapshot() else emptyList()
 
         withContext(Dispatchers.IO) {
             // Only the signed-in user's own events are ever persisted to Room (the encrypted
@@ -565,15 +616,26 @@ internal class EventIngestCache(
                 // request's pubkey — same ownership check as the e-tag path above.
                 if (!authorPubkey.equals(deletionEvent.pubkey, ignoreCase = true)) return@forEach
 
-                // Spec: an a-tag deletion only removes versions up to this request's own
-                // created_at, not any version published after it.
-                ownEventArchive.getLatestAddressableEvent(kind, authorPubkey, identifier)
+                // Resolved against both sources -- mirrors EventRepositoryImpl.getLatestAddressableEvent's
+                // established two-source resolution. Both are bounded by the same spec rule: an
+                // a-tag deletion only removes versions up to this request's own created_at, not
+                // any version published after it.
+                val inMemoryCandidate = inMemorySnapshot.asSequence()
+                    .filter { it.kind == kind && it.pubkey.equals(authorPubkey, ignoreCase = true) }
+                    .filter { it.getTagValue("d") == identifier }
+                    .filter { it.createdAt <= deletionEvent.createdAt }
+                    .maxByOrNull { it.createdAt }
+                    ?.let { DeletionTarget(it.id, it.createdAt) }
+
+                val archiveCandidate = ownEventArchive.getLatestAddressableEvent(kind, authorPubkey, identifier)
                     ?.takeIf { it.createdAt <= deletionEvent.createdAt }
-                    ?.let { target ->
-                        ownEventArchive.deleteEventById(target.id)
-                        seenEventIds.remove(target.id)
-                        resolvedAddressableIds.add(target.id)
-                    }
+                    ?.let { DeletionTarget(it.id, it.createdAt) }
+
+                listOfNotNull(inMemoryCandidate, archiveCandidate).maxByOrNull { it.createdAt }?.let { target ->
+                    ownEventArchive.deleteEventById(target.id)
+                    seenEventIds.remove(target.id)
+                    resolvedAddressableIds.add(target.id)
+                }
             }
         }
 

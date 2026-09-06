@@ -288,7 +288,8 @@ object UseCaseModule {
         contactListRepository,
         muteListRepository,
         pinListRepository,
-        nostrSessionController
+        nostrSessionController,
+        UmbraLog.tag("UmbraLogout")
     )
 
     @Provides
@@ -304,6 +305,7 @@ object UseCaseModule {
         userRepository,
         contactListRepository,
         muteListRepository,
-        pinListRepository
+        pinListRepository,
+        UmbraLog.tag("UmbraTrimMemory")
     )
 }

@@ -4,7 +4,6 @@ import com.umbra.app.domain.logging.UmbraLogger
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.repository.BroadcastRepository
 import com.umbra.app.domain.repository.EventRepository
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.umbra.app.domain.nip01.NostrEventBuilder
@@ -39,7 +38,7 @@ class PublishSignedEventUseCase(
                 logger.d { "Published signed event ${event.id.take(8)} kind=${event.kind}" }
                 event
             }.onFailure { e ->
-                logger.d { "Failed to publish signed event: ${scrubThrowableMessageForLogs(e)}" }
+                logger.e(e) { "Failed to publish signed event" }
             }
         }
 
@@ -66,7 +65,7 @@ class PublishAuthEventUseCase(
                 eventRepository.publishAuthEvent(relayUrl, event).getOrThrow()
                 event
             }.onFailure { e ->
-                logger.d { "Failed to publish signed AUTH event: ${scrubThrowableMessageForLogs(e)}" }
+                logger.e(e) { "Failed to publish signed AUTH event" }
             }
         }
 }

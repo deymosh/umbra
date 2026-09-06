@@ -1,7 +1,7 @@
 package com.umbra.app.data.network
 
 import com.umbra.app.TorProxyConfig
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.logging.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

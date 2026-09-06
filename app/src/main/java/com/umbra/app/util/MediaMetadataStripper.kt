@@ -9,6 +9,7 @@ import android.media.MediaMuxer
 import android.net.Uri
 import androidx.core.net.toUri
 import androidx.exifinterface.media.ExifInterface
+import com.umbra.app.util.logging.LogScrubber
 import com.umbra.app.util.logging.UmbraLog
 import java.io.File
 import java.io.InputStream

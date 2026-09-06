@@ -49,12 +49,13 @@ import com.umbra.app.ui.common.futureEventRecheckTicker
 import com.umbra.app.ui.common.mergeBounded
 import com.umbra.app.ui.common.requestViewportMentionedProfiles
 import com.umbra.app.ui.common.resolveViewportQuotedEvents
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.ImagePrefetcher
 import com.umbra.app.util.UrlPrefetcher
 import com.umbra.app.util.logging.UmbraLog
 import dagger.hilt.android.lifecycle.HiltViewModel
 import androidx.compose.runtime.Immutable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -610,6 +611,8 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             val signedEvent = try {
                 amberSignerGateway.signEvent(eventJson, currentUserHex)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.d { "Error requesting signed event: ${scrubThrowableMessageForLogs(e)}" }
                 null
@@ -628,16 +631,12 @@ class ProfileViewModel @Inject constructor(
         interactionActionsCoordinator.publishSignedEvent(signedEventJson)
     }
 
-    // NOTE: deletion is preserved exactly as-is below — the notes-list removal is unconditional
-    // (not gated on Amber confirming the delete signature) and never rolled back on a
-    // rejected/failed sign, unlike toggleMute/togglePin/toggleFollow's pending-action-plus-
-    // rollback pattern on this same ViewModel. Tracked as a known bug, not fixed here.
     fun deleteEvent(event: Event) {
         val currentUserPubkey = userPreferences.getPublicKey()?.lowercase() ?: return
         interactionActionsCoordinator.deleteEvent(
             event = event,
             currentUserHex = currentUserPubkey,
-            onOptimisticApply = {
+            onDeleteConfirmed = {
                 _state.update { state -> state.copy(notes = state.notes.filter { it.id != event.id }) }
             },
             onCacheRemoveFailure = {

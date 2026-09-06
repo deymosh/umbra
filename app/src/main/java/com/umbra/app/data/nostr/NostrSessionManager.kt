@@ -34,10 +34,14 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.coroutines.runCatchingCancellable
+import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.logging.UmbraLog
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -147,21 +151,49 @@ class NostrSessionManager @Inject constructor(
     private val logger = UmbraLog.tag(TAG)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val nip11FetchSemaphore = Semaphore(MAX_CONCURRENT_NIP11_FETCHES)
+    // bootstrapJob, autoDisableRelayJob, and torCircuitRecoveryJob are written only by start()
+    // and stop() — the volatile started flag above serializes calls to that pair, and neither
+    // field is ever read or reassigned from reconcile()'s concurrently-reachable paths (the
+    // combine()-driven collect and retryJob's own delayed relaunch). An atomic holder would add
+    // no guarantee here, and it could not make the multi-field start()/stop() sequence atomic as
+    // a whole anyway — so these three stay plain nullable fields.
     private var bootstrapJob: Job? = null
-    private var retryJob: Job? = null
-    private var appStartMs: Long = 0L
-    private var firstRelayConnectedLogged = false
-    private var relaysConnected = false
-    private var lastSnapshot: OrchestratorSnapshot? = null
-    private var userBackfillJob: Job? = null
-    private var backfillPubkey: String? = null
     private var autoDisableRelayJob: Job? = null
     private var torCircuitRecoveryJob: Job? = null
+    private val retryJob = AtomicReference<Job?>(null)
+    private var appStartMs: Long = 0L
+    // The five fields below are all read and written from reconcile()'s two genuinely-concurrent
+    // entry points on this class's own multi-threaded scope (Dispatchers.IO, not confined to one
+    // thread): the bootstrapJob's combine()-driven collect loop, and scheduleRetry()'s own delayed
+    // relaunch (see retryJob above and reconcile()'s doc comment). @Volatile guarantees the write
+    // from one of those threads is visible to a read on the other — it does not make a
+    // read-check-write sequence atomic, but every actual mutation here is a single unconditional
+    // assignment (never a read-modify-write of its own prior value), so visibility is the only gap
+    // that existed. stop() also writes several of these from whatever thread calls it; @Volatile
+    // covers that cross-thread visibility too.
+    @Volatile
+    private var firstRelayConnectedLogged = false
+    @Volatile
+    private var relaysConnected = false
+    @Volatile
+    private var lastSnapshot: OrchestratorSnapshot? = null
+    private val userBackfillJob = AtomicReference<Job?>(null)
+    @Volatile
+    private var backfillPubkey: String? = null
     // Pubkey the own-profile bootstrap channel (BootstrapOwnProfileUseCase) is currently open
     // for — null when no bootstrap is active. Keyed by pubkey (not a plain boolean) so a session
     // that switches identity without a full stop()/start() cycle still bootstraps the new one.
+    @Volatile
     private var ownProfileBootstrapPubkey: String? = null
-    private var ownProfileBootstrapWatcherJob: Job? = null
+    private val ownProfileBootstrapWatcherJob = AtomicReference<Job?>(null)
+    // Guards maybeBootstrapOwnProfile's own compound check-then-act sequence
+    // (ownProfileBootstrapPubkey != pubkey -> stop -> assign -> start) — @Volatile on
+    // ownProfileBootstrapPubkey alone only makes each individual read/write visible across
+    // threads, it does not make that whole sequence exclusive. Without this, two overlapping
+    // reconcile() calls (this class's own two documented concurrent entry points) for the same
+    // pubkey can both observe the stale value and both call bootstrapOwnProfileUseCase.start(),
+    // a duplicate channel start.
+    private val ownProfileBootstrapMutex = Mutex()
 
     @Volatile
     private var started = false
@@ -171,6 +203,14 @@ class NostrSessionManager @Inject constructor(
         started = true
         appStartMs = System.currentTimeMillis()
         firstRelayConnectedLogged = false
+        // Unconditionally reset rather than trusting whatever stop() left behind: stop() cannot
+        // take ownProfileBootstrapMutex (NostrSessionController.stop() is a plain, non-suspend
+        // fun), so a stop() call racing a concurrent maybeBootstrapOwnProfile invocation can, in
+        // the narrow lost-race case, leave this non-null after stop() completes. Without this
+        // reset, a re-login as that same pubkey would see ownProfileBootstrapPubkey already equal
+        // to it and silently skip re-bootstrapping, even though stop()'s own
+        // eventRepository.disconnectFromAll() already tore down every real subscription.
+        ownProfileBootstrapPubkey = null
 
         torRuntimeManager.start()
         // Session-lifetime, not tied to any particular screen — see its own doc comment for why
@@ -254,10 +294,8 @@ class NostrSessionManager @Inject constructor(
         }
 
         bootstrapJob?.invokeOnCompletion {
-            retryJob?.cancel()
-            userBackfillJob?.cancel()
-            retryJob = null
-            userBackfillJob = null
+            retryJob.getAndSet(null)?.cancel()
+            userBackfillJob.getAndSet(null)?.cancel()
             relaysConnected = false
             logger.d { "Bootstrap job completed/cancelled" }
         }
@@ -265,19 +303,26 @@ class NostrSessionManager @Inject constructor(
 
     override fun stop() {
         started = false
-        retryJob?.cancel()
+        retryJob.getAndSet(null)?.cancel()
         bootstrapJob?.cancel()
-        userBackfillJob?.cancel()
+        userBackfillJob.getAndSet(null)?.cancel()
         autoDisableRelayJob?.cancel()
         torCircuitRecoveryJob?.cancel()
-        retryJob = null
         bootstrapJob = null
-        userBackfillJob = null
         autoDisableRelayJob = null
         torCircuitRecoveryJob = null
         backfillPubkey = null
         relaysConnected = false
-        stopOwnProfileBootstrap()
+        // Not suspend (NostrSessionController.stop() is a plain fun), so this cannot acquire
+        // ownProfileBootstrapMutex the way maybeBootstrapOwnProfile does. Mutating these fields
+        // directly here — mirroring the getAndSet(null)?.cancel() pattern already used above for
+        // retryJob/userBackfillJob — can in principle race a concurrent maybeBootstrapOwnProfile
+        // call, but start() unconditionally resets ownProfileBootstrapPubkey to null, so a lost
+        // race here can at worst leave a bootstrap channel running slightly longer than intended;
+        // it can never cause a future re-login to silently skip bootstrapping.
+        ownProfileBootstrapWatcherJob.getAndSet(null)?.cancel()
+        ownProfileBootstrapPubkey = null
+        bootstrapOwnProfileUseCase.stop()
         relayListDecryptionCoordinator.stop()
         torRuntimeManager.stop()
         eventRepository.disconnectFromAll()
@@ -296,12 +341,12 @@ class NostrSessionManager @Inject constructor(
             .firstOrNull { normalizeRelayUrl(it.url) == normalizedUrl }
             ?: return
         if (!relay.isEnabled) return
-        runCatching { relayRepository.updateRelay(relay.copy(isEnabled = false)) }
+        runCatchingCancellable { relayRepository.updateRelay(relay.copy(isEnabled = false)) }
             .onSuccess {
                 eventRepository.disconnectRelay(relay.url)
             }
             .onFailure { e ->
-                logger.d { "Failed to auto-disable relay: ${scrubThrowableMessageForLogs(e)}" }
+                logger.e(e) { "Failed to auto-disable relay: ${scrubThrowableMessageForLogs(e)}" }
             }
     }
 
@@ -314,10 +359,8 @@ class NostrSessionManager @Inject constructor(
             } else {
                 logger.d { "Waiting for Tor readiness: status=${state.torStatus}, network=${state.networkAvailable}" }
             }
-            retryJob?.cancel()
-            retryJob = null
-            userBackfillJob?.cancel()
-            userBackfillJob = null
+            retryJob.getAndSet(null)?.cancel()
+            userBackfillJob.getAndSet(null)?.cancel()
             backfillPubkey = null
             return
         }
@@ -346,8 +389,7 @@ class NostrSessionManager @Inject constructor(
         val activeRelaysChanged = previousActiveRelaysSignature != currentActiveRelaysSignature
 
         if (!shouldReconnect) {
-            retryJob?.cancel()
-            retryJob = null
+            retryJob.getAndSet(null)?.cancel()
             startUserHistoryBackfill(state.pubkey)
             return
         }
@@ -355,8 +397,7 @@ class NostrSessionManager @Inject constructor(
         val result = eventRepository.connectToEnabledRelays(state.relays)
         result.onSuccess {
             relaysConnected = true
-            retryJob?.cancel()
-            retryJob = null
+            retryJob.getAndSet(null)?.cancel()
 
             // isDiscovered included alongside isReadActive/isWriteActive for the same reason as
             // FeedViewModel's relayCount — a discovered/bootstrap relay (the only kind that
@@ -387,14 +428,13 @@ class NostrSessionManager @Inject constructor(
             // safe to call on every connect. Gated on activeRelaysChanged, not relaysChanged — see
             // activeRelaySetSignature's doc comment for why the broad signature is wrong here.
             if (activeRelaysChanged) {
-                userBackfillJob?.cancel()
-                userBackfillJob = null
+                userBackfillJob.getAndSet(null)?.cancel()
                 logger.d { "Active relay set changed, restarting user backfill from now" }
             }
             startUserHistoryBackfill(state.pubkey, resyncFromNow = activeRelaysChanged)
         }.onFailure { error ->
             relaysConnected = false
-            logger.d { "Relay connect failed (${state.torStatus}) -> scheduling retry: ${scrubThrowableMessageForLogs(error)}" }
+            logger.e(error) { "Relay connect failed (${state.torStatus}) -> scheduling retry: ${scrubThrowableMessageForLogs(error)}" }
             scheduleRetry()
         }
     }
@@ -411,30 +451,46 @@ class NostrSessionManager @Inject constructor(
      * [OWN_PROFILE_BOOTSTRAP_MAX_MS] regardless, so it can't linger forever if the identity's
      * relay list genuinely isn't reachable from the current pool.
      */
-    private fun maybeBootstrapOwnProfile(pubkey: String?) {
+    private suspend fun maybeBootstrapOwnProfile(pubkey: String?) {
         if (pubkey.isNullOrBlank()) return
-        if (userRepository.getRelayList(pubkey)?.getOutboxRelays()?.isNotEmpty() == true) {
-            stopOwnProfileBootstrap()
-            return
-        }
-        if (ownProfileBootstrapPubkey == pubkey) return
-        stopOwnProfileBootstrap()
-        ownProfileBootstrapPubkey = pubkey
-        bootstrapOwnProfileUseCase.start(pubkey)
-        ownProfileBootstrapWatcherJob = scope.launch {
-            val deadline = System.currentTimeMillis() + OWN_PROFILE_BOOTSTRAP_MAX_MS
-            while (isActive && System.currentTimeMillis() < deadline) {
-                delay(OWN_PROFILE_BOOTSTRAP_POLL_MS)
-                if (userRepository.getRelayList(pubkey)?.getOutboxRelays()?.isNotEmpty() == true) break
+        // The check-then-act sequence below (read ownProfileBootstrapPubkey, decide, then stop/
+        // assign/start) must run as one exclusive unit — reconcile()'s two documented concurrent
+        // entry points can otherwise both observe the pre-write state and both start a duplicate
+        // bootstrap channel for the same pubkey.
+        ownProfileBootstrapMutex.withLock {
+            if (userRepository.getRelayList(pubkey)?.getOutboxRelays()?.isNotEmpty() == true) {
+                stopOwnProfileBootstrapLocked()
+                return@withLock
             }
-            stopOwnProfileBootstrap()
+            if (ownProfileBootstrapPubkey == pubkey) return@withLock
+            stopOwnProfileBootstrapLocked()
+            ownProfileBootstrapPubkey = pubkey
+            bootstrapOwnProfileUseCase.start(pubkey)
+            ownProfileBootstrapWatcherJob.launchReplacing(scope) {
+                val deadline = System.currentTimeMillis() + OWN_PROFILE_BOOTSTRAP_MAX_MS
+                while (isActive && System.currentTimeMillis() < deadline) {
+                    delay(OWN_PROFILE_BOOTSTRAP_POLL_MS)
+                    if (userRepository.getRelayList(pubkey)?.getOutboxRelays()?.isNotEmpty() == true) break
+                }
+                // This lambda runs on its own separately-scheduled coroutine (launchReplacing),
+                // outside the withLock block above that launched it — it must take the mutex
+                // itself before tearing anything down, or a stale watcher's completion here can
+                // race a different maybeBootstrapOwnProfile invocation that, under the same lock,
+                // is concurrently installing a brand-new watcher/pubkey and tear that down instead.
+                ownProfileBootstrapMutex.withLock { stopOwnProfileBootstrapLocked() }
+            }
         }
     }
 
-    private fun stopOwnProfileBootstrap() {
+    /**
+     * Tears down the current own-profile bootstrap channel. Mutex is not reentrant, so this must
+     * only be called by code that already holds [ownProfileBootstrapMutex] (both call sites above
+     * do). [stop] mutates the same fields directly instead, since it cannot suspend to acquire the
+     * lock — see the comment at its own call site.
+     */
+    private fun stopOwnProfileBootstrapLocked() {
         if (ownProfileBootstrapPubkey == null) return
-        ownProfileBootstrapWatcherJob?.cancel()
-        ownProfileBootstrapWatcherJob = null
+        ownProfileBootstrapWatcherJob.getAndSet(null)?.cancel()
         ownProfileBootstrapPubkey = null
         bootstrapOwnProfileUseCase.stop()
     }
@@ -457,18 +513,16 @@ class NostrSessionManager @Inject constructor(
             ?.takeIf { it != UserPreferences.ANONYMOUS_PUBKEY }
 
         if (normalized == null) {
-            userBackfillJob?.cancel()
-            userBackfillJob = null
+            userBackfillJob.getAndSet(null)?.cancel()
             backfillPubkey = null
             return
         }
 
-        if (userBackfillJob?.isActive == true && backfillPubkey == normalized && !resyncFromNow) return
+        if (userBackfillJob.get()?.isActive == true && backfillPubkey == normalized && !resyncFromNow) return
 
-        userBackfillJob?.cancel()
         backfillPubkey = normalized
 
-        userBackfillJob = scope.launch {
+        userBackfillJob.launchReplacing(scope) {
             var windowSeconds = BACKFILL_START_WINDOW_SECS
             var limit = BACKFILL_MIN_LIMIT
             var idleWindows = 0
@@ -599,11 +653,10 @@ class NostrSessionManager @Inject constructor(
     }
 
     private fun scheduleRetry() {
-        if (retryJob?.isActive == true) return
-        retryJob = scope.launch {
+        retryJob.launchIfIdle(scope) {
             delay(RETRY_DELAY_MS)
-            if (!isActive) return@launch
-            val snapshot = lastSnapshot ?: return@launch
+            if (!isActive) return@launchIfIdle
+            val snapshot = lastSnapshot ?: return@launchIfIdle
             reconcile(snapshot, snapshot)
         }
     }

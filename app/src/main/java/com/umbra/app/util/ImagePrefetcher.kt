@@ -6,8 +6,8 @@ import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.size.Precision
 import com.umbra.app.TorProxyConfig
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
-import com.umbra.app.util.LogScrubber.scrubUrlForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubUrlForLogs
 import com.umbra.app.util.logging.UmbraLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.ConcurrentHashMap

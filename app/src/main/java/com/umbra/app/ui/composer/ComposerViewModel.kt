@@ -28,7 +28,7 @@ import com.umbra.app.R
 import com.umbra.app.ui.common.UiMessage
 import com.umbra.app.ui.components.extractMentionedProfileRefs
 import com.umbra.app.ui.components.extractQuotedEventRefs
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.logging.UmbraLog
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview

@@ -3,7 +3,7 @@ package com.umbra.app.data.amber
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import com.umbra.app.domain.util.JsonUtils
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.logging.UmbraLog
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull

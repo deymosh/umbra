@@ -13,8 +13,7 @@ import com.umbra.app.domain.repository.FeedRepository
 import com.umbra.app.domain.usecase.LogoutUseCase
 import com.umbra.app.domain.feed.DefaultFeedFilters
 import com.umbra.app.ui.common.UiMessage
-import com.umbra.app.util.LogScrubber.scrubPubkeyForLogs
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubPubkeyForLogs
 import com.umbra.app.util.logging.UmbraLog
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -77,10 +76,14 @@ class LoginViewModel @Inject constructor(
                 // re-login after a real-account logout doesn't leave it empty.
                 feedRepository.ensureDefaultFiltersSeeded()
 
-                // Activate user session to trigger backfill/hydration
+                // Activate user session to trigger backfill/hydration. A failure here must not
+                // block login itself, since the pubkey is already saved and the user can retry
+                // a hydration later — only the missing visibility into that failure was the bug.
                 try {
                     eventRepository.activateUserSession(anonymousPubkey, DefaultFeedFilters.DEFAULT)
-                } catch (_: Exception) { }
+                } catch (e: Exception) {
+                    logger.e(e) { "Session activation failed" }
+                }
                 // Re-arms the session controller if a prior logout in this process stopped it
                 // (idempotent no-op otherwise) — reads the just-saved pubkey above fresh.
                 nostrSessionController.start()
@@ -94,7 +97,7 @@ class LoginViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                logger.d { "Anonymous login failed: ${scrubThrowableMessageForLogs(e)}" }
+                logger.e(e) { "Anonymous login failed" }
                 _authState.update {
                     it.copy(
                         isLoading = false,
@@ -124,10 +127,15 @@ class LoginViewModel @Inject constructor(
                 // auto-reseeds once per process (its init block) — re-arm it here so a same-process
                 // re-login after a real-account logout doesn't leave it empty.
                 feedRepository.ensureDefaultFiltersSeeded()
-                // Ensure event repository activates the session for backfill/hydration
+                // Ensure event repository activates the session for backfill/hydration. A
+                // failure here must not block login itself, since the pubkey is already saved
+                // and the user can retry a hydration later — only the missing visibility into
+                // that failure was the bug.
                 try {
                     eventRepository.activateUserSession(normalized, DefaultFeedFilters.DEFAULT)
-                } catch (_: Exception) { }
+                } catch (e: Exception) {
+                    logger.e(e) { "Session activation failed" }
+                }
                 // Re-arms the session controller if a prior logout in this process stopped it
                 // (idempotent no-op otherwise) — reads the just-saved pubkey above fresh.
                 nostrSessionController.start()
@@ -140,7 +148,7 @@ class LoginViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                logger.d { "Failed to save public key: ${scrubThrowableMessageForLogs(e)}" }
+                logger.e(e) { "Failed to save public key" }
                 _authState.update {
                     it.copy(
                         isLoading = false,
@@ -219,7 +227,7 @@ class LoginViewModel @Inject constructor(
         try {
             logoutUseCase()
         } catch (e: Exception) {
-            logger.d { "Logout failed: ${scrubThrowableMessageForLogs(e)}" }
+            logger.e(e) { "Logout failed" }
         } finally {
             _authState.update { AuthState() }
         }

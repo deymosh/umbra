@@ -5,7 +5,7 @@ import com.umbra.app.data.network.torGuardedCall
 import com.umbra.app.domain.nipb7.BlossomBlobDescriptor
 import com.umbra.app.domain.repository.MediaUploadRepository
 import com.umbra.app.domain.util.JsonUtils
-import com.umbra.app.util.LogScrubber.scrubUrlForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubUrlForLogs
 import com.umbra.app.util.logging.UmbraLog
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject

@@ -12,7 +12,7 @@ import com.umbra.app.domain.repository.EventRepository
 import com.umbra.app.domain.usecase.PublishAuthEventUseCase
 import com.umbra.app.domain.util.isStale
 import com.umbra.app.ui.common.UiMessage
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.logging.UmbraLog
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope

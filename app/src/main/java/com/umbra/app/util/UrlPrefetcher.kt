@@ -2,8 +2,8 @@ package com.umbra.app.util
 
 import androidx.compose.runtime.mutableStateMapOf
 import com.umbra.app.TorProxyConfig
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
-import com.umbra.app.util.LogScrubber.scrubUrlForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubUrlForLogs
 import com.umbra.app.util.logging.UmbraLog
 import dagger.hilt.android.scopes.ViewModelScoped
 import javax.inject.Inject

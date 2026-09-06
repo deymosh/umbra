@@ -1,8 +1,8 @@
 package com.umbra.app.data.nostr
 
 import com.umbra.app.TorProxyConfig
-import com.umbra.app.util.LogScrubber.scrubEndpointForLogs
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubEndpointForLogs
+import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.logging.UmbraLog
 import java.net.InetSocketAddress
 import java.net.Socket

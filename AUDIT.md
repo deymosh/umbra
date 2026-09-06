@@ -84,7 +84,7 @@ All logs must be safe in release builds.
 - Full `pubkey` (64 hex chars) must never appear in logs — at most `pubkey.take(8)` in debug only
 - Log `"Profile updated"` not `"Profile updated: ${profile.name}"`
 - Log `"Event received"` not `"Event from ${event.pubkey}: ${event.content}"`
-- The project has `LogScrubber.kt` with `scrubUrlForLogs`, `scrubPubkeyForLogs`, `scrubThrowableMessageForLogs` — use these helpers consistently. `Logger.e(throwable) { }` scrubs the throwable's own message automatically via `LogScrubber`; every other message — `logger.d { }`/`logger.w { }`, and the non-throwable part of a `logger.e` message — still requires an explicit `scrub*ForLogs` call, since the utility only scrubs what it's explicitly told to
+- The project has `LogScrubber.kt` with `scrubUrlForLogs`, `scrubPubkeyForLogs`, `scrubThrowableMessageForLogs`, `scrubThrowableForLogs` — use these helpers consistently. `Logger.e(throwable) { }` scrubs both halves automatically: the message via `LogScrubber.scrubThrowableMessageForLogs`, and the `Throwable` object itself via `LogScrubber.scrubThrowableForLogs` (a replacement throwable with a scrubbed message and the original stack frames but no cause) before it ever reaches `Log.e`'s own stack-trace formatting — `Log.e(tag, msg, throwable)` reprints the *throwable's* unscrubbed `toString()`/cause chain independent of `msg`, so passing the original object through would leak whatever the message scrub had just redacted. Every other message — `logger.d { }`/`logger.w { }`, and the non-throwable part of a `logger.e` message — still requires an explicit `scrub*ForLogs` call, since the utility only scrubs what it's explicitly told to
 
 **What to flag:**
 - Any `Log.*` call printing relay URL without `Log.isLoggable` gate
@@ -490,11 +490,12 @@ trusting a hardcoded count here.
 com.umbra.app/ (top level, outside data/domain/ui)
   di/             Hilt modules not scoped under data/ (AuthModule, DatabaseModule, MediaModule,
                    MediaContextModule, RepositoryModule, TorModule, UseCaseModule)
-  util/           Android-level utilities (LogScrubber, BlurHash, MediaMetadataStripper,
+  util/           Android-level utilities (BlurHash, MediaMetadataStripper,
                    BatteryOptimizationHelper, ImagePrefetcher, UrlPrefetcher, MediaLoadPriorityGate,
                    ImageLoadGate) — distinct from domain/util/'s pure-Kotlin helpers
-    logging/      Logger, UmbraLog — Android-backed implementation of domain/logging/UmbraLogger,
-                   the single entry point every log call site goes through (`UmbraLog.tag(TAG)`)
+    logging/      Logger, UmbraLog, LogScrubber — Android-backed implementation of
+                   domain/logging/UmbraLogger, the single entry point every log call site goes
+                   through (`UmbraLog.tag(TAG)`)
 
 data/
   amber/          AmberConnector, AmberSignerGatewayImpl — ONLY place Amber is called

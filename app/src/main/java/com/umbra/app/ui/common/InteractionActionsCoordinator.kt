@@ -12,8 +12,10 @@ import com.umbra.app.domain.usecase.DeleteNoteUseCase
 import com.umbra.app.domain.usecase.PublishSignedEventUseCase
 import com.umbra.app.domain.usecase.RemoveDeletedNoteFromCacheUseCase
 import com.umbra.app.domain.util.JsonUtils
-import com.umbra.app.util.LogScrubber.scrubThrowableMessageForLogs
+import com.umbra.app.util.coroutines.runCatchingCancellable
+import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.logging.UmbraLog
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -28,9 +30,9 @@ import kotlinx.coroutines.launch
  * JSON/share-URL formatting. It never calls `canSignWithAmber()` itself — the two callers show
  * different error messages (or none at all) when a write is blocked, so that guard and its
  * UI-state side effect stay on each caller's own wrapper method, one guard per call path. It also
- * never decides WHEN to mutate relative to a sign confirmation — one caller commits only after
- * Amber confirms the signature, the other commits optimistically and rolls back on failure — that
- * ordering is entirely caller-controlled by which of this class's methods it calls from where.
+ * never decides WHEN to mutate relative to a sign confirmation — every mutation this class
+ * performs, for every caller, commits only after Amber confirms the signature; there is no
+ * optimistic-apply-then-rollback path anywhere in this coordinator.
  */
 internal class InteractionActionsCoordinator(
     private val userPreferences: UserPreferences,
@@ -89,8 +91,10 @@ internal class InteractionActionsCoordinator(
         scope.launch {
             val signedEvent = try {
                 amberSignerGateway.signEvent(buildEventJson(), currentUserHex)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                logger.d { "Error requesting signed event: ${scrubThrowableMessageForLogs(e)}" }
+                logger.e(e) { "Error requesting signed event: ${scrubThrowableMessageForLogs(e)}" }
                 null
             }
             if (signedEvent != null) {
@@ -109,7 +113,7 @@ internal class InteractionActionsCoordinator(
     fun publishSignedEvent(signedEventJson: String, onFailure: suspend (Throwable) -> Unit = {}) {
         scope.launch {
             publishSignedEventUseCase(signedEventJson).onFailure { e ->
-                logger.d { "Error publishing event: ${scrubThrowableMessageForLogs(e)}" }
+                logger.e(e) { "Error publishing event: ${scrubThrowableMessageForLogs(e)}" }
                 onFailure(e)
             }
         }
@@ -123,18 +127,19 @@ internal class InteractionActionsCoordinator(
      * `mutedPubkeys`, so the Room-backed feed query reflects it immediately (offline-safe) instead
      * of waiting on the NIP-51 mute-list publish to round-trip.
      *
-     * [resolveActiveFilter] is caller-supplied rather than a single fixed lookup here because the
-     * two callers resolve "the" active filter differently: one by its own already-computed merged
-     * filter's id, the other by the first entry of the live active-filters list. That difference
-     * predates this extraction and is preserved as-is rather than converged onto one strategy.
+     * [resolveActiveFilter] is caller-supplied rather than a single fixed lookup here so this
+     * coordinator never has to decide what "active" means for a given screen — that stays the
+     * caller's call. Both current callers happen to supply the same resolution today (the first
+     * entry of the live active-filters list), but the parameter still exists to let a future
+     * caller resolve differently without changing this signature.
      */
     suspend fun mirrorMuteIntoActiveFilter(
         target: String,
         mute: Boolean,
         resolveActiveFilter: suspend () -> FeedFilter?
     ) {
-        runCatching {
-            val currentFilter = resolveActiveFilter() ?: return@runCatching
+        runCatchingCancellable {
+            val currentFilter = resolveActiveFilter() ?: return@runCatchingCancellable
             val updated = if (mute) {
                 currentFilter.mutedPubkeys + target
             } else {
@@ -148,23 +153,29 @@ internal class InteractionActionsCoordinator(
         if (pin) pinListRepository.pin(eventId) else pinListRepository.unpin(eventId)
 
     /**
-     * Orchestrates a NIP-09 delete: builds and fires the sign-and-publish round trip, then invokes
-     * [onOptimisticApply] synchronously — before the async cache-removal call below even starts —
-     * so a caller relying on that exact ordering gets it, then asynchronously removes the event
-     * from the local cache/archive, invoking [onCacheRemoveFailure] if that removal fails. Neither
-     * current caller gates this on `canSignWithAmber()`; this primitive does not add one.
+     * Orchestrates a NIP-09 delete: builds the delete request and fires the sign-and-publish round
+     * trip, running both [onDeleteConfirmed] (the caller's visible-state removal) and the local
+     * cache/archive removal only once Amber has actually confirmed the signature — from inside
+     * [requestSignAndPublish]'s `onSigned` callback, before the signed event is published.
+     * [onCacheRemoveFailure] fires if that cache/archive removal itself fails. A rejected or failed
+     * sign runs neither: nothing is applied ahead of confirmation, so there is nothing to roll
+     * back. Neither current caller gates this on `canSignWithAmber()`; this primitive does not add
+     * one.
      */
     fun deleteEvent(
         event: Event,
         currentUserHex: String,
-        onOptimisticApply: () -> Unit = {},
+        onDeleteConfirmed: () -> Unit = {},
         onCacheRemoveFailure: () -> Unit = {}
     ) {
         val eventJson = deleteNoteUseCase(event, currentUserHex).getOrElse { return }
-        requestSignAndPublish(eventJson, currentUserHex)
-        onOptimisticApply()
-        scope.launch {
-            removeDeletedNoteFromCacheUseCase(event.id).onFailure { onCacheRemoveFailure() }
-        }
+        requestSignAndPublish(
+            eventJson,
+            currentUserHex,
+            onSigned = {
+                onDeleteConfirmed()
+                removeDeletedNoteFromCacheUseCase(event.id).onFailure { onCacheRemoveFailure() }
+            }
+        )
     }
 }

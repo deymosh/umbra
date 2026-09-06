@@ -222,6 +222,42 @@ class EventIngestCacheTest {
     }
 
     @Test
+    fun `given a replaceable event cached via cacheRepostTarget when a newer direct-ingest revision arrives then the repost-cached older one is superseded`() = runTest {
+        val cache = subject(this)
+        val pubkey = "b".repeat(64)
+        val repostCachedOlder = metadataRevision(id = "aaa1", pubkey = pubkey, createdAt = 100L)
+        val directNewer = metadataRevision(id = "bbb2", pubkey = pubkey, createdAt = 200L)
+
+        // Simulates a NIP-18 repost embedding an older revision of a kind-0/replaceable slot,
+        // cached via cacheRepostTarget rather than ingest() -- LOG-41's bug was that this path
+        // never updated latestReplaceableEventId, so a subsequent direct ingest of a newer
+        // revision for the same slot wouldn't know to evict this one.
+        cache.cacheRepostTarget(repostCachedOlder)
+        val outcomeNewer = cache.ingest(directNewer, relayA, currentUserPubkey = null)
+
+        assertTrue(outcomeNewer.storedInMemoryCache)
+        assertEquals(directNewer, cache.getCached(directNewer.id))
+        assertNull(cache.getCached(repostCachedOlder.id))
+    }
+
+    @Test
+    fun `given a newer replaceable revision already ingested when an older revision arrives via cacheRepostTarget then it is dropped instead of coexisting`() = runTest {
+        val cache = subject(this)
+        val pubkey = "b".repeat(64)
+        val directNewer = metadataRevision(id = "bbb2", pubkey = pubkey, createdAt = 200L)
+        val repostCachedOlder = metadataRevision(id = "aaa1", pubkey = pubkey, createdAt = 100L)
+
+        cache.ingest(directNewer, relayA, currentUserPubkey = null)
+        // Before LOG-41's fix, cacheRepostTarget did an unconditional id-keyed put with no
+        // race check at all, so this older revision would silently coexist alongside the
+        // already-ingested newer one instead of being dropped.
+        cache.cacheRepostTarget(repostCachedOlder)
+
+        assertEquals(directNewer, cache.getCached(directNewer.id))
+        assertNull(cache.getCached(repostCachedOlder.id))
+    }
+
+    @Test
     fun `given the same event id ingested then re-delivered from a second relay when recordRelayForSeenEvent is called then cache size is unchanged and both relays are recorded`() = runTest {
         val cache = subject(this)
         val event = textNote("1")
@@ -322,6 +358,59 @@ class EventIngestCacheTest {
         advanceTimeBy(300L)
         advanceUntilIdle()
         assertEquals(2, snapshots.size)
+
+        job.cancel()
+    }
+
+    @Test
+    fun `given eight overlapping coroutines calling scheduleSnapshotEmit concurrently when time advances then exactly one snapshot and one bundle emission occur with no event lost`() = runTest {
+        val cache = subject(this)
+        val snapshots = mutableListOf<List<Event>>()
+        val bundles = mutableListOf<Set<Event>>()
+        val snapshotJob = launch { cache.cachedEventsFlow.collect { snapshots.add(it) } }
+        val bundleJob = launch { cache.cachedEventBundles.collect { bundles.add(it) } }
+        advanceUntilIdle()
+
+        val events = (1..8).map { textNote("concurrent-$it") }
+        events.forEach { cache.ingest(it, relayA, currentUserPubkey = null) }
+        events.forEach { event ->
+            launch {
+                cache.enqueueSnapshotEvent(event)
+                cache.scheduleSnapshotEmit()
+            }
+        }
+        advanceTimeBy(300L)
+        advanceUntilIdle()
+
+        assertEquals(1, snapshots.size)
+        assertEquals(1, bundles.size)
+        assertEquals(events.toSet(), bundles.single())
+
+        snapshotJob.cancel()
+        bundleJob.cancel()
+    }
+
+    @Test
+    fun `given a scheduled snapshot emit when cancelPendingSnapshotEmit runs then no emission occurs and a repeated cancel is a harmless no-op`() = runTest {
+        val cache = subject(this)
+        val snapshots = mutableListOf<List<Event>>()
+        val job = launch { cache.cachedEventsFlow.collect { snapshots.add(it) } }
+        advanceUntilIdle()
+
+        val event = textNote("cancel-1")
+        cache.ingest(event, relayA, currentUserPubkey = null)
+        cache.enqueueSnapshotEvent(event)
+        cache.scheduleSnapshotEmit()
+        cache.cancelPendingSnapshotEmit()
+
+        advanceTimeBy(300L)
+        advanceUntilIdle()
+        advanceTimeBy(300L)
+        advanceUntilIdle()
+
+        assertEquals(0, snapshots.size)
+        // A second cancel with no pending job/state must not throw.
+        cache.cancelPendingSnapshotEmit()
 
         job.cancel()
     }
@@ -554,6 +643,90 @@ class EventIngestCacheTest {
         cache.applyIncomingDeletion(deletionEvent)
 
         assertEquals(0, archive.deleteEventByIdCalls.size)
+    }
+
+    // --- NIP-09 a-tag deletion resolves against the in-memory cache too (LOG-19/BUG-03) ---
+
+    @Test
+    fun `given a non-owned addressable event resident only in the in-memory cache when an a-tag deletion targets it then it is removed from the cache`() = runTest {
+        val archive = FakeOwnEventArchive()
+        val authorPubkey = "a".repeat(64)
+        val dTagValue = "article-1"
+        val cache = subject(this, ownEventArchive = archive, isCurrentUserPubkey = { false })
+        val target = event(
+            id = "addr-mem-1",
+            pubkey = authorPubkey,
+            kind = Event.KIND_LONG_FORM,
+            tags = listOf(listOf("d", dTagValue)),
+            createdAt = 100L
+        )
+        cache.ingest(target, relayA, currentUserPubkey = null)
+
+        val coordinate = "${Event.KIND_LONG_FORM}:$authorPubkey:$dTagValue"
+        val deletionEvent = event(
+            pubkey = authorPubkey,
+            kind = Event.KIND_EVENT_DELETION,
+            tags = listOf(listOf("a", coordinate)),
+            createdAt = 200L
+        )
+        cache.applyIncomingDeletion(deletionEvent)
+
+        assertTrue(cache.snapshot().none { it.id == target.id })
+    }
+
+    @Test
+    fun `given an a-tag deletion signed by a different pubkey than the coordinate's author when applied then the in-memory event is not removed`() = runTest {
+        val archive = FakeOwnEventArchive()
+        val authorPubkey = "a".repeat(64)
+        val deleterPubkey = "b".repeat(64)
+        val dTagValue = "article-2"
+        val cache = subject(this, ownEventArchive = archive, isCurrentUserPubkey = { false })
+        val target = event(
+            id = "addr-mem-2",
+            pubkey = authorPubkey,
+            kind = Event.KIND_LONG_FORM,
+            tags = listOf(listOf("d", dTagValue)),
+            createdAt = 100L
+        )
+        cache.ingest(target, relayA, currentUserPubkey = null)
+
+        val coordinate = "${Event.KIND_LONG_FORM}:$authorPubkey:$dTagValue"
+        val deletionEvent = event(
+            pubkey = deleterPubkey,
+            kind = Event.KIND_EVENT_DELETION,
+            tags = listOf(listOf("a", coordinate)),
+            createdAt = 200L
+        )
+        cache.applyIncomingDeletion(deletionEvent)
+
+        assertTrue(cache.snapshot().any { it.id == target.id })
+    }
+
+    @Test
+    fun `given an in-memory addressable event newer than the deletion's own created_at when applied then it is not removed`() = runTest {
+        val archive = FakeOwnEventArchive()
+        val authorPubkey = "a".repeat(64)
+        val dTagValue = "article-3"
+        val cache = subject(this, ownEventArchive = archive, isCurrentUserPubkey = { false })
+        val target = event(
+            id = "addr-mem-3",
+            pubkey = authorPubkey,
+            kind = Event.KIND_LONG_FORM,
+            tags = listOf(listOf("d", dTagValue)),
+            createdAt = 300L
+        )
+        cache.ingest(target, relayA, currentUserPubkey = null)
+
+        val coordinate = "${Event.KIND_LONG_FORM}:$authorPubkey:$dTagValue"
+        val deletionEvent = event(
+            pubkey = authorPubkey,
+            kind = Event.KIND_EVENT_DELETION,
+            tags = listOf(listOf("a", coordinate)),
+            createdAt = 100L
+        )
+        cache.applyIncomingDeletion(deletionEvent)
+
+        assertTrue(cache.snapshot().any { it.id == target.id })
     }
 
     // --- normalizeIncomingEvent ---

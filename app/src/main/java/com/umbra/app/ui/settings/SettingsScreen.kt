@@ -20,6 +20,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.navigation.NavController
+import com.umbra.app.BuildConfig
 import com.umbra.app.R
 import com.umbra.app.ui.Screen
 import com.umbra.app.ui.auth.LoginViewModel
@@ -34,6 +35,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.umbra.app.util.logging.UmbraLog
+
+private val settingsScreenLogger = UmbraLog.tag("SettingsScreen")
 
 /**
  * Settings screen main menu (NIP-01 compliant client configuration)
@@ -166,7 +170,7 @@ fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel)
             item {
                 SettingInfoItem(
                     title = stringResource(R.string.settings_version),
-                    value = stringResource(R.string.settings_version_value)
+                    value = BuildConfig.VERSION_NAME
                 )
             }
 
@@ -201,7 +205,13 @@ fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel)
                             try {
                                 isLoggingOut = true
                                 loginViewModel.logout()
-                            } catch (_: Exception) { }
+                            } catch (e: Exception) {
+                                // A failed logout must not be silently indistinguishable
+                                // from a successful one — still proceed to the login screen
+                                // below since there's no in-app state left to usefully retry
+                                // from, but at least record that it happened.
+                                settingsScreenLogger.e(e) { "Logout failed" }
+                            }
                             isLoggingOut = false
                             navController.navigate(Screen.Login.route) {
                                 popUpTo(0) { inclusive = true }

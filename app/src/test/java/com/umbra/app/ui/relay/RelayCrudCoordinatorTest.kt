@@ -1,0 +1,344 @@
+package com.umbra.app.ui.relay
+
+import com.umbra.app.R
+import com.umbra.app.domain.relay.Relay
+import com.umbra.app.domain.repository.RelayRepository
+import com.umbra.app.domain.usecase.AddRelayUseCase
+import com.umbra.app.domain.usecase.RemoveRelayUseCase
+import com.umbra.app.domain.usecase.UpdateRelayUseCase
+import com.umbra.app.testutil.fakes.FakeEventRepository
+import com.umbra.app.testutil.fakes.FakeUserPreferences
+import com.umbra.app.ui.common.UiMessage
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * Regression coverage for [RelayCrudCoordinator]'s per-role setters — the DM dirty-flag fix
+ * (a rejected/no-op DM enable must not claim the published DM relay list needs re-publishing)
+ * and the per-relay-id lock that keeps two concurrent role toggles on the same relay from
+ * losing one of them. Structure follows InteractionActionsCoordinatorTest: a `subject()`
+ * factory, a nested private recording fake implementing only the [RelayRepository] members this
+ * coordinator actually calls, plain JUnit assertions, no Mockito.
+ */
+class RelayCrudCoordinatorTest {
+
+    // isEnabled/isReadEnabled/isWriteEnabled all forced false so every derived *Active flag
+    // defaults to false too -- the concurrency tests below need a relay that starts with
+    // isWriteActive/isSearchActive both false so a setter flipping one to true is an
+    // observable, unambiguous change rather than a no-op against Relay's own true-by-default
+    // outbox/inbox flags.
+    private fun sampleRelay(id: String, url: String) = Relay(
+        id = id,
+        url = url,
+        isEnabled = false,
+        isReadEnabled = false,
+        isWriteEnabled = false
+    )
+
+    private fun subject(
+        scope: CoroutineScope,
+        relays: List<Relay>,
+        relayRepository: RecordingRelayRepository = RecordingRelayRepository(),
+        userPreferences: FakeUserPreferences = FakeUserPreferences(initialPubkey = "a".repeat(64))
+    ): Pair<RelayCrudCoordinator, MutableStateFlow<RelayConfigState>> {
+        relays.forEach { relayRepository.seed(it) }
+        val state = MutableStateFlow(RelayConfigState(relays = relays))
+        val coordinator = RelayCrudCoordinator(
+            addRelayUseCase = AddRelayUseCase(relayRepository),
+            updateRelayUseCase = UpdateRelayUseCase(relayRepository),
+            removeRelayUseCase = RemoveRelayUseCase(relayRepository),
+            relayRepository = relayRepository,
+            eventRepository = FakeEventRepository(),
+            userPreferences = userPreferences,
+            state = state,
+            scope = scope
+        )
+        return coordinator to state
+    }
+
+    /** Stores relays in a plain map keyed by id — [getAllRelays] snapshots that map, the rest of
+     * [RelayRepository]'s CRUD members read/write it directly. [bootstrapDefaultsOnFirstLogin]/
+     * [clearUserRelayConfig] are no-ops; nothing this coordinator calls needs them to do anything.
+     * [callLog] records an "enter:<id>"/"exit:<id>" pair around every [updateRelay] invocation,
+     * in call order, with an optional gate a test can register via [gateInvocation] to hold a
+     * specific (0-based, across all invocations) call between its "enter" and "exit" markers —
+     * this is what lets a test force two [RelayCrudCoordinator.updateRelayRole] calls to
+     * genuinely overlap instead of merely running one after the other. */
+    private class RecordingRelayRepository : RelayRepository {
+        private val relays = mutableMapOf<String, Relay>()
+        val updateRelayCalls = mutableListOf<Relay>()
+        val callLog = mutableListOf<String>()
+        private val gatesByInvocationIndex = mutableMapOf<Int, CompletableDeferred<Unit>>()
+        private var invocationCount = 0
+
+        fun seed(relay: Relay) {
+            relays[relay.id] = relay
+        }
+
+        fun get(id: String): Relay? = relays[id]
+
+        fun snapshot(): List<Relay> = relays.values.toList()
+
+        fun gateInvocation(index: Int): CompletableDeferred<Unit> =
+            CompletableDeferred<Unit>().also { gatesByInvocationIndex[index] = it }
+
+        override fun getAllRelays(): Flow<List<Relay>> = flowOf(relays.values.toList())
+        override suspend fun getRelayById(id: String): Relay? = relays[id]
+        override suspend fun addRelay(relay: Relay) {
+            relays[relay.id] = relay
+        }
+        override suspend fun updateRelay(relay: Relay) {
+            val myIndex = invocationCount++
+            callLog += "enter:${relay.id}"
+            gatesByInvocationIndex[myIndex]?.await()
+            updateRelayCalls += relay
+            callLog += "exit:${relay.id}"
+            relays[relay.id] = relay
+        }
+        override suspend fun removeRelay(id: String) {
+            relays.remove(id)
+        }
+        override suspend fun bootstrapDefaultsOnFirstLogin() = Unit
+        override suspend fun clearUserRelayConfig() = Unit
+    }
+
+    @Test
+    fun `given a plaintext non-onion relay when setDmEnabled(true) runs then dmRelayListDirty stays false and the transport error is surfaced`() = runTest {
+        val relay = sampleRelay(id = "r1", url = "ws://plain.example")
+        val (coordinator, state) = subject(scope = this, relays = listOf(relay))
+
+        coordinator.setDmEnabled("r1", enabled = true)
+        advanceUntilIdle()
+
+        assertFalse(state.value.dmRelayListDirty)
+        val error = state.value.errorMessage
+        assertTrue(error is UiMessage.Res && error.id == R.string.relay_dm_wss_required)
+    }
+
+    @Test
+    fun `given a wss relay when setDmEnabled(true) runs then dmRelayListDirty is set and the persisted relay is DM-active`() = runTest {
+        val relay = sampleRelay(id = "r1", url = "wss://relay.example")
+        val repository = RecordingRelayRepository()
+        val (coordinator, state) = subject(scope = this, relays = listOf(relay), relayRepository = repository)
+
+        coordinator.setDmEnabled("r1", enabled = true)
+        advanceUntilIdle()
+
+        assertTrue(state.value.dmRelayListDirty)
+        val stored = repository.get("r1")
+        assertTrue(stored?.isDmActive == true)
+        assertTrue(stored?.dmRequiresAuth == true)
+    }
+
+    @Test
+    fun `given an unknown relayId when setDmEnabled(true) runs then dmRelayListDirty stays false and nothing is persisted`() = runTest {
+        val repository = RecordingRelayRepository()
+        val (coordinator, state) = subject(scope = this, relays = emptyList(), relayRepository = repository)
+
+        coordinator.setDmEnabled("missing", enabled = true)
+        advanceUntilIdle()
+
+        assertFalse(state.value.dmRelayListDirty)
+        assertNull(repository.get("missing"))
+        assertEquals(0, repository.updateRelayCalls.size)
+    }
+
+    @Test
+    fun `given two overlapping role toggles on the same relay when both resolve then neither update is lost`() = runTest {
+        val relay = sampleRelay(id = "relayA", url = "wss://relay.example")
+        val repository = RecordingRelayRepository()
+        val (coordinator, _) = subject(scope = this, relays = listOf(relay), relayRepository = repository)
+        // Only the first updateRelay call is gated — the second call must still be blocked by
+        // the per-relay Mutex itself, not merely queued behind this gate.
+        val gate = repository.gateInvocation(0)
+
+        coordinator.setOutboxEnabled("relayA", enabled = true)
+        coordinator.setSearchEnabled("relayA", enabled = true)
+        advanceUntilIdle()
+
+        assertEquals(listOf("enter:relayA"), repository.callLog)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("enter:relayA", "exit:relayA", "enter:relayA", "exit:relayA"),
+            repository.callLog
+        )
+        val stored = repository.get("relayA")
+        assertTrue(stored?.isWriteActive == true)
+        assertTrue(stored?.isSearchActive == true)
+    }
+
+    @Test
+    fun `given overlapping role toggles on different relays when advanced then the un-gated relay is not serialized behind the gated one`() = runTest {
+        val relayA = sampleRelay(id = "relayA", url = "wss://relay.example")
+        val relayB = sampleRelay(id = "relayB", url = "wss://relay2.example")
+        val repository = RecordingRelayRepository()
+        val (coordinator, _) = subject(scope = this, relays = listOf(relayA, relayB), relayRepository = repository)
+        // relayA's write (the first call overall) is gated; relayB's write is not.
+        val gate = repository.gateInvocation(0)
+
+        coordinator.setOutboxEnabled("relayA", enabled = true)
+        coordinator.setSearchEnabled("relayB", enabled = true)
+        advanceUntilIdle()
+
+        // relayB's write both entered and exited while relayA's was still gated mid-write --
+        // proving the lock is per-relay-id, not a single lock shared across all relay writes.
+        assertEquals(listOf("enter:relayA", "enter:relayB", "exit:relayB"), repository.callLog)
+        assertTrue(repository.get("relayB")?.isSearchActive == true)
+        assertFalse(repository.get("relayA")?.isWriteActive == true)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertTrue(repository.get("relayA")?.isWriteActive == true)
+        assertTrue(repository.get("relayB")?.isSearchActive == true)
+    }
+
+    @Test
+    fun `given a relay already in the repository but not yet reflected in the throttled state mirror when saveRelay is called with a blank id then it merges into the existing row instead of creating a duplicate`() = runTest {
+        // Seeded directly into the repository, deliberately left out of the state passed to
+        // subject() below -- simulating RelayConfigViewModel.observeRelays()'s 300ms-throttled
+        // collector not having caught up yet with a relay the repository already has (e.g. a
+        // double-tap on the add-relay dialog's save button, or a concurrent NIP-65 sync path
+        // adding the same URL). Before the WR-02 fix, saveRelay's existence check only consulted
+        // state.value.relays, so this relay would look "new" and get a second, duplicate-URL row.
+        val existing = sampleRelay(id = "existing1", url = "wss://relay.example").copy(isReadEnabled = true)
+        val repository = RecordingRelayRepository()
+        repository.seed(existing)
+        val (coordinator, _) = subject(scope = this, relays = emptyList(), relayRepository = repository)
+
+        coordinator.saveRelay(
+            Relay(id = "", url = "wss://relay.example", isEnabled = false, isReadEnabled = false, isWriteEnabled = true)
+        )
+        advanceUntilIdle()
+
+        assertEquals(1, repository.snapshot().size)
+        val merged = repository.get("existing1")
+        assertTrue(merged?.isWriteEnabled == true)
+        // The pre-existing repository row's isReadEnabled=true must survive the OR-merge --
+        // proof the merge base came from the fresh repository read, not a freshly-generated,
+        // blank relay created by the unguarded "add new" branch.
+        assertTrue(merged?.isReadEnabled == true)
+    }
+
+    @Test
+    fun `given a discovered relay when saveRelay assigns it an owned role then the persisted relay is no longer discovered`() = runTest {
+        val relay = sampleRelay(id = "r1", url = "wss://relay.example").copy(isDiscovered = true)
+        val repository = RecordingRelayRepository()
+        val (coordinator, _) = subject(scope = this, relays = listOf(relay), relayRepository = repository)
+
+        coordinator.saveRelay(relay.copy(isWriteEnabled = true, isWriteActive = true))
+        advanceUntilIdle()
+
+        val stored = repository.get("r1")
+        assertTrue(stored?.isDiscovered == false)
+        assertTrue(stored?.isWriteActive == true)
+    }
+
+    @Test
+    fun `given a discovered relay already in the repository when saveRelay is called with a blank id and the same url then the merged row is no longer discovered`() = runTest {
+        val existing = sampleRelay(id = "existing1", url = "wss://relay.example").copy(isDiscovered = true)
+        val repository = RecordingRelayRepository()
+        repository.seed(existing)
+        val (coordinator, _) = subject(scope = this, relays = emptyList(), relayRepository = repository)
+
+        coordinator.saveRelay(
+            Relay(id = "", url = "wss://relay.example", isEnabled = false, isReadEnabled = false, isWriteEnabled = true)
+        )
+        advanceUntilIdle()
+
+        assertEquals(1, repository.snapshot().size)
+        val merged = repository.get("existing1")
+        assertTrue(merged?.isDiscovered == false)
+        assertTrue(merged?.isWriteEnabled == true)
+    }
+
+    @Test
+    fun `given removeRelayRole overlapping a role setter on the same relay when both resolve then neither the removal nor the flag flip is lost`() = runTest {
+        val relay = sampleRelay(id = "relayA", url = "wss://relay.example")
+            .copy(isSearchEnabled = true, isSearchActive = true)
+        val repository = RecordingRelayRepository()
+        val (coordinator, _) = subject(scope = this, relays = listOf(relay), relayRepository = repository)
+        // Only the first updateRelay call is gated — the removal must still be blocked by the
+        // per-relay Mutex itself, not merely queued behind this gate.
+        val gate = repository.gateInvocation(0)
+
+        coordinator.setOutboxEnabled("relayA", enabled = true)
+        coordinator.removeRelayRole("relayA", RelayRole.SEARCH)
+        advanceUntilIdle()
+
+        assertEquals(listOf("enter:relayA"), repository.callLog)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("enter:relayA", "exit:relayA", "enter:relayA", "exit:relayA"),
+            repository.callLog
+        )
+        val stored = repository.get("relayA")
+        assertTrue(stored?.isWriteActive == true)
+        assertFalse(stored?.isSearchEnabled == true)
+        assertFalse(stored?.isSearchActive == true)
+    }
+
+    @Test
+    fun `given saveRelay overlapping a role setter on the same relay id when both resolve then the second write waits for the first`() = runTest {
+        val relay = sampleRelay(id = "relayA", url = "wss://relay.example")
+        val repository = RecordingRelayRepository()
+        val (coordinator, _) = subject(scope = this, relays = listOf(relay), relayRepository = repository)
+        val gate = repository.gateInvocation(0)
+
+        coordinator.setOutboxEnabled("relayA", enabled = true)
+        coordinator.saveRelay(
+            sampleRelay(id = "relayA", url = "wss://relay.example").copy(isSearchEnabled = true, isSearchActive = true)
+        )
+        advanceUntilIdle()
+
+        assertEquals(listOf("enter:relayA"), repository.callLog)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        // Ordering only -- the non-empty-id save branch writes the caller's relay wholesale
+        // rather than merging, so the setter's flag is legitimately overwritten by the later
+        // save; a no-lost-update assertion on the final state would be wrong here.
+        assertEquals(
+            listOf("enter:relayA", "exit:relayA", "enter:relayA", "exit:relayA"),
+            repository.callLog
+        )
+    }
+
+    @Test
+    fun `given deleteRelay overlapping a role setter on the same relay id when both resolve then the removal waits for the role write`() = runTest {
+        val relay = sampleRelay(id = "relayA", url = "wss://relay.example")
+        val repository = RecordingRelayRepository()
+        val (coordinator, _) = subject(scope = this, relays = listOf(relay), relayRepository = repository)
+        val gate = repository.gateInvocation(0)
+
+        coordinator.setOutboxEnabled("relayA", enabled = true)
+        coordinator.deleteRelay("relayA")
+        advanceUntilIdle()
+
+        // The removal is waiting on the lock -- the row must still exist.
+        assertTrue(repository.get("relayA") != null)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertNull(repository.get("relayA"))
+        assertEquals(listOf("enter:relayA", "exit:relayA"), repository.callLog)
+    }
+}

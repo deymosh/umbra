@@ -6,15 +6,21 @@ import com.umbra.app.domain.relay.Relay
 import com.umbra.app.domain.relay.RelayIdGenerator
 import com.umbra.app.domain.relay.normalizeRelayUrl
 import com.umbra.app.domain.repository.EventRepository
+import com.umbra.app.domain.repository.RelayRepository
 import com.umbra.app.domain.usecase.AddRelayUseCase
 import com.umbra.app.domain.usecase.RemoveRelayUseCase
 import com.umbra.app.domain.usecase.UpdateRelayUseCase
 import com.umbra.app.ui.common.UiMessage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.net.URI
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Relay CRUD/enable-flag cluster extracted from [RelayConfigViewModel]. Manually constructed by
@@ -32,11 +38,17 @@ internal class RelayCrudCoordinator(
     private val addRelayUseCase: AddRelayUseCase,
     private val updateRelayUseCase: UpdateRelayUseCase,
     private val removeRelayUseCase: RemoveRelayUseCase,
+    private val relayRepository: RelayRepository,
     private val eventRepository: EventRepository,
     private val userPreferences: UserPreferences,
     private val state: MutableStateFlow<RelayConfigState>,
     private val scope: CoroutineScope
 ) {
+
+    // Per-relay-id lock for updateRelayRole: two concurrent role toggles on
+    // the SAME relay must serialize so neither one's write is silently lost, while toggles on
+    // DIFFERENT relays keep running concurrently instead of waiting on an unrelated relay's write.
+    private val relayRoleMutexes = ConcurrentHashMap<String, Mutex>()
 
     fun saveRelay(relay: Relay) {
         scope.launch {
@@ -69,41 +81,72 @@ internal class RelayCrudCoordinator(
                 }).copy(isDiscovered = false)
 
                 if (relay.id.isEmpty()) {
-                    val existingRelay = state.value.relays.firstOrNull {
+                    // Resolve existence against a fresh repository read, not just the throttled
+                    // state.value.relays UI mirror (RelayConfigViewModel.observeRelays()'s
+                    // 300ms-throttled collector) — a relay added moments earlier (e.g. a
+                    // double-tap on the add-relay dialog's save button, or a concurrent NIP-65
+                    // sync path adding the same URL) can already exist in the repository without
+                    // yet being reflected in state.value.relays, which would otherwise route this
+                    // call into the unguarded "add new" branch below and produce a duplicate-URL
+                    // relay row — neither addRelayUseCase nor RelayRepository.addRelay enforces
+                    // URL uniqueness. The state.value.relays fallback stays as a belt-and-braces
+                    // check in case the repository read itself races an in-flight write.
+                    val freshRelays = relayRepository.getAllRelays().first()
+                    val existingRelay = freshRelays.firstOrNull {
+                        it.url.equals(sanitizedRelay.url, ignoreCase = true)
+                    } ?: state.value.relays.firstOrNull {
                         it.url.equals(sanitizedRelay.url, ignoreCase = true)
                     }
 
                     if (existingRelay != null) {
-                        updateRelayUseCase(
-                            existingRelay.copy(
-                                url = sanitizedRelay.url,
-                                isOnion = sanitizedRelay.isOnion,
-                                isDiscovered = false,
-                                isReadEnabled = existingRelay.isReadEnabled || sanitizedRelay.isReadEnabled,
-                                isReadActive = existingRelay.isReadActive || sanitizedRelay.isReadActive,
-                                isWriteEnabled = existingRelay.isWriteEnabled || sanitizedRelay.isWriteEnabled,
-                                isWriteActive = existingRelay.isWriteActive || sanitizedRelay.isWriteActive,
-                                isDmEnabled = existingRelay.isDmEnabled || sanitizedRelay.isDmEnabled,
-                                isDmActive = existingRelay.isDmActive || sanitizedRelay.isDmActive,
-                                dmRequiresAuth = (existingRelay.isDmEnabled || sanitizedRelay.isDmEnabled),
-                                isSearchEnabled = existingRelay.isSearchEnabled || sanitizedRelay.isSearchEnabled,
-                                isSearchActive = existingRelay.isSearchActive || sanitizedRelay.isSearchActive,
-                                isIndexEnabled = existingRelay.isIndexEnabled || sanitizedRelay.isIndexEnabled,
-                                isIndexActive = existingRelay.isIndexActive || sanitizedRelay.isIndexActive,
-                                isEnabled =
-                                    existingRelay.isReadActive || sanitizedRelay.isReadActive ||
-                                    existingRelay.isWriteActive || sanitizedRelay.isWriteActive ||
-                                    existingRelay.isDmActive || sanitizedRelay.isDmActive ||
-                                    existingRelay.isSearchActive || sanitizedRelay.isSearchActive ||
-                                    existingRelay.isIndexActive || sanitizedRelay.isIndexActive
+                        // Same per-relay-id Mutex updateRelayRole uses (LOG-42/WR-03) — a role
+                        // toggle in flight for this relay id must not have its write silently
+                        // discarded by this merge, or vice versa.
+                        relayRoleMutexes.computeIfAbsent(existingRelay.id) { Mutex() }.withLock {
+                            // Re-read the base relay from the persisted source of truth inside
+                            // the lock rather than merging against the throttled state.relays
+                            // snapshot captured above: that snapshot can already be stale by the
+                            // time this coroutine reaches the lock (e.g. a concurrent role
+                            // disable landed in between), and every flag below is merged via an
+                            // OR that only ever turns a role on — merging against a stale base
+                            // would silently revert that concurrent disable.
+                            val freshBase = relayRepository.getRelayById(existingRelay.id) ?: existingRelay
+                            updateRelayUseCase(
+                                freshBase.copy(
+                                    url = sanitizedRelay.url,
+                                    isOnion = sanitizedRelay.isOnion,
+                                    isDiscovered = false,
+                                    isReadEnabled = freshBase.isReadEnabled || sanitizedRelay.isReadEnabled,
+                                    isReadActive = freshBase.isReadActive || sanitizedRelay.isReadActive,
+                                    isWriteEnabled = freshBase.isWriteEnabled || sanitizedRelay.isWriteEnabled,
+                                    isWriteActive = freshBase.isWriteActive || sanitizedRelay.isWriteActive,
+                                    isDmEnabled = freshBase.isDmEnabled || sanitizedRelay.isDmEnabled,
+                                    isDmActive = freshBase.isDmActive || sanitizedRelay.isDmActive,
+                                    dmRequiresAuth = (freshBase.isDmEnabled || sanitizedRelay.isDmEnabled),
+                                    isSearchEnabled = freshBase.isSearchEnabled || sanitizedRelay.isSearchEnabled,
+                                    isSearchActive = freshBase.isSearchActive || sanitizedRelay.isSearchActive,
+                                    isIndexEnabled = freshBase.isIndexEnabled || sanitizedRelay.isIndexEnabled,
+                                    isIndexActive = freshBase.isIndexActive || sanitizedRelay.isIndexActive,
+                                    isEnabled =
+                                        freshBase.isReadActive || sanitizedRelay.isReadActive ||
+                                        freshBase.isWriteActive || sanitizedRelay.isWriteActive ||
+                                        freshBase.isDmActive || sanitizedRelay.isDmActive ||
+                                        freshBase.isSearchActive || sanitizedRelay.isSearchActive ||
+                                        freshBase.isIndexActive || sanitizedRelay.isIndexActive
+                                )
                             )
-                        )
+                        }
                     } else {
+                        // A freshly generated id can't race an in-flight role toggle — nothing
+                        // else has ever seen this id before this point — so no lock is needed here.
                         val newRelay = sanitizedRelay.copy(id = RelayIdGenerator.create())
                         addRelayUseCase(newRelay)
                     }
                 } else {
-                    updateRelayUseCase(sanitizedRelay)
+                    // Same per-relay-id Mutex updateRelayRole uses (LOG-42/WR-03).
+                    relayRoleMutexes.computeIfAbsent(relay.id) { Mutex() }.withLock {
+                        updateRelayUseCase(sanitizedRelay)
+                    }
                 }
 
                 // Conservatively marks all four kinds dirty rather than diffing which role flags
@@ -121,6 +164,8 @@ internal class RelayCrudCoordinator(
                         indexListDirty = true
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 state.update {
                     it.copy(
@@ -136,7 +181,18 @@ internal class RelayCrudCoordinator(
         scope.launch {
             try {
                 state.update { it.copy(isLoading = true) }
-                removeRelayUseCase(relayId)
+                // Same per-relay-id Mutex updateRelayRole uses (LOG-42/WR-03) — a role toggle in
+                // flight for this relay id must not race the removal itself.
+                relayRoleMutexes.computeIfAbsent(relayId) { Mutex() }.withLock {
+                    removeRelayUseCase(relayId)
+                }
+                // Pruned only once the removal above has fully completed and the lock is
+                // released (LOG-45) — relayRoleMutexes otherwise grows one entry per distinct
+                // relay id ever toggled, for this coordinator's whole lifetime. A caller that
+                // races in for this now-deleted id right after this line gets a fresh, unlocked
+                // Mutex from computeIfAbsent and no-ops harmlessly once updateRelayRole's own
+                // getRelayById lookup finds nothing, same as any other unknown relayId.
+                relayRoleMutexes.remove(relayId)
                 // Same conservative all-four-dirty marking as saveRelay — the deleted relay may
                 // have held any combination of roles.
                 state.update {
@@ -150,6 +206,8 @@ internal class RelayCrudCoordinator(
                         indexListDirty = true
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 state.update {
                     it.copy(
@@ -161,51 +219,44 @@ internal class RelayCrudCoordinator(
         }
     }
 
+    /**
+     * Functionally a sixth role-mutating setter alongside the five set*Enabled methods below — it
+     * clears one role's enable/active flags the same way those do — so it routes through the same
+     * [updateRelayRole] chokepoint rather than its own independent read-map-persist sequence. That
+     * chokepoint acquires the per-relay-id [relayRoleMutexes] lock and re-reads the relay fresh
+     * from [relayRepository] rather than the throttled `state.relays` mirror; a call here that
+     * bypassed it (as this method's own previous implementation did) could silently lose a
+     * concurrent role change to the same relay id (LOG-37/LOG-29).
+     */
     fun removeRelayRole(relayId: String, role: RelayRole) {
-        scope.launch {
-            val relay = state.value.relays.find { it.id == relayId } ?: return@launch
-
-            if ((role == RelayRole.INBOX || role == RelayRole.DM) && userPreferences.isAnonymousSession()) {
-                state.update {
-                    it.copy(
-                        errorMessage = UiMessage.Res(
-                            if (role == RelayRole.INBOX) R.string.error_inbox_anonymous_disabled else R.string.error_dm_anonymous_disabled
-                        )
+        if ((role == RelayRole.INBOX || role == RelayRole.DM) && userPreferences.isAnonymousSession()) {
+            state.update {
+                it.copy(
+                    errorMessage = UiMessage.Res(
+                        if (role == RelayRole.INBOX) R.string.error_inbox_anonymous_disabled else R.string.error_dm_anonymous_disabled
                     )
-                }
-                return@launch
+                )
             }
+            return
+        }
 
-            val updatedRelay = when (role) {
+        state.update {
+            when (role) {
+                RelayRole.OUTBOX, RelayRole.INBOX -> it.copy(relayListDirty = true)
+                RelayRole.DM -> it.copy(dmRelayListDirty = true)
+                RelayRole.SEARCH -> it.copy(searchListDirty = true)
+                RelayRole.INDEX -> it.copy(indexListDirty = true)
+            }
+        }
+
+        updateRelayRole(relayId) { relay ->
+            when (role) {
                 RelayRole.OUTBOX -> relay.copy(isWriteEnabled = false, isWriteActive = false)
                 RelayRole.INBOX -> relay.copy(isReadEnabled = false, isReadActive = false)
                 RelayRole.DM -> relay.copy(isDmEnabled = false, isDmActive = false, dmRequiresAuth = false)
                 RelayRole.SEARCH -> relay.copy(isSearchEnabled = false, isSearchActive = false)
                 RelayRole.INDEX -> relay.copy(isIndexEnabled = false, isIndexActive = false)
-            }.let {
-                it.copy(isEnabled = it.hasAnyActiveRole())
-            }
-
-            state.update {
-                when (role) {
-                    RelayRole.OUTBOX, RelayRole.INBOX -> it.copy(relayListDirty = true)
-                    RelayRole.DM -> it.copy(dmRelayListDirty = true)
-                    RelayRole.SEARCH -> it.copy(searchListDirty = true)
-                    RelayRole.INDEX -> it.copy(indexListDirty = true)
-                }
-            }
-
-            try {
-                // Always update the relay - don't delete it when disabled
-                updateRelayUseCase(updatedRelay)
-                if (relay.isEnabled && !updatedRelay.isEnabled) {
-                    eventRepository.disconnectRelay(relay.url)
-                }
-            } catch (e: Exception) {
-                state.update {
-                    it.copy(errorMessage = UiMessage.Res(R.string.error_delete_relay, listOf(e.message ?: "")))
-                }
-            }
+            }.let { it.copy(isEnabled = it.hasAnyActiveRole()) }
         }
     }
 
@@ -244,7 +295,6 @@ internal class RelayCrudCoordinator(
             return
         }
 
-        state.update { it.copy(dmRelayListDirty = true) }
         updateRelayRole(relayId) { relay ->
             if (enabled && !isDmTransportAllowed(relay.url)) {
                 state.update {
@@ -253,6 +303,10 @@ internal class RelayCrudCoordinator(
                 return@updateRelayRole relay
             }
 
+            // Only mark the published DM relay list as needing re-publish once the relay
+            // actually changes below — a rejected/no-op enable must never claim the DM list
+            // now differs from what's published, since it doesn't.
+            state.update { it.copy(dmRelayListDirty = true) }
             relay.copy(
                 isDmActive = enabled,
                 dmRequiresAuth = if (enabled) true else false,
@@ -308,22 +362,37 @@ internal class RelayCrudCoordinator(
 
     private fun updateRelayRole(relayId: String, mapper: (Relay) -> Relay) {
         scope.launch {
-            val relay = state.value.relays.find { it.id == relayId } ?: return@launch
-            try {
-                val updated = mapper(relay)
-                updateRelayUseCase(updated)
-                // The relay may have been auto-disabled for failing to connect too many times in
-                // a row (RelayIssueKind.AUTO_DISABLED) — its consecutive-failure count otherwise
-                // sits at that threshold forever, so re-enabling it here would immediately
-                // re-trip on the very next failure instead of getting a fresh run.
-                if (!relay.isEnabled && updated.isEnabled) {
-                    eventRepository.resetRelayFailureCount(relay.url)
+            val mutex = relayRoleMutexes.computeIfAbsent(relayId) { Mutex() }
+            mutex.withLock {
+                // The base snapshot must come from the persisted source of truth, not the
+                // throttled UI mirror: state.relays is only repopulated by
+                // RelayConfigViewModel.observeRelays()'s 300ms-throttled collector, so a second
+                // serialized toggle reading from state here would still map from a pre-write
+                // snapshot and re-lose the first toggle's flag even with the lock in place.
+                // state.value.relays is only a fallback for a relay this coordinator's own
+                // caller already has in memory but the repository hasn't reported yet (e.g. a
+                // relay added in the same batch of work).
+                val relay = relayRepository.getRelayById(relayId)
+                    ?: state.value.relays.find { it.id == relayId }
+                    ?: return@withLock
+                try {
+                    val updated = mapper(relay)
+                    updateRelayUseCase(updated)
+                    // The relay may have been auto-disabled for failing to connect too many times
+                    // in a row (RelayIssueKind.AUTO_DISABLED) — its consecutive-failure count
+                    // otherwise sits at that threshold forever, so re-enabling it here would
+                    // immediately re-trip on the very next failure instead of getting a fresh run.
+                    if (!relay.isEnabled && updated.isEnabled) {
+                        eventRepository.resetRelayFailureCount(relay.url)
+                    }
+                    if (relay.isEnabled && !updated.isEnabled) {
+                        eventRepository.disconnectRelay(relay.url)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    state.update { it.copy(errorMessage = UiMessage.Res(R.string.error_update_relay, listOf(e.message ?: ""))) }
                 }
-                if (relay.isEnabled && !updated.isEnabled) {
-                    eventRepository.disconnectRelay(relay.url)
-                }
-            } catch (e: Exception) {
-                state.update { it.copy(errorMessage = UiMessage.Res(R.string.error_update_relay, listOf(e.message ?: ""))) }
             }
         }
     }
