@@ -363,7 +363,12 @@ class ComposerViewModel @Inject constructor(
                 }
                 is BlossomUploadResult.Failed -> {
                     logger.d { "Attachment upload error: ${scrubThrowableMessageForLogs(result.error)}" }
-                    _state.update { it.copy(pendingUpload = null) }
+                    _state.update {
+                        it.copy(
+                            pendingUpload = null,
+                            attachmentError = UiMessage.Res(R.string.error_picture_upload_failed)
+                        )
+                    }
                 }
             }
             _state.update { it.copy(isUploadingAttachment = false) }
@@ -391,7 +396,8 @@ class ComposerViewModel @Inject constructor(
         // An attachment's URL might have been hand-edited or deleted out of the text after
         // upload — only tag imeta/content-warning for what's actually still in the note.
         val liveAttachments = current.attachments.filter { body.contains(it.url) }
-        val sensitiveReason = if (current.sensitiveContent && liveAttachments.isNotEmpty()) "" else null
+        // NIP-36 applies to the whole note, text-only notes included.
+        val sensitiveReason = if (current.sensitiveContent) "" else null
 
         _state.update { it.copy(isPublishing = true) }
         viewModelScope.launch {

@@ -86,8 +86,8 @@ internal fun SubscriptionCard(
                 }
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
-                        text = stringResource(R.string.relay_subscription_events, req.receivedEventCount),
-                        style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                        text = pluralStringResource(R.plurals.relay_subscription_events, req.receivedEventCount, req.receivedEventCount),
+                        style = MonoStyle,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     // Surfaces sentAtMillis/lastEventAtMillis, which existed on RelayRequestInfo

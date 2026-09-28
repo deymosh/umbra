@@ -199,7 +199,10 @@
     <string name="relay_telemetry_subscriptions">Subscriptions %1$d</string>
     <string name="relay_telemetry_events">Events received %1$d</string>
     <string name="relay_telemetry_issues">Issues %1$d</string>
-    <string name="relay_subscription_events">events=%1$d</string>
+    <plurals name="relay_subscription_events">
+        <item quantity="one">%1$d event</item>
+        <item quantity="other">%1$d events</item>
+    </plurals>
     <string name="relay_subscription_filter_index">filter %1$d</string>
     <plurals name="relay_filter_authors">
         <item quantity="one">%1$d author</item>
@@ -222,7 +225,9 @@
     <string name="active_subscriptions_group_summary" tools:ignore="PluralsCandidate">%1$d relays · %2$d events</string>
     <string name="active_subscriptions_empty">No active subscriptions right now</string>
     <!-- Three counts in one sentence, doesn't fit Android's single-quantity <plurals> model. -->
-    <string name="active_subscriptions_total" tools:ignore="PluralsCandidate">%1$d subscriptions across %2$d relays · %3$d events fetched</string>
+    <string name="active_subscriptions_stat_subscriptions">Subscriptions</string>
+    <string name="active_subscriptions_stat_relays">Relays</string>
+    <string name="active_subscriptions_stat_events">Events</string>
     <string name="active_subscriptions_expand_group">Expand</string>
     <string name="active_subscriptions_collapse_group">Collapse</string>
     <string name="edit">Edit</string>
@@ -246,6 +251,8 @@
     <string name="blossom_servers_description">Servers your media uploads to, in priority order. The first server is tried first when uploading and when looking up an author\'s media if a link breaks.</string>
     <string name="blossom_server_url_label">Server URL (https://…)</string>
     <string name="blossom_server_invalid_url">Invalid server URL. Use https:// (or http://) with a valid host.</string>
+    <string name="blossom_servers_priority_header">Upload order</string>
+    <string name="blossom_server_primary">primary</string>
     <string name="blossom_server_add">Add</string>
     <string name="blossom_server_remove">Remove server</string>
     <string name="blossom_server_move_up">Move up</string>
@@ -287,9 +294,9 @@
         <item quantity="other">%1$d rows</item>
     </plurals>
     <string name="db_inspector_search_header">Search events</string>
-    <string name="db_inspector_search_kind_hint">Kind (optional)</string>
-    <string name="db_inspector_search_pubkey_hint">Pubkey (optional)</string>
     <string name="db_inspector_search_content_hint">Content contains (optional)</string>
+    <string name="db_inspector_encrypted_notice">Encrypted at rest with SQLCipher. Only your own events are stored here.</string>
+    <string name="db_inspector_kind_badge">kind %1$d</string>
     <string name="db_inspector_search_action">Search</string>
     <string name="db_inspector_load_more_action">Load more</string>
     <string name="db_inspector_no_results">No matching events</string>
@@ -321,6 +328,9 @@
         <item quantity="one">%1$d entry</item>
         <item quantity="other">%1$d entries</item>
     </plurals>
+    <string name="resource_usage_section_caches">Caches</string>
+    <string name="resource_usage_section_storage">Storage</string>
+    <string name="resource_usage_section_actions">Maintenance</string>
     <string name="resource_usage_clear_event_cache">Clear in-memory event cache</string>
     <string name="resource_usage_trim_all_caches">Trim all caches now</string>
 
@@ -563,6 +573,9 @@
     <string name="profile_tab_pins">Pinned</string>
     <string name="copy_to_clipboard_cd">Copy %1$s</string>
     <string name="composer_preview_label">Preview</string>
+    <string name="composer_replying_to_prefix">Replying to</string>
+    <string name="composer_uploading">Uploading…</string>
+    <string name="composer_route_tor">via Tor</string>
     <string name="stay_in_umbra">Stay private</string>
     <string name="thread_reply_hint">Reply to %1$s…</string>
     <string name="settings_group_feed">Feed and look</string>
