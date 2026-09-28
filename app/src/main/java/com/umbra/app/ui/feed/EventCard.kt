@@ -10,7 +10,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.automirrored.filled.Reply
+import androidx.compose.foundation.background
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -45,7 +47,7 @@ import com.umbra.app.ui.components.ConfirmDialog
 import com.umbra.app.ui.components.ContentWarningPlaceholder
 import com.umbra.app.ui.components.EmojiReactionPickerSheet
 import com.umbra.app.ui.components.ExternalUrlWarningDialog
-import com.umbra.app.ui.components.NoteHeader
+import com.umbra.app.ui.components.NoteAuthorLine
 import com.umbra.app.ui.components.NostrTextRenderer
 import com.umbra.app.ui.components.PROFILE_MENTION_REGEX
 import com.umbra.app.ui.components.QuotedNoteCard
@@ -56,7 +58,6 @@ import com.umbra.app.ui.components.extractQuotedEventRefs
 import com.umbra.app.ui.components.extractQuotedEventRefsFromContent
 import com.umbra.app.ui.components.InlineMediaSegment
 import com.umbra.app.ui.components.parseInlineMediaSegments
-import com.umbra.app.ui.components.ChipBadge
 import com.umbra.app.ui.components.ReactionBar
 import com.umbra.app.ui.components.ShowMoreLessToggle
 import com.umbra.app.ui.components.TimeFormatter
@@ -467,6 +468,11 @@ fun EventCard(
         )
     }
 
+    val kindLabelText = eventKindLabel?.let { label ->
+        if (label.arg == null) stringResource(label.labelRes) else stringResource(label.labelRes, label.arg)
+    }
+    val depthIndent = (threadDepth.coerceAtMost(4) * 10).dp
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -478,259 +484,272 @@ fun EventCard(
                 }
             ),
     ) {
-        Column(
+        // Context lines (reposted by / replying to) sit above the note, aligned with its text
+        // column, so the author's avatar stays the anchor of the row.
+        if (repostedByPubkey != null) {
+            RepostBanner(
+                pubkey = repostedByPubkey,
+                userProfile = repostedByProfile,
+                onClick = { onProfileClickState.value(repostedByPubkey) },
+                repostedAt = repostedAt,
+                onMenuClick = { showRepostActionsSheet = true },
+                authorPubkey = repostedByPubkey,
+                userRepository = userRepository,
+                modifier = Modifier.padding(start = NoteGutter + depthIndent, end = 8.dp, top = 8.dp)
+            )
+        }
+
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 14.dp + (threadDepth.coerceAtMost(4) * 6).dp, end = 14.dp, top = 10.dp, bottom = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(
+                    start = 16.dp + depthIndent,
+                    end = 8.dp,
+                    top = if (repostedByPubkey != null) 2.dp else 14.dp,
+                    bottom = 6.dp
+                ),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (isReply) {
-                val threadLabel = replyToLabel
-                    ?: parentEventId?.truncatePublicKey(4, 4)
-                    ?: stringResource(R.string.event_thread_fallback)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.event_reply_arrow),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    if (replyToProfile != null) {
-                        UserAvatar(
-                            userProfile = replyToProfile,
-                            pubkey = replyToProfile.pubkey,
-                            size = 18.dp,
-                            shape = CircleShape,
-                            animate = animateAvatars,
-                            authorPubkey = replyToProfile.pubkey,
-                            userRepository = userRepository
-                        )
-                    }
-                    Text(
-                        text = threadLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-
-            if (repostedByPubkey != null) {
-                RepostBanner(
-                    pubkey = repostedByPubkey,
-                    userProfile = repostedByProfile,
-                    onClick = { onProfileClickState.value(repostedByPubkey) },
-                    repostedAt = repostedAt,
-                    onMenuClick = { showRepostActionsSheet = true },
-                    authorPubkey = repostedByPubkey,
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .clickable(onClick = profileClick)
+            ) {
+                UserAvatar(
+                    userProfile = userProfile,
+                    pubkey = event.pubkey,
+                    size = NoteAvatarSize,
+                    shape = CircleShape,
+                    animate = animateAvatars,
+                    authorPubkey = event.pubkey,
                     userRepository = userRepository
                 )
             }
 
-            NoteHeader(
-                userProfile = userProfile,
-                pubkey = event.pubkey,
-                createdAt = event.createdAt,
-                onProfileClick = profileClick,
-                animateAvatar = animateAvatars,
-                authorPubkey = event.pubkey,
-                userRepository = userRepository,
-                trailingContent = {
-                    IconButton(
-                        onClick = { showActionsSheet = true },
-                        modifier = Modifier.size(36.dp)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                NoteAuthorLine(
+                    userProfile = userProfile,
+                    pubkey = event.pubkey,
+                    createdAt = event.createdAt,
+                    kindLabel = kindLabelText,
+                    modifier = Modifier.clickable(
+                        interactionSource = null,
+                        indication = null,
+                        onClick = profileClick
+                    ),
+                    trailingContent = {
+                        IconButton(
+                            onClick = { showActionsSheet = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreHoriz,
+                                contentDescription = stringResource(R.string.event_more_actions),
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                )
+
+                if (isReply) {
+                    val threadLabel = replyToProfile?.getUserDisplayName()
+                        ?: replyToLabel
+                        ?: parentEventId?.truncatePublicKey(4, 4)
+                        ?: stringResource(R.string.event_thread_fallback)
+                    Row(
+                        modifier = Modifier.padding(end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = stringResource(R.string.event_more_actions),
-                            modifier = Modifier.size(22.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            imageVector = Icons.AutoMirrored.Filled.Reply,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = stringResource(R.string.event_replying_to, threadLabel),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
-            )
 
-            // Content with images, mentions, hashtags, URLs
-            if (contentWarning != null && !isContentRevealed) {
-                ContentWarningPlaceholder(
-                    reason = contentWarning.reason,
-                    onShowEvent = { isContentRevealed = true },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            } else if (normalizedContent.isNotBlank()) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    NostrTextRenderer(
-                        text = displayText,
-                        tags = eventTagsSnapshot,
-                        torDataSourceFactory = torDataSourceFactory,
-                        userRepository = userRepository,
-                        authorPubkey = event.pubkey,
-                        // getProfiles() is cache/Room-only (no network call) — safe to resolve
-                        // per-card so nostr:npub1.../nprofile1... mentions render as "@name"
-                        // when we already have kind-0 metadata for that pubkey (never triggers
-                        // a fetch for ones we don't).
-                        resolveMentionProfiles = true,
-                        getUrlMetadata = urlMetadataLookup,
-                        modifier = Modifier.fillMaxWidth(),
-                        mediaContentPadding = PaddingValues(horizontal = 0.dp),
-                        onMentionClick = mentionClick,
-                        onEventReferenceClick = eventReferenceClick,
-                        onHashtagClick = hashtagClick,
-                        onUrlClick = { url ->
-                            pendingExternalUrl = url
-                        },
-                        getQuotedEvent = getQuotedEvent,
-                        getQuotedEventAuthorProfile = getQuotedEventAuthorProfile,
-                        hiddenEventIds = hiddenEventIds,
-                        animateMedia = animateAvatars,
-                        fullImageUrls = fullImageUrls,
-                        fullLightningInvoices = fullLightningInvoices,
-                        fullLnurlReferences = fullLnurlReferences,
-                        compactMedia = compactMedia
+                // Content with images, mentions, hashtags, URLs
+                if (contentWarning != null && !isContentRevealed) {
+                    ContentWarningPlaceholder(
+                        reason = contentWarning.reason,
+                        onShowEvent = { isContentRevealed = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(end = 8.dp)
                     )
-
-                    if (textMetrics.shouldShowExpandButton) {
-                        ShowMoreLessToggle(
-                            isExpanded = isExpanded.value,
-                            onToggle = { isExpanded.value = !isExpanded.value }
+                } else if (normalizedContent.isNotBlank()) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(end = 8.dp)) {
+                        NostrTextRenderer(
+                            text = displayText,
+                            tags = eventTagsSnapshot,
+                            torDataSourceFactory = torDataSourceFactory,
+                            userRepository = userRepository,
+                            authorPubkey = event.pubkey,
+                            // getProfiles() is cache/Room-only (no network call) — safe to resolve
+                            // per-card so nostr:npub1.../nprofile1... mentions render as "@name"
+                            // when we already have kind-0 metadata for that pubkey (never triggers
+                            // a fetch for ones we don't).
+                            resolveMentionProfiles = true,
+                            getUrlMetadata = urlMetadataLookup,
+                            modifier = Modifier.fillMaxWidth(),
+                            mediaContentPadding = PaddingValues(horizontal = 0.dp),
+                            onMentionClick = mentionClick,
+                            onEventReferenceClick = eventReferenceClick,
+                            onHashtagClick = hashtagClick,
+                            onUrlClick = { url ->
+                                pendingExternalUrl = url
+                            },
+                            getQuotedEvent = getQuotedEvent,
+                            getQuotedEventAuthorProfile = getQuotedEventAuthorProfile,
+                            hiddenEventIds = hiddenEventIds,
+                            animateMedia = animateAvatars,
+                            fullImageUrls = fullImageUrls,
+                            fullLightningInvoices = fullLightningInvoices,
+                            fullLnurlReferences = fullLnurlReferences,
+                            compactMedia = compactMedia
                         )
-                    }
 
-                }
-
-            }
-
-            // Quotes referenced only via a "q" tag, with no matching nostr:note1/nevent1/naddr1
-            // substring anywhere in the content to anchor an inline embed to (see
-            // quotesWithoutInlinePosition's doc comment above) — rendered here instead of dropped.
-            if (quotesWithoutInlinePosition.isNotEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    quotesWithoutInlinePosition.forEach { ref ->
-                        val quotedEvent = getQuotedEvent(ref.id)
-                        val clickReference = encodeQuoteReferenceForClick(ref.id, ref.relays)
-                        if (quotedEvent != null) {
-                            QuotedNoteCard(
-                                quotedEvent = quotedEvent,
-                                authorProfile = getQuotedEventAuthorProfile(quotedEvent.pubkey),
-                                onClick = { eventReferenceClick(clickReference) },
-                                torDataSourceFactory = torDataSourceFactory,
-                                userRepository = userRepository,
-                                onMentionClick = mentionClick,
-                                onHashtagClick = hashtagClick,
-                                onUrlClick = { url -> pendingExternalUrl = url },
-                                onEventReferenceClick = eventReferenceClick
-                            )
-                        } else {
-                            UnresolvedQuoteReferenceChip(
-                                eventId = ref.id,
-                                relayHints = ref.relays,
-                                onClick = { eventReferenceClick(clickReference) }
+                        if (textMetrics.shouldShowExpandButton) {
+                            ShowMoreLessToggle(
+                                isExpanded = isExpanded.value,
+                                onToggle = { isExpanded.value = !isExpanded.value }
                             )
                         }
                     }
                 }
-            }
 
-            // Hashtags display (from NIP-30) — compact one-line with "+X more"
-            if (hashtags.isNotEmpty()) {
-                var expanded by remember(event.id) { mutableStateOf(false) }
-                val maxVisible = 3
-
-                if (!expanded) {
-                    // FlowRow (not Row) so a chip that doesn't fit on the current line wraps to
-                    // the next one instead of overflowing past the screen edge — still reads as
-                    // "compact" since it's capped to maxVisible + "+X more" chips.
-                    FlowRow(
+                // Quotes referenced only via a "q" tag, with no matching nostr:note1/nevent1/naddr1
+                // substring anywhere in the content to anchor an inline embed to (see
+                // quotesWithoutInlinePosition's doc comment above) — rendered here instead of dropped.
+                if (quotesWithoutInlinePosition.isNotEmpty()) {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                            .padding(top = 4.dp, end = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        val display = if (hashtags.size <= maxVisible) hashtags else hashtags.take(maxVisible - 1)
+                        quotesWithoutInlinePosition.forEach { ref ->
+                            val quotedEvent = getQuotedEvent(ref.id)
+                            val clickReference = encodeQuoteReferenceForClick(ref.id, ref.relays)
+                            if (quotedEvent != null) {
+                                QuotedNoteCard(
+                                    quotedEvent = quotedEvent,
+                                    authorProfile = getQuotedEventAuthorProfile(quotedEvent.pubkey),
+                                    onClick = { eventReferenceClick(clickReference) },
+                                    torDataSourceFactory = torDataSourceFactory,
+                                    userRepository = userRepository,
+                                    onMentionClick = mentionClick,
+                                    onHashtagClick = hashtagClick,
+                                    onUrlClick = { url -> pendingExternalUrl = url },
+                                    onEventReferenceClick = eventReferenceClick
+                                )
+                            } else {
+                                UnresolvedQuoteReferenceChip(
+                                    eventId = ref.id,
+                                    relayHints = ref.relays,
+                                    onClick = { eventReferenceClick(clickReference) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Hashtags (from "t" tags) — compact, with "+X more" when there are many.
+                if (hashtags.isNotEmpty()) {
+                    var expanded by remember(event.id) { mutableStateOf(false) }
+                    val maxVisible = 3
+                    val display = when {
+                        expanded || hashtags.size <= maxVisible -> hashtags
+                        else -> hashtags.take(maxVisible - 1)
+                    }
+                    // FlowRow (not Row) so a tag that doesn't fit wraps to the next line instead of
+                    // overflowing past the screen edge.
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth().padding(end = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         display.forEach { tag ->
                             // No onClick: onHashtagClick has no wired destination yet (see
-                            // EventCard's default), so a chevron here would promise navigation
-                            // that tapping doesn't deliver.
-                            ChipBadge(
-                                text = "#$tag",
-                                backgroundColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                textColor = MaterialTheme.colorScheme.onTertiaryContainer
-                            )
+                            // EventCard's default), so a tap affordance here would promise
+                            // navigation that tapping doesn't deliver.
+                            HashtagPill(text = "#$tag")
                         }
-                        if (hashtags.size > display.size) {
-                            val remaining = hashtags.size - display.size
-                            ChipBadge(
-                                text = stringResource(R.string.event_more_count, remaining),
-                                backgroundColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                textColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        if (!expanded && hashtags.size > display.size) {
+                            HashtagPill(
+                                text = stringResource(R.string.event_more_count, hashtags.size - display.size),
                                 onClick = { expanded = true }
                             )
-                        }
-                    }
-                } else {
-                    FlowRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        hashtags.forEach { tag ->
-                            ChipBadge(
-                                text = "#$tag",
-                                backgroundColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                textColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        } else if (expanded && hashtags.size > maxVisible) {
+                            HashtagPill(
+                                text = stringResource(R.string.event_show_less),
+                                onClick = { expanded = false }
                             )
                         }
-                        // Add a collapse control when hashtags are expanded
-                        ChipBadge(
-                            text = stringResource(R.string.event_show_less),
-                            backgroundColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            textColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                            onClick = { expanded = false },
-                            collapses = true
-                        )
                     }
                 }
-            }
 
-            ReactionBar(
-                replyCount = replyCount,
-                reactionCount = reactionCount,
-                repostCount = repostCount,
-                isLiked = isLiked,
-                canSign = !currentUserPubkey.isNullOrBlank(),
-                onReply = replyAction,
-                onLike = likeAction,
-                onRepost = repostAction,
-                onQuote = quoteAction,
-                onShare = shareAction,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp),
-                isReposted = isReposted,
-                eventKindLabel = eventKindLabel?.let { label ->
-                    if (label.arg == null) {
-                        stringResource(label.labelRes)
-                    } else {
-                        stringResource(label.labelRes, label.arg)
-                    }
-                }
-            )
+                ReactionBar(
+                    replyCount = replyCount,
+                    reactionCount = reactionCount,
+                    repostCount = repostCount,
+                    isLiked = isLiked,
+                    canSign = !currentUserPubkey.isNullOrBlank(),
+                    onReply = replyAction,
+                    onLike = likeAction,
+                    onRepost = repostAction,
+                    onQuote = quoteAction,
+                    onShare = shareAction,
+                    // Pull the first chip's touch padding back so its icon lines up with the text.
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset(x = (-8).dp),
+                    isReposted = isReposted
+                )
+            }
         }
 
         HorizontalDivider(
             thickness = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+            color = MaterialTheme.colorScheme.outlineVariant
         )
     }
+}
+
+private val NoteAvatarSize = 42.dp
+
+/** Start inset of a note's text column: 16dp edge + avatar + 12dp gap. */
+private val NoteGutter = 16.dp + NoteAvatarSize + 12.dp
+
+@Composable
+private fun HashtagPill(text: String, onClick: (() -> Unit)? = null) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = if (onClick != null) {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            MaterialTheme.colorScheme.primary
+        },
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    )
 }
 
 /**

@@ -74,6 +74,12 @@ internal object SnapshotFixtures {
         tags = listOf(listOf("e", "e1".padEnd(64, '0'), "", "reply"), listOf("p", ALICE))
     )
 
+    val feed: List<Pair<Event, UserProfile>> get() = listOf(
+        textNote to alice,
+        shortNote to bob,
+        reply to carol
+    )
+
     val tors: DataSource.Factory = DataSource.Factory { error("no network in snapshots") }
 
     /** A UserRepository that answers everything with "nothing cached" — enough for rendering. */

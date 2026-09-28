@@ -11,7 +11,7 @@ The moderation constraint means: muting, NSFW hiding, and feed content filters (
 Single-module Gradle project (`:app`), package `com.umbra.app`.
 
 Stack: Kotlin 2.4.10 · Jetpack Compose · MVVM + Clean Architecture · Hilt · Room · OkHttp · Media3 · Coil 3 · kotlinx.serialization · BouncyCastle (BIP-340 Schnorr).
-Build: AGP 9.3+ · Gradle 9.x · JDK 21 (Gradle runtime; Paparazzi needs it) · compileSdk 37 · minSdk 26 · jvmTarget 17.
+Build: AGP 9.3+ · Gradle 9.x · JDK 21 (Gradle runtime; Robolectric snapshots need it) · compileSdk 37 · minSdk 26 · jvmTarget 17.
 
 **Before making any change, read [AUDIT.md](../AUDIT.md).** It is the master reference for security, architecture, Room, performance, and UI rules, and takes precedence over anything below. [CONTRIBUTING.md](../CONTRIBUTING.md) covers workflow/PR expectations. [.github/agents/umbra.agent.md](../.github/agents/umbra.agent.md) is GitHub Copilot's agent config for this repo — a parallel restatement of AUDIT.md's rules in that tool's own format, not additional required reading for Claude Code. This file, AUDIT.md, and the skills under `.claude/skills/` are self-sufficient; don't treat umbra.agent.md as a dependency.
 
@@ -50,9 +50,9 @@ export PATH="$JAVA_HOME/bin:$PATH"
 # Assemble debug APK without installing
 ./gradlew assembleDebug
 
-# UI snapshots (Paparazzi, no device needed) — see docs/UI_SNAPSHOTS.md
-./gradlew recordPaparazziDebug   # (re)write goldens in app/src/test/snapshots/images/
-./gradlew verifyPaparazziDebug   # fail on visual diffs against the goldens
+# UI snapshots (Roborazzi/Robolectric, no device needed) — see docs/UI_SNAPSHOTS.md
+./gradlew recordRoborazziDebug   # (re)write goldens in app/src/test/snapshots/
+./gradlew verifyRoborazziDebug   # fail on visual diffs against the goldens
 ```
 
 **Windows:**

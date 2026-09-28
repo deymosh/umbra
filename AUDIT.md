@@ -607,7 +607,7 @@ ui/
 | `SharedFlow<SideEffect>` for navigation | ViewModels never call startActivity directly |
 | `@UnstableApi` isolated at lowest level | Prevents annotation propagating up call chain |
 | `DownloadManager` forbidden | Downloads must go through TOR proxy via OkHttp |
-| `jvmTarget = "17"` | Bytecode target; Gradle itself runs on JDK 21 (required by the Paparazzi plugin), app bytecode stays 17 — do not downgrade to 1.8 |
+| `jvmTarget = "17"` | Bytecode target; Gradle itself runs on JDK 21 (Robolectric SDK 36 UI snapshots need it), app bytecode stays 17 — do not downgrade to 1.8 |
 | AGP 9.3+ required | Needed for compileSdk 37 and Gradle 9.x compatibility |
 | User events encrypted archive only | Historical rule, superseded by "single encrypted database" above — there is no public database left to accidentally put them in |
 | `DefaultRelays` in `domain/relay/DefaultRelays.kt` | Bootstrap relay list is a domain concern, not tied to any entity |

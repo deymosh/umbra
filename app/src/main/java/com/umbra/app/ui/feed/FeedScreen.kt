@@ -72,6 +72,9 @@ import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.ui.Screen
 import com.umbra.app.ui.common.resolve
 import com.umbra.app.ui.components.EmptyState
+import com.umbra.app.ui.components.EclipseMark
+import androidx.compose.foundation.border
+import androidx.compose.ui.unit.sp
 import com.umbra.app.ui.components.ErrorBanner
 import com.umbra.app.ui.components.KeyValueCopyRow
 import com.umbra.app.ui.components.MenuItemRow
@@ -300,7 +303,10 @@ fun FeedScreen(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
+            ModalDrawerSheet(
+                drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp)
+            ) {
                 Column(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -337,7 +343,7 @@ fun FeedScreen(
                         }
                     }
 
-                    HorizontalDivider()
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                     MenuItemRow(
                         icon = Icons.Default.AccountCircle,
@@ -410,21 +416,22 @@ fun FeedScreen(
                     )
 
                     Spacer(modifier = Modifier.weight(1f))
-                    Surface(
-                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                        EclipseMark(size = 36.dp)
+                        Column {
                             Text(
-                                text = stringResource(R.string.app_name),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                text = stringResource(R.string.app_name).lowercase(),
+                                style = MaterialTheme.typography.displaySmall.copy(fontSize = 24.sp, lineHeight = 26.sp),
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = stringResource(R.string.drawer_title_orbot_powered),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -447,6 +454,7 @@ fun FeedScreen(
                 isTorConnected = feedState.isTorConnected,
                 isTorStarting = feedState.torStatus == "STARTING_TOR",
                 onAvatarClick = { scope.launch { drawerState.open() } },
+                onStatusClick = { navController.navigate(Screen.RelayConfig.route) },
                 onToggleSearch = {
                     val nowVisible = !searchVisible
                     searchVisible = nowVisible
@@ -523,6 +531,7 @@ fun FeedScreen(
                         onGoTop = { scope.launch { listState.scrollToTopImmediate() } },
                         onCompose = { currentNavController.navigate(Screen.Composer.new()) },
                         onRelays = { navController.navigate(Screen.RelayConfig.route) },
+                        onFilters = { navController.navigate(Screen.FeedConfig.route) },
                         onSettings = {
                             navController.navigate(Screen.Settings.route) {
                                 launchSingleTop = true
@@ -561,6 +570,7 @@ fun FeedScreen(
                             onGoTop = { scope.launch { listState.scrollToTopImmediate() } },
                             onCompose = { currentNavController.navigate(Screen.Composer.new()) },
                             onRelays = { navController.navigate(Screen.RelayConfig.route) },
+                            onFilters = { navController.navigate(Screen.FeedConfig.route) },
                             onSettings = {
                                 navController.navigate(Screen.Settings.route) {
                                     launchSingleTop = true
@@ -617,92 +627,6 @@ fun FeedScreen(
 }
 
 @Composable
-internal fun RelayStatusBadge(
-    relayCount: Int,
-    isConnected: Boolean
-) {
-    if (relayCount <= 0) return
-
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = if (isConnected) {
-            MaterialTheme.colorScheme.tertiaryContainer
-        } else {
-            MaterialTheme.colorScheme.errorContainer
-        }
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Language,
-                contentDescription = null,
-                modifier = Modifier.size(14.dp),
-                tint = if (isConnected) {
-                    MaterialTheme.colorScheme.onTertiaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onErrorContainer
-                }
-            )
-            Text(
-                text = if (isConnected) "$relayCount" else "--",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (isConnected) {
-                    MaterialTheme.colorScheme.onTertiaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onErrorContainer
-                }
-            )
-        }
-    }
-}
-
-@Composable
-internal fun TorStatusBadge(isTorConnected: Boolean, isTorStarting: Boolean = false) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = if (isTorConnected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.errorContainer
-        }
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
-            ) {
-                Text(
-                    text = stringResource(R.string.tor_onion_symbol),
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                    style = MaterialTheme.typography.labelSmall
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(
-                        when {
-                            isTorConnected -> MaterialTheme.colorScheme.tertiary
-                            // Actively retrying (STARTING_TOR) reads differently from "not
-                            // connected and not doing anything about it" — amber vs. red.
-                            isTorStarting -> Color(0xFFF9A825)
-                            else -> MaterialTheme.colorScheme.error
-                        }
-                    )
-            )
-        }
-    }
-}
-
-@Composable
 private fun ScrollToTopPill(
     modifier: Modifier = Modifier,
     visible: Boolean,
@@ -715,10 +639,13 @@ private fun ScrollToTopPill(
         modifier = modifier
     ) {
         Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.primaryContainer,
-            shadowElevation = 4.dp,
-            modifier = Modifier.clickable(onClick = onClick)
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            shadowElevation = 8.dp,
+            modifier = Modifier
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), CircleShape)
+                .clip(CircleShape)
+                .clickable(onClick = onClick)
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -729,12 +656,12 @@ private fun ScrollToTopPill(
                     imageVector = Icons.Default.KeyboardArrowUp,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    tint = MaterialTheme.colorScheme.primary
                 )
                 Text(
                     text = stringResource(R.string.back_to_top),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         }

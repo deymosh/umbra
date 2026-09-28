@@ -38,6 +38,22 @@ object TimeFormatter {
     }
 
     /**
+     * Compact form for dense attribution lines: "now", "45s", "14m", "2h", "3d", then the
+     * calendar date once a note is over a week old (a date is more useful than "5w" there).
+     */
+    fun formatCompactRelativeTime(unixSeconds: Long): String {
+        val secondsAgo = System.currentTimeMillis() / 1000 - unixSeconds
+        return when {
+            secondsAgo < 10 -> "now"
+            secondsAgo < 60 -> "${secondsAgo}s"
+            secondsAgo < 3600 -> "${secondsAgo / 60}m"
+            secondsAgo < 86400 -> "${secondsAgo / 3600}h"
+            secondsAgo < 604800 -> "${secondsAgo / 86400}d"
+            else -> formatShortDate(unixSeconds)
+        }
+    }
+
+    /**
      * Format unix timestamp as full date/time
      * @param unixSeconds Unix timestamp in seconds
      * @return Formatted date string like "Oct 10, 2:35 PM"

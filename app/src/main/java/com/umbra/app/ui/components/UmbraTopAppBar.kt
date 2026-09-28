@@ -47,7 +47,10 @@ object UmbraTopAppBarDefaults {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun colors(): TopAppBarColors = TopAppBarDefaults.topAppBarColors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        // Chrome sits on the same void as the content — separation comes from the content's own
+        // hairlines, not a tinted slab across the top of every screen.
+        containerColor = MaterialTheme.colorScheme.background,
+        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
         titleContentColor = MaterialTheme.colorScheme.onSurface,
         navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
         actionIconContentColor = MaterialTheme.colorScheme.onSurface

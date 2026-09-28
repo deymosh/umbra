@@ -16,24 +16,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import app.cash.paparazzi.DeviceConfig
-import com.android.resources.NightMode
 import com.umbra.app.R
 import com.umbra.app.ui.components.EclipseMark
 import com.umbra.app.ui.components.UmbraIcons
 import com.umbra.app.ui.components.media.UserAvatar
-import org.junit.Rule
 import org.junit.Test
+import android.app.Application
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [SNAPSHOT_SDK], application = Application::class, qualifiers = PHONE)
 class BrandSnapshotTest {
-    @get:Rule
-    val paparazzi = umbraPaparazzi(
-        DeviceConfig.PIXEL_6.copy(nightMode = NightMode.NIGHT, screenHeight = 1400, softButtons = false)
-    )
-
     @Test
     fun brandSheet() {
-        paparazzi.snapshot {
+        snapshot("Brand_brandSheet") {
             SnapshotHost {
                 Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -60,7 +60,9 @@ class BrandSnapshotTest {
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         Icon(UmbraIcons.Onion, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(32.dp))
                         Icon(UmbraIcons.Eclipse, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                        Icon(UmbraIcons.Onion, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
+                        Icon(UmbraIcons.Onion, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(24.dp))
+                        Icon(UmbraIcons.Onion, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(16.dp))
+                        Icon(UmbraIcons.Onion, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(72.dp))
                     }
                 }
             }

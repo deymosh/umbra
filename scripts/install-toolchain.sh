@@ -28,7 +28,7 @@ esac
 mkdir -p "$TOOLCHAIN_DIR"
 
 # --- JDK 21 (Eclipse Temurin, via Adoptium's "latest GA" API) ---
-# Gradle itself runs on 21 (the Paparazzi snapshot plugin requires it); app bytecode
+# Gradle itself runs on 21 (Robolectric's SDK 36 runtime for UI snapshots needs it); app bytecode
 # still targets jvmTarget 17 via the Kotlin/Java compile options.
 if [ -x "$JDK_DIR/bin/java" ]; then
   echo "JDK already present at $JDK_DIR — skipping download"

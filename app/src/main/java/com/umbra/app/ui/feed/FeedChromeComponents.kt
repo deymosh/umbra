@@ -6,15 +6,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.sp
+import com.umbra.app.ui.components.NetworkStatusPill
 import androidx.compose.material3.Text
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
@@ -26,17 +29,13 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.umbra.app.R
 import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.ui.components.privateKeyboardOptions
 import com.umbra.app.ui.components.UmbraTopAppBar
-import com.umbra.app.ui.components.UmbraTopAppBarDefaults
 import com.umbra.app.ui.components.media.UserAvatar
-import com.umbra.app.ui.components.truncatePublicKey
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,6 +49,7 @@ internal fun FeedTopBar(
     isTorStarting: Boolean,
     onAvatarClick: () -> Unit,
     onToggleSearch: () -> Unit,
+    onStatusClick: (() -> Unit)? = null,
     userRepository: UserRepository? = null
 ) {
     UmbraTopAppBar(
@@ -57,35 +57,35 @@ internal fun FeedTopBar(
             UserAvatar(
                 userProfile = currentProfile,
                 pubkey = currentPubkey ?: "U",
-                size = 36.dp,
+                size = 34.dp,
                 shape = CircleShape,
                 authorPubkey = currentPubkey,
                 userRepository = userRepository,
                 modifier = Modifier
-                    .padding(start = 10.dp)
+                    .padding(start = 12.dp)
+                    .clip(CircleShape)
                     .clickable(onClick = onAvatarClick)
             )
         },
         title = {
+            // The wordmark, not the user's name: the avatar beside it already says who you are,
+            // and this is the one place the brand gets to speak.
             Text(
-                text = currentProfile?.getUserDisplayName()
-                    ?: currentPubkey?.truncatePublicKey(8, 8)
-                    ?: stringResource(R.string.app_name).lowercase(),
-                modifier = Modifier.padding(start = 6.dp),
-                style = MaterialTheme.typography.titleMedium,
-                fontFamily = FontFamily.Serif,
+                text = stringResource(R.string.app_name).lowercase(),
+                modifier = Modifier.padding(start = 8.dp),
+                style = MaterialTheme.typography.displaySmall.copy(fontSize = 30.sp, lineHeight = 32.sp),
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                maxLines = 1
             )
         },
         actions = {
-            RelayStatusBadge(
+            NetworkStatusPill(
+                isTorConnected = isTorConnected,
+                isTorStarting = isTorStarting,
                 relayCount = relayCount,
-                isConnected = isConnected
+                relaysConnected = isConnected,
+                onClick = onStatusClick
             )
-            Spacer(modifier = Modifier.width(4.dp))
-            TorStatusBadge(isTorConnected = isTorConnected, isTorStarting = isTorStarting)
             Spacer(modifier = Modifier.width(4.dp))
             IconButton(onClick = onToggleSearch) {
                 Icon(
@@ -94,8 +94,7 @@ internal fun FeedTopBar(
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             }
-        },
-        colors = UmbraTopAppBarDefaults.colors()
+        }
     )
 }
 
@@ -116,15 +115,15 @@ internal fun FeedSearchBar(
         }
     }
 
-    OutlinedTextField(
+    TextField(
         value = query,
         onValueChange = onQueryChange,
         modifier = Modifier
             .focusRequester(focusRequester)
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         singleLine = true,
-        shape = RoundedCornerShape(50),
+        shape = CircleShape,
         keyboardOptions = privateKeyboardOptions(KeyboardOptions.Default),
         placeholder = {
             Text(
@@ -150,9 +149,12 @@ internal fun FeedSearchBar(
                 }
             }
         } else null,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            cursorColor = MaterialTheme.colorScheme.primary
         )
     )
 }

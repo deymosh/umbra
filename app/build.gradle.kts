@@ -4,11 +4,27 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
-    alias(libs.plugins.paparazzi)
+    alias(libs.plugins.roborazzi)
 }
 
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+// UI snapshot goldens (see docs/UI_SNAPSHOTS.md): recordRoborazziDebug writes them here,
+// verifyRoborazziDebug diffs against them.
+roborazzi {
+    outputDir.set(file("src/test/snapshots"))
+}
+
+// Robolectric normally downloads its Android framework jar itself at test time, outside Gradle's
+// dependency resolution (no caching, no mirrors, fails behind rate limits). Resolve it through
+// Gradle instead and run Robolectric offline against it.
+val robolectricRuntime: Configuration by configurations.creating { isTransitive = false }
+val robolectricDependencyDir = layout.buildDirectory.dir("robolectric-deps")
+val prepareRobolectricRuntime by tasks.registering(Sync::class) {
+    from(robolectricRuntime)
+    into(robolectricDependencyDir)
 }
 
 android {
@@ -73,6 +89,24 @@ android {
             // to stub it per-test, so returning Android's default value (false/0/null) instead of
             // throwing is what lets a class that logs still be exercised by a plain JVM unit test.
             isReturnDefaultValues = true
+            // Merged resources (fonts, strings, drawables) for the Roborazzi UI snapshot tests.
+            // Those tests opt in to Robolectric's Android runtime via their own runner; every
+            // other unit test keeps running against the plain stubbed android.jar above.
+            isIncludeAndroidResources = true
+            all { test ->
+                test.dependsOn(prepareRobolectricRuntime)
+                test.systemProperty("robolectric.offline", "true")
+                test.systemProperty(
+                    "robolectric.dependency.dir",
+                    robolectricDependencyDir.get().asFile.absolutePath
+                )
+                // Robolectric reaches into java.io.FileDescriptor internals on JDK 17+ (via
+                // SharedSecrets on 21).
+                test.jvmArgs(
+                    "--add-opens=java.base/java.io=ALL-UNNAMED",
+                    "--add-exports=java.base/jdk.internal.access=ALL-UNNAMED"
+                )
+            }
         }
     }
 
@@ -144,6 +178,14 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
+    robolectricRuntime(libs.robolectric.android.all)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.roborazzi.junit.rule)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.ext.junit)

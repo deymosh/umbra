@@ -116,8 +116,8 @@ fun PubkeyEclipseAvatar(
     modifier: Modifier = Modifier
 ) {
     val (hue, angle) = remember(pubkey) { pubkeySeed(pubkey) }
-    val corona = remember(hue) { Color.hsl(hue, 0.62f, 0.74f) }
-    val background = remember(hue) { Color.hsl(hue, 0.35f, 0.13f) }
+    val corona = remember(hue) { Color.hsl(hue, 0.7f, 0.76f) }
+    val background = remember(hue) { Color.hsl(hue, 0.4f, 0.2f) }
     val flare = UmbraTheme.colors.zap
     Canvas(modifier) {
         drawRect(

@@ -4,21 +4,21 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import app.cash.paparazzi.DeviceConfig
-import com.android.resources.NightMode
 import com.umbra.app.ui.feed.EventCard
 import com.umbra.app.ui.components.QuickActionBottomBar
 import com.umbra.app.ui.components.EmptyState
 import com.umbra.app.ui.components.ErrorBanner
-import org.junit.Rule
 import org.junit.Test
+import android.app.Application
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [SNAPSHOT_SDK], application = Application::class, qualifiers = PHONE)
 class ComponentSnapshotTest {
-    @get:Rule
-    val paparazzi = umbraPaparazzi(
-        DeviceConfig.PIXEL_6.copy(nightMode = NightMode.NIGHT, screenHeight = 2400, softButtons = false)
-    )
-
     @Composable
     private fun Card(event: com.umbra.app.domain.nip01.Event, profile: com.umbra.app.domain.profile.UserProfile, liked: Boolean = false, replyToProfile: com.umbra.app.domain.profile.UserProfile? = null) {
         EventCard(
@@ -38,7 +38,7 @@ class ComponentSnapshotTest {
 
     @Test
     fun feedCards() {
-        paparazzi.snapshot {
+        snapshot("Component_feedCards") {
             SnapshotHost {
                 Column(Modifier.fillMaxWidth()) {
                     Card(SnapshotFixtures.textNote, SnapshotFixtures.alice, liked = true)
@@ -53,7 +53,7 @@ class ComponentSnapshotTest {
 
     @Test
     fun emptyState() {
-        paparazzi.snapshot {
+        snapshot("Component_emptyState") {
             SnapshotHost {
                 EmptyState(title = "No notes yet", message = "Connecting to relays over Tor…")
             }

@@ -15,36 +15,50 @@ import androidx.compose.ui.unit.dp
  */
 object UmbraIcons {
 
-    /** Tor: an onion's layered bulb — the circuit's layers of encryption. */
+    /**
+     * Tor: the onion — three nested layers around a solid core (the circuit's layers of
+     * encryption) with the stem and leaf that make the silhouette read as "onion" even at 16dp.
+     */
     val Onion: ImageVector by lazy {
         ImageVector.Builder("Onion", 24.dp, 24.dp, 24f, 24f).apply {
-            stroked {
-                // Outer bulb
-                moveTo(12f, 5.5f)
-                curveTo(16.2f, 8.2f, 19.5f, 11f, 19.5f, 14.5f)
-                curveTo(19.5f, 18.4f, 16.2f, 21f, 12f, 21f)
-                curveTo(7.8f, 21f, 4.5f, 18.4f, 4.5f, 14.5f)
-                curveTo(4.5f, 11f, 7.8f, 8.2f, 12f, 5.5f)
+            stroked(width = 1.6f) {
+                // Outer layer: wide bulb tapering to the neck.
+                moveTo(12f, 6.2f)
+                curveTo(16.6f, 8.4f, 20f, 11.2f, 20f, 14.9f)
+                curveTo(20f, 19f, 16.4f, 21.8f, 12f, 21.8f)
+                curveTo(7.6f, 21.8f, 4f, 19f, 4f, 14.9f)
+                curveTo(4f, 11.2f, 7.4f, 8.4f, 12f, 6.2f)
                 close()
             }
-            stroked {
-                // Middle layer
-                moveTo(12f, 8.6f)
-                curveTo(14.4f, 10.4f, 15.8f, 12.3f, 15.8f, 14.6f)
-                curveTo(15.8f, 16.9f, 14.2f, 18.4f, 12f, 18.4f)
-                curveTo(9.8f, 18.4f, 8.2f, 16.9f, 8.2f, 14.6f)
-                curveTo(8.2f, 12.3f, 9.6f, 10.4f, 12f, 8.6f)
+            stroked(width = 1.4f) {
+                // Middle layer.
+                moveTo(12f, 9.4f)
+                curveTo(15f, 11f, 16.8f, 12.8f, 16.8f, 15.2f)
+                curveTo(16.8f, 17.6f, 14.7f, 19.2f, 12f, 19.2f)
+                curveTo(9.3f, 19.2f, 7.2f, 17.6f, 7.2f, 15.2f)
+                curveTo(7.2f, 12.8f, 9f, 11f, 12f, 9.4f)
                 close()
             }
-            stroked {
-                // Core
-                moveTo(12f, 12f)
-                verticalLineTo(15.8f)
+            path(fill = SolidColor(Color.Black)) {
+                // Solid core.
+                moveTo(12f, 12.6f)
+                curveTo(13.5f, 13.5f, 14.2f, 14.4f, 14.2f, 15.4f)
+                curveTo(14.2f, 16.5f, 13.2f, 17.1f, 12f, 17.1f)
+                curveTo(10.8f, 17.1f, 9.8f, 16.5f, 9.8f, 15.4f)
+                curveTo(9.8f, 14.4f, 10.5f, 13.5f, 12f, 12.6f)
+                close()
             }
-            stroked {
-                // Sprout
-                moveTo(12f, 5.5f)
-                curveTo(12f, 4.2f, 12.8f, 3.2f, 14.3f, 2.8f)
+            stroked(width = 1.6f) {
+                // Stem.
+                moveTo(12f, 6.2f)
+                verticalLineTo(3.4f)
+            }
+            path(fill = SolidColor(Color.Black)) {
+                // Leaf curling off the stem.
+                moveTo(12f, 4.6f)
+                curveTo(12.6f, 2.8f, 14.4f, 2f, 16.4f, 2.3f)
+                curveTo(15.9f, 4.2f, 14.1f, 5.2f, 12f, 4.6f)
+                close()
             }
         }.build()
     }
@@ -64,11 +78,14 @@ object UmbraIcons {
         }.build()
     }
 
-    private inline fun ImageVector.Builder.stroked(block: androidx.compose.ui.graphics.vector.PathBuilder.() -> Unit) {
+    private inline fun ImageVector.Builder.stroked(
+        width: Float = 1.8f,
+        block: androidx.compose.ui.graphics.vector.PathBuilder.() -> Unit
+    ) {
         path(
             fill = null,
             stroke = SolidColor(Color.Black),
-            strokeLineWidth = 1.8f,
+            strokeLineWidth = width,
             strokeLineCap = StrokeCap.Round,
             strokeLineJoin = StrokeJoin.Round,
             pathBuilder = block
