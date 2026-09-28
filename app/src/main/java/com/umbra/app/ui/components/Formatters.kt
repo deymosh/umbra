@@ -78,7 +78,7 @@ object TimeFormatter {
  * Truncate public key for display
  */
 fun String.truncatePublicKey(start: Int = 6, end: Int = 4): String {
-    return if (this.length <= start + end + 2) this else "${take(start)}...${takeLast(end)}"
+    return if (this.length <= start + end + 1) this else "${take(start)}…${takeLast(end)}"
 }
 
 /**

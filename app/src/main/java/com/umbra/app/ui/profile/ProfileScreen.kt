@@ -1,5 +1,23 @@
 package com.umbra.app.ui.profile
 
+import kotlin.math.roundToInt
+import com.umbra.app.ui.components.ShowMoreLessToggle
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.foundation.gestures.Orientation
 import android.content.ClipData
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -73,7 +91,6 @@ import com.umbra.app.ui.components.EmptyState
 import com.umbra.app.ui.components.ErrorBanner
 import com.umbra.app.ui.components.ExternalUrlWarningDialog
 import com.umbra.app.ui.components.LoadingSpinner
-import com.umbra.app.ui.components.NotesTimelineContainer
 import com.umbra.app.domain.nip05.Nip05VerificationState
 import com.umbra.app.ui.components.HASHTAG_REGEX
 import com.umbra.app.ui.components.URL_REGEX
@@ -92,7 +109,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-private enum class ProfileTab {
+internal enum class ProfileTab {
     NOTES,
     REPLIES,
     FOLLOWS,
@@ -142,7 +159,25 @@ fun ProfileScreen(
         }
     }
 
-    val listState = rememberLazyListState()
+    val tabs = remember(isOwnProfile) {
+        buildList {
+            add(ProfileTab.NOTES)
+            add(ProfileTab.REPLIES)
+            add(ProfileTab.FOLLOWS)
+            add(ProfileTab.RELAYS)
+            if (isOwnProfile) {
+                add(ProfileTab.MUTES)
+                add(ProfileTab.PINNED)
+            }
+        }
+    }
+    val pagerState = rememberPagerState(initialPage = tabs.indexOf(selectedTab).coerceAtLeast(0)) { tabs.size }
+    LaunchedEffect(pagerState, tabs) {
+        snapshotFlow { pagerState.currentPage }.collect { page -> selectedTab = tabs[page] }
+    }
+    // One list per tab so each keeps its own scroll position while swiping between them.
+    val listStates = tabs.associateWith { rememberLazyListState() }
+    val listState = listStates.getValue(selectedTab)
     LaunchedEffect(listState, selectedTab) {
         snapshotFlow {
             val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
@@ -215,15 +250,13 @@ fun ProfileScreen(
         )
     }
 
-    val visibleNotes = when (selectedTab) {
+    fun notesFor(tab: ProfileTab) = when (tab) {
         ProfileTab.NOTES -> topLevelNotes
         ProfileTab.REPLIES -> replyNotes
         ProfileTab.PINNED -> state.pinnedNotes
         else -> emptyList()
     }
-    val threadDepthByEventId = remember(visibleNotes, eventsById) {
-        buildThreadDepthByEventId(visibleNotes, eventsById)
-    }
+    val visibleNotes = notesFor(selectedTab)
     val pinnedEventIds = remember(state.pinnedNotes) { state.pinnedNotes.mapTo(HashSet()) { it.id } }
     // pinnedEventIds is a plain remember(key) val, not a State-delegate read — rememberUpdatedState
     // gives the permanently-stable lambda below a way to always see the latest set without being
@@ -231,14 +264,15 @@ fun ProfileScreen(
     val currentPinnedEventIds by rememberUpdatedState(pinnedEventIds)
     val isPinnedForEventStable = remember { { eventId: String -> currentPinnedEventIds.contains(eventId) } }
     val latestVisibleNotes by rememberUpdatedState(visibleNotes)
-    val notesSectionStartIndex = remember(state.errorMessage, selectedTab) {
-        // Optional error banner + ProfileHero + ProfileTabsRow before notes section.
-        (if (state.errorMessage != null) 1 else 0) + 2
-    }
-    val emptyNotesTitle = when (selectedTab) {
-        ProfileTab.REPLIES -> stringResource(R.string.profile_no_replies_yet)
-        ProfileTab.PINNED -> stringResource(R.string.profile_no_pins)
-        else -> stringResource(R.string.no_notes_yet)
+    // Each tab's list holds only that tab's rows now (the header lives outside the pager).
+    val notesSectionStartIndex = 0
+    val noNotesTitle = stringResource(R.string.no_notes_yet)
+    val noRepliesTitle = stringResource(R.string.profile_no_replies_yet)
+    val noPinsTitle = stringResource(R.string.profile_no_pins)
+    fun emptyTitleFor(tab: ProfileTab) = when (tab) {
+        ProfileTab.REPLIES -> noRepliesTitle
+        ProfileTab.PINNED -> noPinsTitle
+        else -> noNotesTitle
     }
 
     LaunchedEffect(listState, selectedTab, notesSectionStartIndex) {
@@ -263,106 +297,92 @@ fun ProfileScreen(
             }
     }
 
+    val density = LocalDensity.current
+    // Collapsing header: the hero (banner, identity, bio) scrolls away first, then the active
+    // tab's list scrolls; the tab bar stays pinned. heroHeightPx is how far it can collapse.
+    var heroHeightPx by remember { mutableIntStateOf(0) }
+    var tabBarHeightPx by remember { mutableIntStateOf(0) }
+    var headerOffsetPx by remember { mutableFloatStateOf(0f) }
+    val headerConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y >= 0f) return Offset.Zero
+                val newOffset = (headerOffsetPx + available.y).coerceIn(-heroHeightPx.toFloat(), 0f)
+                val consumed = newOffset - headerOffsetPx
+                headerOffsetPx = newOffset
+                return Offset(0f, consumed)
+            }
+
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (available.y <= 0f) return Offset.Zero
+                val newOffset = (headerOffsetPx + available.y).coerceIn(-heroHeightPx.toFloat(), 0f)
+                val used = newOffset - headerOffsetPx
+                headerOffsetPx = newOffset
+                return Offset(0f, used)
+            }
+        }
+    }
+    // Drags that start on the header itself (it's most of the first screen) scroll too, with
+    // fling: collapse the header first, then hand the rest to the active tab's list.
+    val currentListState by rememberUpdatedState(listState)
+    val headerScrollState = rememberScrollableState { delta ->
+        if (delta < 0f) {
+            val newOffset = (headerOffsetPx + delta).coerceIn(-heroHeightPx.toFloat(), 0f)
+            val collapsed = newOffset - headerOffsetPx
+            headerOffsetPx = newOffset
+            collapsed - currentListState.dispatchRawDelta(-(delta - collapsed))
+        } else {
+            val listConsumed = -currentListState.dispatchRawDelta(-delta)
+            val remaining = delta - listConsumed
+            val newOffset = (headerOffsetPx + remaining).coerceIn(-heroHeightPx.toFloat(), 0f)
+            val expanded = newOffset - headerOffsetPx
+            headerOffsetPx = newOffset
+            listConsumed + expanded
+        }
+    }
+    val collapseFraction = if (heroHeightPx > 0) (-headerOffsetPx / heroHeightPx).coerceIn(0f, 1f) else 0f
+    val listTopPadding = with(density) { (heroHeightPx + tabBarHeightPx).toDp() }
+
+    // When switching tabs with the header collapsed, bring the new tab's list level with it
+    // instead of showing an empty band where the header used to be.
+    LaunchedEffect(pagerState.settledPage) {
+        val collapsedBy = (-headerOffsetPx).toInt()
+        val state = listStates.getValue(tabs[pagerState.settledPage])
+        if (collapsedBy > 0 && state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset < collapsedBy) {
+            state.scrollToItem(0, collapsedBy)
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .nestedScroll(headerConnection)
     ) {
-        NotesTimelineContainer(
-            listState = listState,
+        HorizontalPager(
+            state = pagerState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 80.dp),
-            listHorizontalPadding = 0.dp,
-            listVerticalPadding = 0.dp,
-            verticalArrangement = Arrangement.Top,
-            bottomOverlay = {
-                // NotesTimelineContainer owns BottomCenter alignment for this slot (so it can
-                // measure the bar's real height and reserve matching list padding) — don't
-                // re-align here.
-                QuickActionBottomBar(
-                    modifier = Modifier
-                        .padding(bottom = 6.dp)
-                        .zIndex(2f),
-                    onGoTop = { scope.launch { listState.scrollToItem(0) } },
-                    onCompose = { navController.navigate(Screen.Composer.new()) },
-                    onRelays = { navController.navigate(Screen.RelayConfig.route) },
-                    onSettings = {
-                        navController.navigate(Screen.Settings.route) {
-                            launchSingleTop = true
-                        }
-                    }
-                )
+            key = { tabs[it].name },
+            beyondViewportPageCount = 1
+        ) { page ->
+            val pageTab = tabs[page]
+            val pageNotes = notesFor(pageTab)
+            val pageThreadDepth = remember(pageNotes, eventsById) {
+                buildThreadDepthByEventId(pageNotes, eventsById)
             }
-        ) {
-            state.errorMessage?.let { message ->
-                item {
-                    ErrorBanner(
-                        message = message.resolve(context),
-                        onDismiss = { viewModel.clearError() }
-                    )
-                }
-            }
-
-            item {
-                ProfileHero(
-                    profile = profile,
-                    pubkey = viewModel.pubkey,
-                    canSign = canSign,
-                    isOwnProfile = isOwnProfile,
-                    isFollowing = state.isFollowing,
-                    isFollowActionInFlight = state.isFollowActionInFlight,
-                    followersCount = state.followersCount,
-                    onToggleFollow = { viewModel.toggleFollow() },
-                    onEditProfile = { navController.navigate(Screen.EditProfile.route) },
-                    onMuteUser = { viewModel.muteUser(viewModel.pubkey) },
-                    npub = npub,
-                    onCopyHex = {
-                        scope.launch {
-                            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(null, viewModel.pubkey)))
-                        }
-                        Toast.makeText(context, context.getString(R.string.copy_hex_toast), Toast.LENGTH_SHORT).show()
-                    },
-                    onCopyNpub = {
-                        scope.launch {
-                            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(null, npub)))
-                        }
-                        Toast.makeText(context, context.getString(R.string.copy_npub_toast), Toast.LENGTH_SHORT).show()
-                    },
-                    onWebsiteClick = { url -> pendingExternalUrl = normalizeExternalUrl(url) },
-                    onBioUrlClick = { url -> pendingExternalUrl = normalizeExternalUrl(url) },
-                    userRepository = viewModel.userRepositoryPublic
-                )
-            }
-
-            item {
-                val relaysCount = if (isOwnProfile) {
-                    state.relayStats.total
-                } else {
-                    (state.targetOutboxRelays + state.targetInboxRelays + state.targetDmRelays)
-                        .toSet().size
-                }
-                ProfileTabsRow(
-                    selectedTab = selectedTab,
-                    notesCount = state.totalNotesCount,
-                    repliesCount = replyNotes.size,
-                    followsCount = state.followedPubkeys.size,
-                    relaysCount = relaysCount,
-                    mutesCount = state.mutedPubkeys.size,
-                    showMutes = isOwnProfile,
-                    pinsCount = state.pinnedNotes.size,
-                    showPins = isOwnProfile,
-                    onSelect = { selectedTab = it }
-                )
-            }
-
-            when (selectedTab) {
+            LazyColumn(
+                state = listStates.getValue(pageTab),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(top = listTopPadding, bottom = 112.dp)
+            ) {
+            when (pageTab) {
                 ProfileTab.NOTES,
                 ProfileTab.REPLIES,
                 ProfileTab.PINNED -> {
                     notesFeedSection(
-                        notes = visibleNotes,
+                        notes = pageNotes,
                         eventsById = eventsById,
-                        threadDepthByEventId = threadDepthByEventId,
+                        threadDepthByEventId = pageThreadDepth,
                         profileForPubkey = resolveProfileForPubkey,
                         userRepository = viewModel.userRepositoryPublic,
                         replyCounts = state.replyCounts,
@@ -372,12 +392,12 @@ fun ProfileScreen(
                         repostedAtForEvent = state.repostedAtByEvent,
                         repostEventForEvent = state.repostEventByEvent,
                         pendingReposts = state.pendingReposts,
-                        isLoading = selectedTab != ProfileTab.PINNED && state.isLoading,
-                        isLoadingMore = selectedTab != ProfileTab.PINNED && state.isLoadingMore,
-                        noOlderNotesFound = selectedTab != ProfileTab.PINNED && state.olderNotesExhausted,
+                        isLoading = pageTab != ProfileTab.PINNED && state.isLoading,
+                        isLoadingMore = pageTab != ProfileTab.PINNED && state.isLoadingMore,
+                        noOlderNotesFound = pageTab != ProfileTab.PINNED && state.olderNotesExhausted,
                         // The tab row already shows the count; a second header line repeated it.
                         notesHeaderText = null,
-                        emptyTitle = emptyNotesTitle,
+                        emptyTitle = emptyTitleFor(pageTab),
                         showBottomSpacer = true,
                         torDataSourceFactory = viewModel.mediaCacheDataSourceFactory,
                         enableEventClick = true,
@@ -426,7 +446,6 @@ fun ProfileScreen(
                                 onClick = { navController.navigate(Screen.Profile.forPubkey(followedPubkey)) }
                             )
                         }
-                        item { Spacer(modifier = Modifier.height(92.dp)) }
                     }
                 }
 
@@ -482,8 +501,7 @@ fun ProfileScreen(
                                     RelaySummaryRow(relay = relay)
                                 }
                             }
-                            item { Spacer(modifier = Modifier.height(92.dp)) }
-                        }
+                            }
                     } else {
                         // Other user: show their published relay lists (NIP-65 + NIP-17)
                         val allTargetRelays = (
@@ -530,8 +548,7 @@ fun ProfileScreen(
                                     RelayUrlRow(url = url)
                                 }
                             }
-                            item { Spacer(modifier = Modifier.height(92.dp)) }
-                        }
+                            }
                     }
                 }
 
@@ -575,17 +592,116 @@ fun ProfileScreen(
                                 }
                             }
                         }
-                        item { Spacer(modifier = Modifier.height(92.dp)) }
                     }
                 }
             }
+            }
         }
-    }
 
+        // Header: hero + pinned tab bar, translated up as the page scrolls.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { IntOffset(0, headerOffsetPx.roundToInt()) }
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onSizeChanged { heroHeightPx = it.height }
+                    .scrollable(headerScrollState, Orientation.Vertical)
+            ) {
+                ProfileHero(
+                    profile = profile,
+                    pubkey = viewModel.pubkey,
+                    canSign = canSign,
+                    isOwnProfile = isOwnProfile,
+                    isFollowing = state.isFollowing,
+                    isFollowActionInFlight = state.isFollowActionInFlight,
+                    followersCount = state.followersCount,
+                    followingCount = state.followedPubkeys.size,
+                    onFollowingClick = {
+                        scope.launch { pagerState.animateScrollToPage(tabs.indexOf(ProfileTab.FOLLOWS)) }
+                    },
+                    onToggleFollow = { viewModel.toggleFollow() },
+                    onEditProfile = { navController.navigate(Screen.EditProfile.route) },
+                    onMuteUser = { viewModel.muteUser(viewModel.pubkey) },
+                    npub = npub,
+                    onCopyHex = {
+                        scope.launch {
+                            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(null, viewModel.pubkey)))
+                        }
+                        Toast.makeText(context, context.getString(R.string.copy_hex_toast), Toast.LENGTH_SHORT).show()
+                    },
+                    onCopyNpub = {
+                        scope.launch {
+                            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(null, npub)))
+                        }
+                        Toast.makeText(context, context.getString(R.string.copy_npub_toast), Toast.LENGTH_SHORT).show()
+                    },
+                    onWebsiteClick = { url -> pendingExternalUrl = normalizeExternalUrl(url) },
+                    onBioUrlClick = { url -> pendingExternalUrl = normalizeExternalUrl(url) },
+                    userRepository = viewModel.userRepositoryPublic
+                )
+                state.errorMessage?.let { message ->
+                    ErrorBanner(
+                        message = message.resolve(context),
+                        onDismiss = { viewModel.clearError() }
+                    )
+                }
+            }
+            val relaysCount = if (isOwnProfile) {
+                state.relayStats.total
+            } else {
+                (state.targetOutboxRelays + state.targetInboxRelays + state.targetDmRelays).toSet().size
+            }
+            ProfileTabBar(
+                tabs = tabs,
+                selectedIndex = pagerState.currentPage,
+                countFor = { tab ->
+                    when (tab) {
+                        ProfileTab.NOTES -> state.totalNotesCount
+                        ProfileTab.REPLIES -> replyNotes.size
+                        ProfileTab.FOLLOWS -> state.followedPubkeys.size
+                        ProfileTab.RELAYS -> relaysCount
+                        ProfileTab.MUTES -> state.mutedPubkeys.size
+                        ProfileTab.PINNED -> state.pinnedNotes.size
+                    }
+                },
+                onSelect = { index -> scope.launch { pagerState.animateScrollToPage(index) } },
+                modifier = Modifier.onSizeChanged { tabBarHeightPx = it.height }
+            )
+        }
+
+        ProfileTopOverlay(
+            title = profile?.getUserDisplayName() ?: viewModel.pubkey.truncatePublicKey(),
+            collapseFraction = collapseFraction,
+            onBack = { navController.popBackStack() }
+        )
+
+        QuickActionBottomBar(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .zIndex(2f),
+            onGoTop = {
+                scope.launch {
+                    listState.scrollToItem(0)
+                    headerOffsetPx = 0f
+                }
+            },
+            onCompose = { navController.navigate(Screen.Composer.new()) },
+            onRelays = { navController.navigate(Screen.RelayConfig.route) },
+            onSettings = {
+                navController.navigate(Screen.Settings.route) {
+                    launchSingleTop = true
+                }
+            }
+        )
+    }
 }
 
 @Composable
-private fun ProfileHero(
+internal fun ProfileHero(
     profile: UserProfile?,
     pubkey: String,
     canSign: Boolean,
@@ -593,6 +709,8 @@ private fun ProfileHero(
     isFollowing: Boolean,
     isFollowActionInFlight: Boolean,
     followersCount: Int?,
+    followingCount: Int,
+    onFollowingClick: () -> Unit,
     onToggleFollow: () -> Unit,
     onEditProfile: () -> Unit,
     onMuteUser: () -> Unit,
@@ -793,22 +911,27 @@ private fun ProfileHero(
                 )
             }
 
+            // Who they follow / who follows them — one line, tapping "following" opens that tab.
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                ProfileStat(
+                    count = followingCount,
+                    label = stringResource(R.string.profile_stat_following),
+                    onClick = onFollowingClick
+                )
+                // Best-effort NIP-45 COUNT across relays that advertise support; hidden until at
+                // least one has actually answered, so we never flash a false "0".
+                followersCount?.let { count ->
+                    ProfileStat(count = count, label = stringResource(R.string.profile_stat_followers))
+                }
+            }
+
             val lightning = profile?.lud16 ?: profile?.lud06
             val website = profile?.website?.takeIf { it.isNotBlank() }
-            if (website != null || !lightning.isNullOrBlank() || followersCount != null) {
+            if (website != null || !lightning.isNullOrBlank()) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Best-effort NIP-45 COUNT across relays that advertise support; null (hidden)
-                    // until at least one has actually answered, so we never flash a false "0".
-                    followersCount?.let { count ->
-                        Text(
-                            text = stringResource(R.string.profile_followers_count, count),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
                     if (website != null) {
                         IdentityTagRow(
                             icon = Icons.Outlined.Link,
@@ -834,7 +957,7 @@ private fun ProfileHero(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 KeyChip(
                     label = stringResource(R.string.npub_label),
-                    value = npub.truncatePublicKey(10, 6),
+                    value = npub.truncatePublicKey(9, 5),
                     onCopy = onCopyNpub,
                     modifier = Modifier.weight(1f)
                 )
@@ -849,6 +972,22 @@ private fun ProfileHero(
 }
 
 private val ProfileBannerHeight = 150.dp
+
+@Composable
+private fun ProfileStat(count: Int, label: String, onClick: (() -> Unit)? = null) {
+    Row(
+        modifier = if (onClick != null) Modifier.clip(MaterialTheme.shapes.extraSmall).clickable(onClick = onClick) else Modifier,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = formatCount(count),
+            style = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = "tnum"),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(text = label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
 private val ProfileAvatarSize = 88.dp
 
 /** A copyable identifier: tiny label, the value in mono, and a copy affordance. */
@@ -890,54 +1029,47 @@ private fun KeyChip(
     }
 }
 
+/**
+ * Swipeable-pager tab bar: a scrollable row with a sliding corona indicator under the current
+ * tab; tapping animates the pager, swiping the pager moves the indicator.
+ */
 @Composable
-private fun ProfileTabsRow(
-    selectedTab: ProfileTab,
-    notesCount: Int,
-    repliesCount: Int,
-    followsCount: Int,
-    relaysCount: Int,
-    mutesCount: Int,
-    showMutes: Boolean,
-    pinsCount: Int,
-    showPins: Boolean,
-    onSelect: (ProfileTab) -> Unit
+internal fun ProfileTabBar(
+    tabs: List<ProfileTab>,
+    selectedIndex: Int,
+    countFor: (ProfileTab) -> Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val tabs = buildList {
-        add(Triple(ProfileTab.NOTES, stringResource(R.string.profile_tab_notes), notesCount))
-        add(Triple(ProfileTab.REPLIES, stringResource(R.string.profile_tab_replies), repliesCount))
-        add(Triple(ProfileTab.FOLLOWS, stringResource(R.string.profile_tab_follows), followsCount))
-        add(Triple(ProfileTab.RELAYS, stringResource(R.string.profile_tab_relays), relaysCount))
-        if (showMutes) add(Triple(ProfileTab.MUTES, stringResource(R.string.profile_tab_mutes), mutesCount))
-        if (showPins) add(Triple(ProfileTab.PINNED, stringResource(R.string.profile_tab_pins), pinsCount))
-    }
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            tabs.forEach { (tab, label, count) ->
-                val selected = selectedTab == tab
-                Column(
-                    modifier = Modifier
-                        .clip(MaterialTheme.shapes.small)
-                        .clickable { onSelect(tab) }
-                        .padding(horizontal = 10.dp)
-                        .padding(top = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+    PrimaryScrollableTabRow(
+        selectedTabIndex = selectedIndex,
+        modifier = modifier.fillMaxWidth(),
+        edgePadding = 8.dp,
+        containerColor = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        indicator = {
+            TabRowDefaults.PrimaryIndicator(
+                modifier = Modifier.tabIndicatorOffset(selectedIndex, matchContentSize = true),
+                width = Dp.Unspecified,
+                color = UmbraTheme.colors.corona
+            )
+        },
+        divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
+    ) {
+        tabs.forEachIndexed { index, tab ->
+            val selected = index == selectedIndex
+            val count = countFor(tab)
+            Tab(
+                selected = selected,
+                onClick = { onSelect(index) },
+                selectedContentColor = MaterialTheme.colorScheme.onSurface,
+                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text(stringResource(tab.labelRes()), style = MaterialTheme.typography.titleSmall)
                         if (count > 0) {
                             Text(
                                 text = formatCount(count),
@@ -946,18 +1078,61 @@ private fun ProfileTabsRow(
                             )
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
-                    Box(
-                        modifier = Modifier
-                            .height(3.dp)
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
-                            .background(if (selected) UmbraTheme.colors.corona else Color.Transparent)
-                    )
                 }
-            }
+            )
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
+}
+
+private fun ProfileTab.labelRes(): Int = when (this) {
+    ProfileTab.NOTES -> R.string.profile_tab_notes
+    ProfileTab.REPLIES -> R.string.profile_tab_replies
+    ProfileTab.FOLLOWS -> R.string.profile_tab_follows
+    ProfileTab.RELAYS -> R.string.profile_tab_relays
+    ProfileTab.MUTES -> R.string.profile_tab_mutes
+    ProfileTab.PINNED -> R.string.profile_tab_pins
+}
+
+/**
+ * Back button floating over the banner (scrim circle so it reads on any image), which becomes a
+ * compact title bar with the person's name once the header has scrolled away.
+ */
+@Composable
+internal fun ProfileTopOverlay(
+    title: String,
+    collapseFraction: Float,
+    onBack: () -> Unit
+) {
+    val barAlpha = ((collapseFraction - 0.75f) / 0.25f).coerceIn(0f, 1f)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background.copy(alpha = barAlpha))
+            .statusBarsPadding()
+            .height(56.dp)
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .size(40.dp)
+                .background(Color.Black.copy(alpha = 0.45f * (1f - barAlpha)), CircleShape)
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = stringResource(R.string.back),
+                tint = Color.White.copy(alpha = 1f - barAlpha).compositeOver(MaterialTheme.colorScheme.onSurface.copy(alpha = barAlpha))
+            )
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = barAlpha),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -1193,13 +1368,21 @@ private fun HashtagAwareBio(
         if (cursor < text.length) append(text.substring(cursor))
     }
 
-    Text(
-        text = annotated,
-        style = MaterialTheme.typography.bodyMedium.copy(
-            color = MaterialTheme.colorScheme.onSurface
-        ),
-        modifier = modifier
-    )
+    // Long bios collapse to a few lines so the notes stay reachable; one tap expands.
+    var expanded by remember(text) { mutableStateOf(false) }
+    var overflows by remember(text) { mutableStateOf(false) }
+    Column(modifier = modifier) {
+        Text(
+            text = annotated,
+            style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+            maxLines = if (expanded) Int.MAX_VALUE else 5,
+            overflow = TextOverflow.Ellipsis,
+            onTextLayout = { if (!expanded) overflows = it.hasVisualOverflow }
+        )
+        if (overflows || expanded) {
+            ShowMoreLessToggle(isExpanded = expanded, onToggle = { expanded = !expanded })
+        }
+    }
 }
 
 

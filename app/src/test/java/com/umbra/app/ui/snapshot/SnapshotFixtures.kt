@@ -29,7 +29,9 @@ internal object SnapshotFixtures {
         name = "alice",
         displayName = "Alice Moreau",
         nip05 = "alice@umbra.social",
-        about = "Cryptographer. Night-sky photographer. Running relays over onion services since before it was cool.",
+        about = "Cryptographer. Night-sky photographer. Running relays over onion services since before it was cool.\n\nChasing totality around the world — next stop 2027. #eclipse #nostr",
+        website = "https://alice.example",
+        lud16 = "alice@getalby.com",
         nip05VerificationState = Nip05VerificationState.Verified
     )
     val bob = UserProfile(pubkey = BOB, name = "bob", displayName = "Bob Kade", nip05 = "_@kade.dev")
