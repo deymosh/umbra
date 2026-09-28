@@ -17,6 +17,7 @@ import com.umbra.app.domain.nip92.MediaDimensions
 import com.umbra.app.domain.nipb7.DefaultBlossomServer
 import com.umbra.app.domain.preferences.UserPreferences
 import com.umbra.app.domain.profile.UserProfile
+import com.umbra.app.domain.repository.DraftRepository
 import com.umbra.app.domain.repository.EventRepository
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.usecase.BlossomUploadResult
@@ -49,6 +50,7 @@ private const val TAG = "UmbraComposerVM"
 private const val CONTENT_RESOLVE_DEBOUNCE_MS = 400L
 private const val MENTION_QUERY_DEBOUNCE_MS = 250L
 private const val MENTION_SUGGESTION_LIMIT = 8
+private const val DRAFT_SAVE_DEBOUNCE_MS = 500L
 private const val DRAFT_EVENT_ID = "composer-draft"
 
 /** Start index (in the raw text) of an in-progress "@query" the caret is currently inside. */
@@ -135,7 +137,8 @@ class ComposerViewModel @Inject constructor(
     private val publishSignedEventUseCase: PublishSignedEventUseCase,
     private val trackReferencedAuthorUseCase: TrackReferencedAuthorUseCase,
     private val uploadBlossomBlobUseCase: UploadBlossomBlobUseCase,
-    private val videoCacheDataSourceProvider: VideoCacheDataSourceProvider
+    private val videoCacheDataSourceProvider: VideoCacheDataSourceProvider,
+    private val draftRepository: DraftRepository
 ) : ViewModel() {
 
     val mediaCacheDataSourceFactory get() = videoCacheDataSourceProvider.getCacheDataSourceFactory()
@@ -145,6 +148,13 @@ class ComposerViewModel @Inject constructor(
     private val quoteEventId: String? = savedStateHandle.get<String>("quote")
 
     val textState = TextFieldState()
+
+    // Quotes are prefilled from their target, so only new notes and replies keep a draft.
+    private val draftKey: String? = when {
+        quoteEventId != null -> null
+        replyToEventId != null -> "reply:$replyToEventId"
+        else -> "new"
+    }
 
     private val logger = UmbraLog.tag(TAG)
 
@@ -169,6 +179,21 @@ class ComposerViewModel @Inject constructor(
                 userRepository.observeProfile(pubkey).collectLatest { profile ->
                     _state.update { it.copy(currentUserProfile = profile) }
                 }
+            }
+        }
+
+        draftKey?.let(draftRepository::load)?.let { draft ->
+            textState.edit {
+                replace(0, length, draft)
+                selection = TextRange(draft.length)
+            }
+        }
+        if (draftKey != null) {
+            viewModelScope.launch {
+                snapshotFlow { textState.text.toString() }
+                    .debounce(DRAFT_SAVE_DEBOUNCE_MS)
+                    .distinctUntilChanged()
+                    .collectLatest { draftRepository.save(draftKey, it) }
             }
         }
 
@@ -418,6 +443,7 @@ class ComposerViewModel @Inject constructor(
             }
             if (signed != null) {
                 publishSignedEventUseCase(signed)
+                draftKey?.let(draftRepository::clear)
                 _published.emit(Unit)
             }
             _state.update { it.copy(isPublishing = false) }

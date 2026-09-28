@@ -43,6 +43,8 @@ object NostrChannels {
     const val THREAD_PREFIX = "thread"
     // One-shot NIP-A3 payment-target lookup for the recipient of an open zap sheet.
     const val PAYMENT_TARGETS_PREFIX = "payto"
+    // One per open hashtag feed.
+    const val HASHTAG_PREFIX = "hashtag"
     const val DEFAULT_EVENTS = "default-events"
 
     // Public (not private) so SubscriptionType.fromChannelId can classify dynamic, per-pubkey
@@ -118,4 +120,6 @@ object NostrChannels {
     fun thread(anchorId: String): String = "$THREAD_PREFIX-${anchorId.take(16)}"
 
     fun paymentTargets(pubkey: String): String = "$PAYMENT_TARGETS_PREFIX-${pubkey.take(16)}"
+
+    fun hashtag(tag: String): String = "$HASHTAG_PREFIX-${tag.lowercase().take(32)}"
 }

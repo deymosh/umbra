@@ -101,6 +101,7 @@ enum class SubscriptionType(val family: SubscriptionFamily) {
                 channelId.startsWith(NostrChannels.SEARCH) -> SEARCH_NOTES
                 channelId.startsWith(NostrChannels.THREAD_PREFIX) -> EVENT_INTERACTIONS
                 channelId.startsWith(NostrChannels.PAYMENT_TARGETS_PREFIX) -> PROFILE_LOOKUP
+                channelId.startsWith(NostrChannels.HASHTAG_PREFIX) -> SEARCH_NOTES
                 channelId.startsWith(NostrChannels.REFERENCED_AUTHOR_HYDRATION_PREFIX) -> PROFILE_LOOKUP
                 channelId.startsWith(NostrChannels.PROFILE_BACKFILL_NOTES_PREFIX) -> PROFILE_BACKFILL
                 channelId.startsWith(NostrChannels.PROFILE_BACKFILL_METADATA_PREFIX) ||

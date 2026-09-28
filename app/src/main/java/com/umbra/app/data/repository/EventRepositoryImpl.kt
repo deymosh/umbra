@@ -1456,19 +1456,26 @@ class EventRepositoryImpl @Inject constructor(
             }.distinctUntilChanged().flowOn(Dispatchers.Default)
         }
 
-    override fun observeInbox(pubkey: String, limit: Int): Flow<List<Event>> {
-        val normalized = pubkey.lowercase()
-        return eventIngestCache.cachedEventsFlow.map { events ->
+    override fun observeInbox(pubkey: String, limit: Int): Flow<List<Event>> =
+        observeCachedEvents(limit) { event ->
+            !event.pubkey.equals(pubkey, ignoreCase = true) && event.hasTag("p", pubkey)
+        }
+
+    override fun observeEventsWithTag(tagName: String, value: String, kinds: Set<Int>, limit: Int): Flow<List<Event>> =
+        observeCachedEvents(limit) { event -> event.kind in kinds && event.hasTag(tagName, value) }
+
+    /** Newest-first slice of the in-memory event cache matching [predicate]. */
+    private fun observeCachedEvents(limit: Int, predicate: (Event) -> Boolean): Flow<List<Event>> =
+        eventIngestCache.cachedEventsFlow.map { events ->
             events.asSequence()
-                .filter { event ->
-                    !event.pubkey.equals(normalized, ignoreCase = true) &&
-                        event.tags.any { it.size >= 2 && it[0] == "p" && it[1].equals(normalized, ignoreCase = true) }
-                }
+                .filter(predicate)
                 .sortedWith(compareByDescending<Event> { it.createdAt }.thenBy { it.id })
                 .take(limit)
                 .toList()
         }.distinctUntilChanged().flowOn(Dispatchers.Default)
-    }
+
+    private fun Event.hasTag(name: String, value: String): Boolean =
+        tags.any { it.size >= 2 && it[0] == name && it[1].equals(value, ignoreCase = true) }
 
     override fun observeCountEventsByPubkeyAndKind(pubkey: String, kind: Int): Flow<Int> =
         if (isCurrentUserPubkey(pubkey)) {

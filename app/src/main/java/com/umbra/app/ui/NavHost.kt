@@ -47,6 +47,10 @@ import com.umbra.app.ui.components.BroadcastBanner
 import com.umbra.app.ui.composer.ComposerScreen
 import com.umbra.app.ui.composer.ComposerViewModel
 import com.umbra.app.ui.zap.ZapHost
+import androidx.compose.runtime.CompositionLocalProvider
+import com.umbra.app.ui.hashtag.HashtagScreen
+import com.umbra.app.ui.hashtag.HashtagViewModel
+import com.umbra.app.ui.hashtag.LocalHashtagNavigator
 import com.umbra.app.ui.networkusage.NetworkUsageScreen
 import com.umbra.app.ui.networkusage.NetworkUsageViewModel
 import com.umbra.app.ui.notifications.NotificationsScreen
@@ -95,6 +99,9 @@ sealed class Screen(val route: String) {
     object Settings      : Screen("settings")
     object Notifications : Screen("notifications")
     object NetworkUsage  : Screen("network_usage")
+    object Hashtag       : Screen("tag/{tag}") {
+        fun forTag(tag: String) = "tag/${Uri.encode(tag.removePrefix("#").lowercase())}"
+    }
     // Wraps RelayConfig/RelayDetails/ActiveSubscriptions (see the nested navigation() graph
     // below) so the three share one RelayConfigViewModel instance instead of each getting its
     // own screen-scoped one. Never navigated to directly — entered via RelayConfig, its start
@@ -329,6 +336,7 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
     }
 
     ZapHost {
+    CompositionLocalProvider(LocalHashtagNavigator provides { tag -> navController.navigate(Screen.Hashtag.forTag(tag)) }) {
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
         navController = navController,
@@ -370,6 +378,17 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
                 onNavigateBack = { navController.popBackStack() },
                 onOpenThread = { navController.navigate(Screen.Thread.forEvent(it)) },
                 onOpenProfile = { navController.navigate(Screen.Profile.forPubkey(it)) }
+            )
+        }
+        composable(Screen.Hashtag.route) {
+            val hashtagViewModel: HashtagViewModel = hiltViewModel()
+            HashtagScreen(
+                viewModel = hashtagViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onOpenThread = { navController.navigate(Screen.Thread.forEvent(it)) },
+                onOpenProfile = { navController.navigate(Screen.Profile.forPubkey(it)) },
+                onReply = { navController.navigate(Screen.Composer.reply(it.id)) },
+                onQuote = { navController.navigate(Screen.Composer.quote(it.id)) }
             )
         }
         composable(Screen.NetworkUsage.route) {
@@ -500,6 +519,7 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
             .navigationBarsPadding()
             .padding(bottom = 16.dp)
     )
+    }
     }
     }
 }

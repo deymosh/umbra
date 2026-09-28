@@ -266,6 +266,10 @@ interface EventRepository {
      */
     fun observeInbox(pubkey: String, limit: Int = 400): Flow<List<Event>> = kotlinx.coroutines.flow.flowOf(emptyList())
 
+    /** Cached events of [kinds] carrying tag [tagName] = [value] (case-insensitive), newest first. */
+    fun observeEventsWithTag(tagName: String, value: String, kinds: Set<Int>, limit: Int = 300): Flow<List<Event>> =
+        kotlinx.coroutines.flow.flowOf(emptyList())
+
     /**
      * Observe total amount of events by author and kind from local cache storage.
      */

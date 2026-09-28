@@ -65,6 +65,7 @@ import com.umbra.app.ui.components.media.UserAvatar
 import com.umbra.app.ui.components.computeTextRenderMetrics
 import com.umbra.app.ui.components.launchExternalUrl
 import com.umbra.app.ui.components.launchLightningInvoice
+import com.umbra.app.ui.hashtag.LocalHashtagNavigator
 import com.umbra.app.ui.zap.LocalZapLauncher
 import com.umbra.app.ui.zap.ZapTarget
 import com.umbra.app.ui.components.resolveEventReference
@@ -234,7 +235,8 @@ fun EventCard(
     onReply: (Event) -> Unit = {},
     onProfileClick: (String) -> Unit = {},
     onEventReferenceClick: (String) -> Unit = {},
-    onHashtagClick: (String) -> Unit = {},
+    // Null falls back to LocalHashtagNavigator (open the tag feed).
+    onHashtagClick: ((String) -> Unit)? = null,
     currentUserPubkey: String? = null,
     onDelete: (Event) -> Unit = {},
     onMute: (String) -> Unit = {},
@@ -268,7 +270,8 @@ fun EventCard(
     val onReplyState = rememberUpdatedState(onReply)
     val onProfileClickState = rememberUpdatedState(onProfileClick)
     val onEventReferenceClickState = rememberUpdatedState(onEventReferenceClick)
-    val onHashtagClickState = rememberUpdatedState(onHashtagClick)
+    val hashtagNavigator = LocalHashtagNavigator.current
+    val onHashtagClickState = rememberUpdatedState(onHashtagClick ?: hashtagNavigator ?: {})
     val onDeleteState = rememberUpdatedState(onDelete)
     val onMuteState = rememberUpdatedState(onMute)
     val onPinState = rememberUpdatedState(onPin)

@@ -654,4 +654,7 @@
     <string name="network_usage_reset">Reset counters</string>
     <string name="network_usage_reset_title">Reset network usage?</string>
     <string name="network_usage_reset_message">This clears this session\'s counters and the running total.</string>
+    <string name="hashtag_loading">Looking for #%1$s over Tor…</string>
+    <string name="hashtag_empty">No notes tagged #%1$s yet</string>
+    <string name="hashtag_empty_message">Notes appear as your relays return them. Your feed filters and mutes apply here too.</string>
 </resources>
