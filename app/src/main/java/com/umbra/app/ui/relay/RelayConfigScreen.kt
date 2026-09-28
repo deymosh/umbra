@@ -12,7 +12,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ChevronRight
@@ -36,7 +35,6 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.material.icons.outlined.Info
 import com.umbra.app.ui.theme.MonoStyle
 import com.umbra.app.ui.theme.UmbraTheme
-import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip11.RelayInfo
 import com.umbra.app.domain.nip77.SyncDirection
 import com.umbra.app.domain.relay.Relay

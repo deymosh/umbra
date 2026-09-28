@@ -9,7 +9,6 @@ import com.umbra.app.domain.nip55.AmberSignerGateway
 import com.umbra.app.domain.nip01.NostrEventBuilder
 import com.umbra.app.domain.nipb7.DefaultBlossomServer
 import com.umbra.app.domain.nipb7.preferredUploadServer
-import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.domain.preferences.UserPreferences
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.usecase.BlossomUploadResult

@@ -36,7 +36,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import com.umbra.app.domain.nip01.NostrEventBuilder
 import com.umbra.app.domain.usecase.TrackReferencedAuthorUseCase
 import com.umbra.app.domain.usecase.CheckTorStatusUseCase
@@ -67,8 +66,6 @@ import com.umbra.app.util.logging.UmbraLog
 import androidx.compose.runtime.Immutable
 import javax.inject.Inject
 import coil3.ImageLoader
-import coil3.request.ImageRequest
-import coil3.request.CachePolicy
 
 /**
  * UI state for event interactions

@@ -2,7 +2,6 @@ package com.umbra.app.ui.components
 
 import com.umbra.app.domain.util.JsonUtils
 import com.umbra.app.domain.nip30.CustomEmoji
-import com.umbra.app.domain.nip30.extractCustomEmojis
 import com.umbra.app.domain.nip92.ImetaTag
 import com.umbra.app.domain.profile.UserProfile
 import androidx.compose.foundation.text.appendInlineContent

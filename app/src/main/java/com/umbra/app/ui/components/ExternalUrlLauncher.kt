@@ -2,7 +2,6 @@ package com.umbra.app.ui.components
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import androidx.core.net.toUri
 import java.util.Locale
 

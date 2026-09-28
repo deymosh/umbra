@@ -63,7 +63,6 @@ import com.umbra.app.ui.components.ShowMoreLessToggle
 import com.umbra.app.ui.components.TimeFormatter
 import com.umbra.app.ui.components.media.UserAvatar
 import com.umbra.app.ui.components.computeTextRenderMetrics
-import com.umbra.app.ui.components.UserIdentityBadge
 import com.umbra.app.ui.components.launchExternalUrl
 import com.umbra.app.ui.components.launchLightningInvoice
 import com.umbra.app.ui.components.resolveEventReference

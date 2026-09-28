@@ -8,9 +8,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.outlined.Delete
@@ -28,17 +26,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.umbra.app.R
-import com.umbra.app.domain.nip01.Event
-import com.umbra.app.domain.nip11.RelayInfo
-import com.umbra.app.domain.relay.Relay
 import com.umbra.app.domain.relay.RelayIssue
 import com.umbra.app.domain.relay.normalizeRelayUrl
 import com.umbra.app.ui.components.launchExternalUrl
@@ -57,7 +50,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import com.umbra.app.ui.Screen
 import coil3.compose.AsyncImage
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable

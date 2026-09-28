@@ -46,7 +46,6 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.umbra.app.R
 import com.umbra.app.domain.feed.DefaultFeedFilters
-import com.umbra.app.domain.feed.FeedFilter
 import com.umbra.app.ui.components.ChipBadge
 import com.umbra.app.ui.components.UmbraTopAppBar
 import com.umbra.app.ui.components.UmbraTopAppBarDefaults

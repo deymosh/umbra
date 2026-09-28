@@ -1,5 +1,6 @@
 package com.umbra.app.ui.components.media
 
+import androidx.compose.foundation.border
 import com.umbra.app.ui.theme.UmbraTheme
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -40,7 +41,8 @@ import com.umbra.app.R
 import com.umbra.app.domain.repository.UserRepository
 
 internal val IMAGE_GALLERY_SPACING = 6.dp
-internal val IMAGE_GALLERY_CORNER = RoundedCornerShape(12.dp)
+// Matches MaterialTheme.shapes.medium (16dp), the media/card radius in the design system.
+internal val IMAGE_GALLERY_CORNER = RoundedCornerShape(16.dp)
 
 // Matches UserIdentityBadge.kt's NIP-05-pending badge exactly, so "queued" reads as the same
 // visual language everywhere in the app rather than inventing a second one.
@@ -206,6 +208,8 @@ private fun GalleryImageCell(
         modifier = modifier
             .clip(IMAGE_GALLERY_CORNER)
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            // Hairline edge so a dark photo doesn't bleed into the black background.
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, IMAGE_GALLERY_CORNER)
             .clickable { onClick() }
     ) {
         val gatedState = rememberRetryingAsyncImagePainter(

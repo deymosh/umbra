@@ -24,7 +24,6 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.umbra.app.R
-import com.umbra.app.domain.model.ResourceUsageSnapshot
 import com.umbra.app.ui.components.UmbraTopAppBar
 import com.umbra.app.ui.components.UmbraTopAppBarDefaults
 import com.umbra.app.ui.components.UsageBar

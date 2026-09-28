@@ -1,5 +1,6 @@
 package com.umbra.app.ui.components.media
 
+import androidx.compose.foundation.border
 import com.umbra.app.ui.theme.UmbraTheme
 import android.graphics.drawable.Animatable
 import androidx.compose.foundation.background
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Schedule
@@ -34,7 +34,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
@@ -186,6 +185,8 @@ fun ImageAttachment(
             }
             .clip(IMAGE_GALLERY_CORNER)
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            // Hairline edge so a dark photo doesn't bleed into the black background.
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, IMAGE_GALLERY_CORNER)
     ) {
         Box(
             modifier = Modifier

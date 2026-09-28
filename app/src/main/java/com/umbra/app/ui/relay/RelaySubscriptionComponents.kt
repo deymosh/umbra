@@ -1,12 +1,10 @@
 package com.umbra.app.ui.relay
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,7 +17,6 @@ import com.umbra.app.R
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip01.EventFilter
 import com.umbra.app.domain.nip01.KindNames
-import com.umbra.app.domain.relay.Relay
 import com.umbra.app.domain.relay.RelayRequestInfo
 import com.umbra.app.domain.relay.SubscriptionType
 import com.umbra.app.ui.components.TimeFormatter

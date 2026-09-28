@@ -15,7 +15,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.umbra.app.R
-import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.relay.Relay
 import com.umbra.app.domain.relay.normalizeRelayUrl
 import com.umbra.app.domain.relay.groupByPurpose
@@ -24,7 +23,6 @@ import com.umbra.app.ui.components.UmbraTopAppBar
 import com.umbra.app.ui.components.UmbraTopAppBarDefaults
 import kotlin.OptIn
 import androidx.compose.material3.ExperimentalMaterial3Api
-import com.umbra.app.ui.Screen
 /**
  * Cross-relay view of every currently-open subscription, grouped by purpose (outbox/inbox/feed/
  * other — see [groupByPurpose]). Unlike the per-relay Relay Details screen, this doesn't require

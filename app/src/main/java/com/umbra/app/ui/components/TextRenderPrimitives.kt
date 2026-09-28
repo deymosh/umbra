@@ -1,10 +1,10 @@
 package com.umbra.app.ui.components
 
+import com.umbra.app.ui.theme.MonoStyle
 import com.umbra.app.R
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -40,8 +39,8 @@ internal fun JsonContentBlock(
     onCopy: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Box(
             modifier = Modifier
@@ -51,10 +50,7 @@ internal fun JsonContentBlock(
             Text(
                 text = json,
                 modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                style = MonoStyle.copy(color = MaterialTheme.colorScheme.onSurface)
             )
 
             CopyIconButton(
