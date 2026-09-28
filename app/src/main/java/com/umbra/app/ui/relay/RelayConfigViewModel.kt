@@ -22,7 +22,10 @@ import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.usecase.AddRelayUseCase
 import com.umbra.app.domain.nip01.EventFilter
 import com.umbra.app.domain.relay.normalizeRelayUrl
+import kotlinx.coroutines.flow.Flow
+import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.domain.usecase.CountOnRelayUseCase
+import com.umbra.app.domain.usecase.TrackReferencedAuthorUseCase
 import com.umbra.app.domain.usecase.GetAllRelaysUseCase
 import com.umbra.app.domain.usecase.PublishSignedEventUseCase
 import com.umbra.app.domain.usecase.RemoveRelayUseCase
@@ -159,7 +162,8 @@ class RelayConfigViewModel @Inject constructor(
     private val publishSignedEventUseCase: PublishSignedEventUseCase,
     private val developerPreferences: DeveloperPreferences,
     private val syncPreferences: SyncPreferences,
-    private val countOnRelay: CountOnRelayUseCase
+    private val countOnRelay: CountOnRelayUseCase,
+    private val trackReferencedAuthor: TrackReferencedAuthorUseCase
 ) : ViewModel() {
 
     companion object {
@@ -595,5 +599,11 @@ class RelayConfigViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /** The NIP-11 owner's profile, requested from relays the first time it's shown this session. */
+    fun observeOwnerProfile(pubkey: String): Flow<UserProfile?> {
+        trackReferencedAuthor(pubkey)
+        return userRepository.observeProfile(pubkey)
     }
 }

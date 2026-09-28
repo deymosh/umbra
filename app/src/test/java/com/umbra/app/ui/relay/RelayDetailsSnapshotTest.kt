@@ -48,6 +48,8 @@ class RelayDetailsSnapshotTest {
     fun details() = snapshot("RelayDetails") {
         RelayDetailsContent(
             relay = relay,
+            ownerName = "Damus",
+            onOpenOwner = {},
             relaysLoaded = true,
             connectionState = RelayConnectionIndicatorState.CONNECTED,
             ownCounts = RelayOwnCounts(yourEvents = 1_284, mentions = 5_310, approximate = true),

@@ -40,8 +40,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import com.umbra.app.ui.Screen
+import kotlinx.coroutines.flow.flowOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -84,6 +86,8 @@ import java.util.Date
 import java.util.Locale
 
 /** NIPs Umbra actively uses when a relay supports them — highlighted in the NIP list. */
+private val HEX_PUBKEY = Regex("^[0-9a-fA-F]{64}$")
+
 private val NIPS_UMBRA_USES = setOf(1, 9, 11, 42, 45, 50, 65, 77)
 
 @Composable
@@ -92,7 +96,7 @@ fun RelayDetailsScreen(
     relayId: String,
     viewModel: RelayConfigViewModel
 ) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var pendingExternalUrl by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -153,8 +157,15 @@ fun RelayDetailsScreen(
         state.relayIssues.filter { normalizeRelayUrl(it.relayUrl) == normalizedUrl }.takeLast(50).reversed()
     }
 
+    val ownerPubkey = relay?.relayInfo?.pubkey?.takeIf { HEX_PUBKEY.matches(it) }?.lowercase()
+    val ownerProfile by remember(ownerPubkey) {
+        ownerPubkey?.let(viewModel::observeOwnerProfile) ?: flowOf(null)
+    }.collectAsStateWithLifecycle(initialValue = null)
+
     RelayDetailsContent(
         relay = relay,
+        ownerName = ownerProfile?.getUserDisplayName()?.takeIf { it.isNotBlank() },
+        onOpenOwner = ownerPubkey?.let { pk -> { navController.navigate(Screen.Profile.forPubkey(pk)) } },
         relaysLoaded = state.relaysLoaded,
         connectionState = connectionState,
         ownCounts = normalizedUrl?.let { state.relayCounts[it] },
@@ -184,6 +195,8 @@ fun RelayDetailsScreen(
 @Composable
 internal fun RelayDetailsContent(
     relay: Relay?,
+    ownerName: String?,
+    onOpenOwner: (() -> Unit)?,
     relaysLoaded: Boolean,
     connectionState: RelayConnectionIndicatorState?,
     ownCounts: RelayOwnCounts?,
@@ -308,7 +321,7 @@ internal fun RelayDetailsContent(
                         }
                     } else {
                         val rows = buildList<Triple<String, String, Pair<Boolean, String?>>> {
-                            info.pubkey?.takeIf { it.isNotBlank() }?.let { add(Triple("owner", it, true to null)) }
+                            info.pubkey?.takeIf { it.isNotBlank() }?.let { add(Triple("owner", ownerName ?: it, (ownerName == null) to null)) }
                             info.self?.takeIf { it.isNotBlank() }?.let { add(Triple("self", it, true to null)) }
                             info.contact?.takeIf { it.isNotBlank() }?.let { add(Triple("contact", it, false to null)) }
                             info.software?.takeIf { it.isNotBlank() }?.let {
@@ -332,7 +345,7 @@ internal fun RelayDetailsContent(
                                 ),
                                 value = if (key == "terms") stringResource(R.string.relay_diag_open_terms) else value,
                                 mono = mono,
-                                onClick = link?.let { url -> { onOpenUrl(url) } },
+                                onClick = if (key == "owner") onOpenOwner else link?.let { url -> { onOpenUrl(url) } },
                                 showDivider = index < rows.lastIndex
                             )
                         }
