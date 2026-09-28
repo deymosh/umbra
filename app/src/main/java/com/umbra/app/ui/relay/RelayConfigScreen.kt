@@ -1,5 +1,6 @@
 package com.umbra.app.ui.relay
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.umbra.app.ui.components.UmbraIcons
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.foundation.background
@@ -67,7 +68,7 @@ fun RelayConfigScreen(
     navController: NavController,
     viewModel: RelayConfigViewModel
 ) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var pendingExternalUrl by remember { mutableStateOf<String?>(null) }
 

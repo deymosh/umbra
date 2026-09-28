@@ -1,5 +1,6 @@
 package com.umbra.app.ui.components.media
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.ClipData
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -36,7 +37,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -340,7 +340,7 @@ private fun ZoomableFullscreenImagePage(
         userRepository = null
     )
     val painter = gatedState.painter
-    val painterState by painter.state.collectAsState()
+    val painterState by painter.state.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier

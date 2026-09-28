@@ -1,5 +1,6 @@
 package com.umbra.app.ui.feedconfig
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.umbra.app.ui.components.ConfirmDialog
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.outlined.Delete
@@ -38,7 +39,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -68,7 +68,7 @@ fun FeedConfigScreen(
     navController: NavController,
     viewModel: FeedConfigViewModel
 ) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val availableFilters by remember(state.filters, state.activeFilters) {
         derivedStateOf {

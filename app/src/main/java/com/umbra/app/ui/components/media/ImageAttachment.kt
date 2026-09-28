@@ -1,5 +1,6 @@
 package com.umbra.app.ui.components.media
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.border
 import com.umbra.app.ui.theme.UmbraTheme
 import android.graphics.drawable.Animatable
@@ -24,7 +25,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -218,7 +218,7 @@ fun ImageAttachment(
                 userRepository = userRepository
             )
             val painter = gatedState.painter
-            val painterState by painter.state.collectAsState()
+            val painterState by painter.state.collectAsStateWithLifecycle()
             val currentBlurHashBitmap = blurHashBitmap
 
             Image(

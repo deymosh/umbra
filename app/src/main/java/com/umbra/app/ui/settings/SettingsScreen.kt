@@ -1,12 +1,12 @@
 package com.umbra.app.ui.settings
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material3.Switch
-import androidx.compose.runtime.collectAsState
 import com.umbra.app.ui.auth.rememberPrivacyLogout
 import androidx.compose.material.icons.outlined.DataUsage
 import androidx.compose.material.icons.automirrored.outlined.Logout
@@ -50,7 +50,7 @@ import androidx.compose.runtime.setValue
 @Composable
 fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel) {
     val logout = rememberPrivacyLogout(navController, loginViewModel)
-    val panicWipeEnabled by loginViewModel.panicWipeEnabled.collectAsState()
+    val panicWipeEnabled by loginViewModel.panicWipeEnabled.collectAsStateWithLifecycle()
 
     SettingsContent(
         onBack = {

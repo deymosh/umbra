@@ -1,5 +1,6 @@
 package com.umbra.app.ui
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -211,14 +211,14 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.backExitTransition
 @Composable
 fun UmbraNavHost(deepLinkUri: String? = null) {
     val viewModel: AppLaunchViewModel = hiltViewModel()
-    val startDestination by viewModel.startDestination.collectAsState()
+    val startDestination by viewModel.startDestination.collectAsStateWithLifecycle()
     // Scoped to this composable (not a nav destination) so it's created once and survives
     // navigation between whichever screen triggered a publish and wherever the user goes next —
     // see BroadcastViewModel's doc comment.
     val broadcastViewModel: BroadcastViewModel = hiltViewModel()
-    val activeBroadcasts by broadcastViewModel.activeBroadcasts.collectAsState()
+    val activeBroadcasts by broadcastViewModel.activeBroadcasts.collectAsStateWithLifecycle()
     val torGateViewModel: TorGateViewModel = hiltViewModel()
-    val torState by torGateViewModel.state.collectAsState()
+    val torState by torGateViewModel.state.collectAsStateWithLifecycle()
     // Same "created once, survives navigation" scoping as broadcastViewModel/torGateViewModel
     // above — hosts the Amber launchers for search/index relay-list decryption so that keeps
     // working regardless of which screen/tab is currently showing, not just while Relay Settings
@@ -347,12 +347,12 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
 
     // One app-wide instance: the note menu's "Read later" state and the Read later screen share it.
     val readLaterViewModel: ReadLaterViewModel = hiltViewModel()
-    val savedReadLaterIds by readLaterViewModel.savedIds.collectAsState()
+    val savedReadLaterIds by readLaterViewModel.savedIds.collectAsStateWithLifecycle()
     val readLaterActions = remember(savedReadLaterIds) {
         ReadLaterActions(isSaved = { it in savedReadLaterIds }, toggle = readLaterViewModel::toggle)
     }
     val bookmarksViewModel: BookmarksViewModel = hiltViewModel()
-    val bookmarkedIds by bookmarksViewModel.bookmarkedIds.collectAsState()
+    val bookmarkedIds by bookmarksViewModel.bookmarkedIds.collectAsStateWithLifecycle()
     val bookmarkActions = remember(bookmarkedIds) {
         if (bookmarksViewModel.canBookmark) {
             BookmarkActions(isBookmarked = { it in bookmarkedIds }, toggle = bookmarksViewModel::toggle)

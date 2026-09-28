@@ -1,5 +1,6 @@
 package com.umbra.app.ui.components.media
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.border
 import com.umbra.app.ui.theme.UmbraTheme
 import androidx.compose.foundation.Image
@@ -24,7 +25,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -220,7 +220,7 @@ private fun GalleryImageCell(
             userRepository = userRepository
         )
         val painter = gatedState.painter
-        val painterState by painter.state.collectAsState()
+        val painterState by painter.state.collectAsStateWithLifecycle()
 
         Image(
             painter = painter,

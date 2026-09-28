@@ -1,5 +1,6 @@
 package com.umbra.app.ui.components.media
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.graphics.drawable.Animatable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -11,7 +12,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -110,7 +110,7 @@ fun UserAvatar(
                     userRepository = userRepository
                 )
                 val painter = gatedState.painter
-                val painterState by painter.state.collectAsState()
+                val painterState by painter.state.collectAsStateWithLifecycle()
                 if (gatedState.isPending || painterState !is AsyncImagePainter.State.Success) {
                     AvatarDefaultPlaceholder(pubkey = pubkey, size = size, shape = shape)
                 }
@@ -192,7 +192,7 @@ private fun AnimatedUserAvatar(
         modifier = Modifier.fillMaxSize(),
         contentScale = ContentScale.Crop
     ) {
-        val painterState by painter.state.collectAsState()
+        val painterState by painter.state.collectAsStateWithLifecycle()
 
         // Joins ImageLoadGate for the first time. SubcomposeAsyncImage's content lambda
         // reads painter.state directly, so this can't reuse rememberRetryingAsyncImagePainter's

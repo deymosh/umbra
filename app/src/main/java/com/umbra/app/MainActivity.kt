@@ -1,5 +1,6 @@
 package com.umbra.app
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
@@ -8,7 +9,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.umbra.app.domain.preferences.AppearancePreferences
 import com.umbra.app.ui.UmbraNavHost
@@ -50,7 +50,7 @@ class MainActivity : ComponentActivity() {
                 LocalMediaLoadPriorityGate provides mediaLoadPriorityGate,
                 LocalImageLoadGate provides imageLoadGate
             ) {
-                val selectedTheme by appearancePreferences.observeSelectedTheme().collectAsState()
+                val selectedTheme by appearancePreferences.observeSelectedTheme().collectAsStateWithLifecycle()
                 UmbraTheme(themeOption = selectedTheme.toUmbraThemeOption()) {
                     UmbraNavHost(deepLinkUri = deepLinkUri)
                 }

@@ -1,7 +1,7 @@
 package com.umbra.app.ui.readlater
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.res.stringResource
@@ -21,8 +21,8 @@ fun ReadLaterScreen(
     onOpenThread: (String) -> Unit,
     onOpenProfile: (String) -> Unit
 ) {
-    val items by viewModel.items.collectAsState()
-    val profiles by viewModel.profiles.collectAsState()
+    val items by viewModel.items.collectAsStateWithLifecycle()
+    val profiles by viewModel.profiles.collectAsStateWithLifecycle()
     SavedNotesScreen(
         title = stringResource(R.string.read_later_title),
         emptyTitle = stringResource(R.string.read_later_empty),
