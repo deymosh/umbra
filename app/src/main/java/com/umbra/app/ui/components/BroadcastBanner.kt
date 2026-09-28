@@ -1,5 +1,6 @@
 package com.umbra.app.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -117,8 +118,9 @@ private fun BroadcastBannerCard(
             .clip(RoundedCornerShape(20.dp))
             .clickable { expanded = !expanded },
         shape = RoundedCornerShape(20.dp),
-        tonalElevation = 3.dp,
-        shadowElevation = 4.dp
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 12.dp
     ) {
         Column(Modifier.padding(16.dp)) {
             BroadcastHeaderRow(broadcasts = broadcasts, onDismissAll = { broadcasts.forEach { onDismiss(it.id) } })

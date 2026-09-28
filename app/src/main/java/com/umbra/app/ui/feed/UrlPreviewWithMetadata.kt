@@ -1,5 +1,6 @@
 package com.umbra.app.ui.feed
 
+import androidx.compose.foundation.BorderStroke
 import android.content.ClipData
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -79,8 +80,8 @@ fun UrlPreviewWithMetadata(
                 }
             ),
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 4.dp
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         if (metadata.hasMetadata && (!metadata.imageUrl.isNullOrBlank() || !metadata.title.isNullOrBlank())) {
             // Rich preview with metadata — height is intrinsic (no fixed row height), so a

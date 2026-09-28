@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Notes
 import androidx.compose.material3.Icon
@@ -41,7 +40,7 @@ import java.net.URI
 
 /**
  * Compact inline embed for a quoted note (NIP-18 "q" tag / nostr:note1|nevent1|naddr1 content
- * reference) — reuses UserAvatar/UserIdentityBadge rather than a bespoke header, matching the
+ * reference) — reuses UserAvatar/NoteAuthorLine rather than a bespoke header, matching the
  * full EventCard's NoteHeader in spirit at a smaller scale. Tapping navigates to the thread.
  * Public (not confined to EventCard.kt) since NostrTextRenderer renders this directly, positioned
  * where the reference actually appears in the text, instead of the caller appending it after all
@@ -92,43 +91,35 @@ fun QuotedNoteCard(
         parseInlineMediaSegments(normalizedQuoteContent).filterIsInstance<InlineMediaSegment.LnurlReference>().map { it.lnurl }
     }
     Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
     ) {
         Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 UserAvatar(
                     userProfile = authorProfile,
                     pubkey = quotedEvent.pubkey,
-                    // 32.dp (not the 20.dp this used to be) so the avatar reads proportionate
-                    // to UserIdentityBadge's two-line name+nip05 stack next to it, matching
-                    // NoteHeader's own header/badge size ratio at a smaller scale instead of
-                    // looking like a stray dot floating next to taller text.
-                    size = 32.dp,
+                    size = 22.dp,
                     shape = CircleShape,
                     animate = false,
                     authorPubkey = quotedEvent.pubkey,
                     userRepository = userRepository
                 )
-                UserIdentityBadge(
+                NoteAuthorLine(
                     userProfile = authorProfile,
                     pubkey = quotedEvent.pubkey,
+                    createdAt = quotedEvent.createdAt,
                     modifier = Modifier.weight(1f)
-                )
-                Text(
-                    text = TimeFormatter.formatRelativeTime(quotedEvent.createdAt),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             // Non-text-note kinds (e.g. a quoted repost, article, or any kind without a
@@ -201,8 +192,8 @@ fun UnresolvedQuoteReferenceChip(
     onClick: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier
             .fillMaxWidth()

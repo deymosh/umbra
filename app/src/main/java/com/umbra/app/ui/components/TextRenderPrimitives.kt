@@ -41,7 +41,7 @@ internal fun JsonContentBlock(
 ) {
     Surface(
         shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
         Box(
             modifier = Modifier

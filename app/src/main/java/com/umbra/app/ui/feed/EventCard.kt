@@ -251,7 +251,10 @@ fun EventCard(
     getUrlMetadata: (String) -> com.umbra.app.ui.common.UrlMetadata? = { null },
     // Caps embedded image height instead of full aspect-ratio sizing — for a note shown as
     // context rather than as its own post (e.g. the "replying to" card above a reply composer).
-    compactMedia: Boolean = false
+    compactMedia: Boolean = false,
+    // The note a thread was opened on: set on its own surface with the exact publish time, so
+    // the conversation's focal point is obvious among its ancestors and replies.
+    highlighted: Boolean = false
 ) {
     val context = LocalContext.current
     val onEventClickState = rememberUpdatedState(onEventClick)
@@ -477,6 +480,9 @@ fun EventCard(
         modifier = modifier
             .fillMaxWidth()
             .then(
+                if (highlighted) Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow) else Modifier
+            )
+            .then(
                 if (enableEventClick) {
                     Modifier.clickable { onEventClickState.value(event) }
                 } else {
@@ -700,6 +706,15 @@ fun EventCard(
                             )
                         }
                     }
+                }
+
+                if (highlighted) {
+                    Text(
+                        text = TimeFormatter.formatFullTime(event.createdAt),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
                 }
 
                 ReactionBar(

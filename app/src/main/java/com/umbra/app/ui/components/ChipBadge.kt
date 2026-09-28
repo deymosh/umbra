@@ -4,7 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -23,8 +23,8 @@ import androidx.compose.ui.unit.dp
 fun ChipBadge(
     modifier: Modifier = Modifier,
     text: String,
-    backgroundColor: Color = MaterialTheme.colorScheme.tertiaryContainer,
-    textColor: Color = MaterialTheme.colorScheme.onTertiaryContainer,
+    backgroundColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    textColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     onClick: (() -> Unit)? = null,
     // Collapse controls (e.g. "Show less") point the chevron back the other way, so the icon
     // itself signals expand-vs-collapse instead of every clickable chip looking identical.
@@ -38,7 +38,7 @@ fun ChipBadge(
         modifier = modifier.then(
             if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
         ),
-        shape = RoundedCornerShape(8.dp),
+        shape = CircleShape,
         color = backgroundColor
     ) {
         // A clickable chip is otherwise visually identical to a static one (same shape/color as
@@ -48,7 +48,7 @@ fun ChipBadge(
         if (onClick != null) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+                modifier = Modifier.padding(start = 10.dp, end = 6.dp, top = 4.dp, bottom = 4.dp)
             ) {
                 Text(
                     text = text,
@@ -71,7 +71,7 @@ fun ChipBadge(
                 text = text,
                 style = MaterialTheme.typography.labelSmall,
                 color = textColor,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
             )
         }
     }

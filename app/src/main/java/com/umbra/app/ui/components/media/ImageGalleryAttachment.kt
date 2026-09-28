@@ -205,7 +205,7 @@ private fun GalleryImageCell(
     Box(
         modifier = modifier
             .clip(IMAGE_GALLERY_CORNER)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .clickable { onClick() }
     ) {
         val gatedState = rememberRetryingAsyncImagePainter(
@@ -232,7 +232,7 @@ private fun GalleryImageCell(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)),
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -247,7 +247,7 @@ private fun GalleryImageCell(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)),
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(

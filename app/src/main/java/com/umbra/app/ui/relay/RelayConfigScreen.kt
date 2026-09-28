@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
@@ -24,13 +23,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.umbra.app.R
+import com.umbra.app.ui.theme.MonoStyle
+import com.umbra.app.ui.theme.UmbraTheme
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip11.RelayInfo
 import com.umbra.app.domain.nip77.SyncDirection
@@ -418,9 +418,9 @@ private fun NegentropySyncCard(direction: SyncDirection, onDirectionChange: (Syn
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(12.dp),
+            .clip(MaterialTheme.shapes.large)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
@@ -459,9 +459,9 @@ private fun RelayTelemetryCard(telemetry: RelayTelemetrySnapshot, onSubscription
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(12.dp),
+            .clip(MaterialTheme.shapes.large)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
@@ -515,15 +515,10 @@ private fun RelayCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(color = MaterialTheme.colorScheme.surfaceContainerHigh)
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                shape = RoundedCornerShape(14.dp)
-            )
+            .clip(MaterialTheme.shapes.large)
+            .background(color = MaterialTheme.colorScheme.surfaceContainer)
             .clickable(onClick = onOpenDetails)
-            .padding(11.dp)
+            .padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp)
     ) {
         // Header row
         Row(
@@ -550,7 +545,7 @@ private fun RelayCard(
                     )
                     Text(
                         text = formatRelayUrl(relay.url),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MonoStyle,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -578,8 +573,7 @@ private fun RelayCard(
                     onCheckedChange = { newValue ->
                         optimisticChecked = newValue
                         onToggle(newValue)
-                    },
-                    modifier = Modifier.scale(0.70f)
+                    }
                 )
                 if (onDelete != null) {
                     IconButton(
@@ -622,11 +616,11 @@ internal fun RelayIcon(
     iconUrl: String?,
     relayConnectionState: RelayConnectionIndicatorState? = null
 ) {
-    Box(modifier = Modifier.size(34.dp)) {
+    Box(modifier = Modifier.size(38.dp)) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.surfaceContainerHighest
         ) {
             if (!iconUrl.isNullOrBlank()) {
                 // A relay-declared icon URL can still fail to load (slow/unreachable over Tor,
@@ -638,7 +632,7 @@ internal fun RelayIcon(
                     contentDescription = null,
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(8.dp)),
+                        .clip(MaterialTheme.shapes.small),
                     loading = { RelayIconFallback() },
                     error = { RelayIconFallback() }
                 )
@@ -652,19 +646,19 @@ internal fun RelayIcon(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .offset(x = 2.dp, y = (-2).dp)
-                    .size(10.dp)
+                    .size(11.dp)
                     .clip(CircleShape)
                     .background(
                         when (relayConnectionState) {
-                            RelayConnectionIndicatorState.CONNECTED -> MaterialTheme.colorScheme.tertiary
-                            RelayConnectionIndicatorState.CONNECTING -> MaterialTheme.colorScheme.secondary
+                            RelayConnectionIndicatorState.CONNECTED -> UmbraTheme.colors.secure
+                            RelayConnectionIndicatorState.CONNECTING -> UmbraTheme.colors.caution
                             RelayConnectionIndicatorState.FAILED -> MaterialTheme.colorScheme.error
                             RelayConnectionIndicatorState.DISABLED -> MaterialTheme.colorScheme.outline
                         }
                     )
                     .border(
                         width = 1.dp,
-                        color = MaterialTheme.colorScheme.surface,
+                        color = MaterialTheme.colorScheme.surfaceContainer,
                         shape = CircleShape
                     )
             )

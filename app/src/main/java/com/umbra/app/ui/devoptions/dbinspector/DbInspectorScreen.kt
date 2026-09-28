@@ -161,7 +161,7 @@ fun DbInspectorScreen(
 private fun TableSummaryRow(summary: DbTableSummary) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         shape = RoundedCornerShape(16.dp)
     ) {
         Row(
@@ -189,7 +189,7 @@ private fun TableSummaryRow(summary: DbTableSummary) {
 private fun EventResultRow(event: DbEventDetail, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         shape = RoundedCornerShape(16.dp),
         onClick = onClick
     ) {

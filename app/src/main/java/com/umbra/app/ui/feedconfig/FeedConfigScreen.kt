@@ -1,5 +1,7 @@
 package com.umbra.app.ui.feedconfig
 
+import com.umbra.app.ui.theme.UmbraTheme
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -187,8 +189,9 @@ private fun ActiveFilterCard(
     onDeactivate: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, UmbraTheme.colors.corona.copy(alpha = 0.45f))
     ) {
         Column(
             modifier = Modifier
@@ -253,9 +256,8 @@ private fun FeedFilterCard(
     var expanded by remember(filter.id, isSelected) { mutableStateOf(isSelected) }
 
     Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = if (expanded) 3.dp else 1.dp,
+        shape = MaterialTheme.shapes.large,
+        color = if (expanded) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainer,
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
@@ -295,10 +297,7 @@ private fun FeedFilterCard(
                     ) {
                         Button(
                             onClick = onActivate,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondary
-                            )
+                            modifier = Modifier.weight(1f)
                         ) {
                             Text(stringResource(R.string.activate))
                         }

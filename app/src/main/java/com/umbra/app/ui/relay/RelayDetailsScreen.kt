@@ -108,8 +108,8 @@ fun RelayDetailsScreen(
         bottomBar = {
             relay?.let { relayItem ->
                 Surface(
-                    tonalElevation = 2.dp,
-                    shadowElevation = 4.dp
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    shadowElevation = 8.dp
                 ) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),

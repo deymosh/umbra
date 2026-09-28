@@ -113,7 +113,7 @@ fun InlineVideoAttachment(
             .padding(vertical = 4.dp)
             .clip(INLINE_VIDEO_CORNER),
         shape = INLINE_VIDEO_CORNER,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         val player = remember(url) {
             createExoPlayerForUrl(context, torDataSourceFactory, url, autoPrepare = false)

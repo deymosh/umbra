@@ -1,6 +1,8 @@
 package com.umbra.app.ui.components
 
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -19,19 +21,33 @@ fun ConfirmDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = title) },
-        text = { Text(text = message) },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        title = { Text(text = title, style = MaterialTheme.typography.titleLarge) },
+        text = {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(
-                    text = confirmLabel,
-                    color = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                )
+            Button(
+                onClick = onConfirm,
+                colors = if (isDestructive) {
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                } else {
+                    ButtonDefaults.buttonColors()
+                }
+            ) {
+                Text(text = confirmLabel)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(text = stringResource(R.string.cancel))
+                Text(text = stringResource(R.string.cancel), color = MaterialTheme.colorScheme.onSurface)
             }
         }
     )

@@ -1,6 +1,14 @@
 package com.umbra.app.ui.feed
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Surface
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -159,40 +167,14 @@ fun ThreadScreen(
             return@Scaffold
         }
 
-        state.errorMessage?.let { message ->
-            ErrorBanner(
-                message = message.resolve(context),
-                onDismiss = { viewModel.clearError() },
-                modifier = Modifier.padding(innerPadding)
-            )
-        }
-
         if (state.anchor == null && !state.isLoading) {
-            Box(
+            EmptyState(
+                title = stringResource(R.string.note_not_found_title),
+                message = stringResource(R.string.note_not_found_message),
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.padding(32.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.note_not_found_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = stringResource(R.string.note_not_found_message),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
+                    .padding(innerPadding)
+            )
             return@Scaffold
         }
 
@@ -206,11 +188,23 @@ fun ThreadScreen(
             return@Scaffold
         }
 
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+        // In the column (not overlaid on the list) so it never covers the first note.
+        state.errorMessage?.let { message ->
+            ErrorBanner(
+                message = message.resolve(context),
+                onDismiss = { viewModel.clearError() }
+            )
+        }
         LazyColumn(
             state = listState,
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
+                .weight(1f)
+                .fillMaxWidth(),
             verticalArrangement = Arrangement.Top
         ) {
             items(
@@ -224,6 +218,7 @@ fun ThreadScreen(
 
                 EventCard(
                     event = event,
+                    highlighted = event.id == state.anchor?.id,
                     enableEventClick = false,
                     initiallyExpanded = true,
                     userProfile = state.profiles[event.pubkey],
@@ -255,7 +250,43 @@ fun ThreadScreen(
                 )
             }
         }
+        state.anchor?.let { anchor ->
+            ThreadReplyBar(
+                authorName = state.profiles[anchor.pubkey]?.getUserDisplayName(),
+                onClick = { onReplyStable(anchor) }
+            )
+        }
+        }
     }
 
 }
 
+/** A tap target shaped like a text field that opens the composer as a reply to the focal note. */
+@Composable
+private fun ThreadReplyBar(authorName: String?, onClick: () -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.background) {
+        Column {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text(
+                text = if (authorName != null) {
+                    stringResource(R.string.thread_reply_hint, authorName)
+                } else {
+                    stringResource(R.string.reply_note_hint)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .clickable(onClick = onClick)
+                    .padding(horizontal = 18.dp, vertical = 14.dp)
+            )
+        }
+    }
+}

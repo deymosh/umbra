@@ -18,7 +18,6 @@
     <string name="search_close">Close</string>
     <string name="search_placeholder">Search notes, authors, nip05</string>
     <string name="search_nip50_notice">Results include local cache and relays that support NIP-50 search.</string>
-    <string name="unknown_error">Unknown error</string>
     <string name="connecting_relays">Connecting to relays…</string>
     <string name="configure_relays">Configure Relays</string>
     <string name="no_events_yet">No events yet</string>
@@ -82,7 +81,6 @@
     <string name="amber_recommended">Amber holds your key in its own app. Umbra only ever asks it to sign.</string>
     <string name="continue_anonymously">Browse without signing in</string>
     <string name="anonymous_limited_features">Read-only. You can\'t post, react or follow until you sign in.</string>
-    <string name="privacy_info">No tracking, no analytics, no ads. Your key never touches this app.</string>
     <string name="nostr_powered_tor">Nostr, from the shadow.</string>
     <string name="login_failed">Authentication failed. Please try again.</string>
     <string name="login_error_with_detail">Login error: %1$s</string>
@@ -250,7 +248,6 @@
     <string name="settings_configure_relays_subtitle">Add, edit, and manage Nostr relays</string>
     <string name="settings_feed_preferences">Feed Preferences</string>
     <string name="settings_feed_preferences_subtitle">Customize feed filters and content</string>
-    <string name="settings_media">Media</string>
     <string name="settings_configure_blossom_servers_title">Blossom Servers</string>
     <string name="settings_configure_blossom_servers_subtitle">Manage where your media uploads go</string>
     <string name="blossom_servers_title">Blossom Servers</string>
@@ -263,8 +260,6 @@
     <string name="blossom_server_move_down">Move down</string>
     <string name="blossom_servers_empty">No servers configured yet — uploads use the default server (%1$s) until you add one.</string>
     <string name="blossom_servers_saved">Server list saved</string>
-
-    <string name="settings_appearance">Appearance</string>
     <string name="settings_appearance_title">Theme</string>
     <string name="settings_appearance_subtitle">Choose a color palette</string>
 
@@ -416,7 +411,6 @@
     <string name="event_kind_pins">Pins</string>
     <string name="event_kind_unknown">Kind %1$d</string>
     <string name="copy_formatted_json">Copy JSON</string>
-    <string name="profile_website_label">Website: %1$s</string>
     <string name="profile_follow">Follow</string>
     <string name="profile_unfollow">Unfollow</string>
     <string name="profile_follow_anonymous_hint">Anonymous mode is read-only. Sign in with AMBER to follow users.</string>
@@ -449,9 +443,9 @@
     <string name="video_download_failed">Video download failed</string>
     <string name="press_back_again_to_exit">Press back again to exit</string>
     <string name="copied">Copied</string>
-    <string name="warning">Warning</string>
-    <string name="external_url_tor_warning">This link will open in your browser outside of TOR. Your real IP may be exposed.</string>
-    <string name="open_anyway">Open anyway</string>
+    <string name="warning">Leave Tor?</string>
+    <string name="external_url_tor_warning">This opens in another app, outside Tor. The site will see your real IP address.</string>
+    <string name="open_anyway">Open outside Tor</string>
 
     <!-- Feed action error messages -->
     <string name="error_anonymous_read_only_react">Anonymous mode is read-only. Sign in with AMBER to react.</string>
@@ -558,7 +552,10 @@
     <string name="broadcast_collapse">Collapse</string>
     <string name="nip05_verified_cd">Verified NIP-05 identity</string>
     <string name="event_replying_to">Replying to %1$s</string>
-    <string name="network_status_secure_cd">Tor connected, %1$d relays</string>
+    <plurals name="network_status_secure_cd">
+        <item quantity="one">Tor connected, %1$d relay</item>
+        <item quantity="other">Tor connected, %1$d relays</item>
+    </plurals>
     <string name="network_status_starting_cd">Tor is connecting</string>
     <string name="network_status_offline_cd">Tor is not connected</string>
     <string name="network_status_relays_offline_cd">Tor connected, relays offline</string>
@@ -575,4 +572,6 @@
     <string name="profile_tab_pins">Pinned</string>
     <string name="copy_to_clipboard_cd">Copy %1$s</string>
     <string name="composer_preview_label">Preview</string>
+    <string name="stay_in_umbra">Stay private</string>
+    <string name="thread_reply_hint">Reply to %1$s…</string>
 </resources>

@@ -1,15 +1,23 @@
 package com.umbra.app.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -33,25 +41,46 @@ fun ActionsBottomSheet(
     actions: List<ActionItem>,
     onDismissRequest: () -> Unit
 ) {
-    ModalBottomSheet(onDismissRequest = onDismissRequest) {
-        Column {
-            actions.forEach { action ->
-                val contentColor = if (action.destructive) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                }
-                ListItem(
-                    headlineContent = { Text(action.label, color = contentColor) },
-                    leadingContent = {
-                        Icon(imageVector = action.icon, contentDescription = null, tint = contentColor)
-                    },
-                    modifier = Modifier.clickable {
-                        action.onClick()
-                        onDismissRequest()
-                    }
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = MaterialTheme.colorScheme.outline) }
+    ) {
+        Column(modifier = Modifier.padding(bottom = 12.dp)) {
+            val (regular, destructive) = actions.partition { !it.destructive }
+            regular.forEach { action -> ActionRow(action, onDismissRequest) }
+            if (destructive.isNotEmpty()) {
+                // Destructive actions are set apart so they're never hit by a slip of the thumb.
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant
                 )
+                destructive.forEach { action -> ActionRow(action, onDismissRequest) }
             }
         }
+    }
+}
+
+@Composable
+private fun ActionRow(action: ActionItem, onDismissRequest: () -> Unit) {
+    val contentColor = if (action.destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                action.onClick()
+                onDismissRequest()
+            }
+            .padding(horizontal = 24.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        Icon(
+            imageVector = action.icon,
+            contentDescription = null,
+            tint = if (action.destructive) contentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp)
+        )
+        Text(action.label, style = MaterialTheme.typography.bodyLarge, color = contentColor)
     }
 }

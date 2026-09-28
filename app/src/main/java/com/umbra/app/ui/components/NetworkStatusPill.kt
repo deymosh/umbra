@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -48,7 +49,7 @@ fun NetworkStatusPill(
     val description = when {
         !isTorConnected && isTorStarting -> stringResource(R.string.network_status_starting_cd)
         !isTorConnected -> stringResource(R.string.network_status_offline_cd)
-        relaysConnected -> stringResource(R.string.network_status_secure_cd, relayCount)
+        relaysConnected -> pluralStringResource(R.plurals.network_status_secure_cd, relayCount, relayCount)
         else -> stringResource(R.string.network_status_relays_offline_cd)
     }
     Row(

@@ -199,7 +199,7 @@ fun AppResourceUsageScreen(
 private fun MetricRow(label: String, value: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         shape = RoundedCornerShape(20.dp)
     ) {
         Row(
@@ -227,7 +227,7 @@ private fun MetricRow(label: String, value: String) {
 private fun MetricRowWithBar(label: String, value: String, fraction: Float) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         shape = RoundedCornerShape(20.dp)
     ) {
         Column(

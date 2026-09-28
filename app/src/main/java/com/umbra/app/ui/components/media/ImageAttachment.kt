@@ -185,7 +185,7 @@ fun ImageAttachment(
                 }
             }
             .clip(IMAGE_GALLERY_CORNER)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Box(
             modifier = Modifier
@@ -243,7 +243,7 @@ fun ImageAttachment(
                     } else {
                         Box(
                             modifier = placeholderModifier
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)),
+                                .background(MaterialTheme.colorScheme.surfaceContainerLow),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -270,7 +270,7 @@ fun ImageAttachment(
                         // spinner makes the in-flight state unambiguous.
                         Box(
                             modifier = placeholderModifier
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)),
+                                .background(MaterialTheme.colorScheme.surfaceContainerLow),
                             contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator(

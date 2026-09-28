@@ -80,7 +80,7 @@ private fun DeveloperToggleRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
+                    MaterialTheme.colorScheme.surfaceContainer,
                     RoundedCornerShape(20.dp)
                 )
                 .padding(horizontal = 18.dp, vertical = 14.dp),
