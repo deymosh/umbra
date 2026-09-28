@@ -22,7 +22,7 @@
     <string name="configure_relays">Configure Relays</string>
     <string name="no_events_yet">No events yet</string>
     <string name="search_no_results">No results for "%1$s"</string>
-    <string name="no_more_notes_found">No more notes found</string>
+    <string name="no_more_notes_found">You\'ve reached the beginning</string>
     <string name="go_to_top">Go to top</string>
     <string name="back_to_top">Back to top</string>
     <string name="share_event_url_chooser">Share Event URL</string>
@@ -50,8 +50,6 @@
     <string name="hex_label">hex</string>
     <string name="npub_label">npub</string>
     <string name="no_notes_yet">No notes yet</string>
-    <string name="profile_tab_notes_count">Notes %1$d</string>
-    <string name="profile_tab_replies_count">Replies %1$d</string>
     <string name="profile_followers_count">Followers %1$d</string>
     <string name="profile_no_replies_yet">No replies yet</string>
     <string name="profile_no_follows">No follows found for this profile</string>
@@ -579,4 +577,5 @@
     <string name="relay_delete_confirm_message">Umbra will stop reading from and publishing to it. You can add it again later.</string>
     <string name="relay_capability_on_cd">%1$s on</string>
     <string name="relay_capability_off_cd">%1$s off</string>
+    <string name="reaction_picker_remove_hint">Long-press an emoji to remove it from this list.</string>
 </resources>

@@ -1,5 +1,7 @@
 package com.umbra.app.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -247,10 +249,10 @@ fun LazyListScope.notesFeedSection(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(20.dp),
                 contentAlignment = Alignment.Center
             ) {
-                LoadingSpinner(size = 32.dp)
+                LoadingSpinner(size = 24.dp, strokeWidth = 2.5.dp)
             }
         }
     } else if (noOlderNotesFound && notes.isNotEmpty()) {
@@ -261,12 +263,18 @@ fun LazyListScope.notesFeedSection(
                     .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = stringResource(R.string.no_more_notes_found),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    EclipseMark(size = 28.dp, ignition = 0.3f)
+                    Text(
+                        text = stringResource(R.string.no_more_notes_found),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
     }

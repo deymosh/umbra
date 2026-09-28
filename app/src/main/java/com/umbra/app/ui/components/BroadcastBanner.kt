@@ -1,5 +1,8 @@
 package com.umbra.app.ui.components
 
+import androidx.compose.ui.graphics.StrokeCap
+import com.umbra.app.ui.theme.MonoStyle
+import com.umbra.app.ui.theme.UmbraTheme
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -127,7 +130,12 @@ private fun BroadcastBannerCard(
             if (anyInProgress) {
                 Spacer(Modifier.height(8.dp))
                 val aggregateProgress = broadcasts.map { it.progress }.average().toFloat()
-                LinearProgressIndicator(progress = { aggregateProgress }, modifier = Modifier.fillMaxWidth())
+                LinearProgressIndicator(
+                    progress = { aggregateProgress },
+                    modifier = Modifier.fillMaxWidth(),
+                    strokeCap = StrokeCap.Round,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                )
             }
             AnimatedVisibility(visible = expanded) {
                 Column(
@@ -138,7 +146,7 @@ private fun BroadcastBannerCard(
                 ) {
                     broadcasts.forEachIndexed { index, broadcast ->
                         if (index > 0) Spacer(Modifier.height(4.dp))
-                        HorizontalDivider()
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         BroadcastSection(
                             broadcast = broadcast,
                             isExpanded = broadcast.id in expandedBroadcastIds,
@@ -171,7 +179,7 @@ private fun BroadcastHeaderRow(broadcasts: List<BroadcastEvent>, onDismissAll: (
             } else {
                 pluralStringResource(R.plurals.broadcast_results_title_count, broadcasts.size, broadcasts.size)
             }
-            Text(title, style = MaterialTheme.typography.bodyMedium)
+            Text(title, style = MaterialTheme.typography.titleSmall)
 
             val totalSuccess = broadcasts.sumOf { it.successCount }
             val totalRelays = broadcasts.sumOf { it.totalRelays }
@@ -250,10 +258,10 @@ private fun RelayResultRow(relayUrl: String, result: RelayBroadcastResult?) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
-            Text(relayHost(relayUrl), style = MaterialTheme.typography.bodySmall)
+            Text(relayHost(relayUrl), style = MonoStyle, color = MaterialTheme.colorScheme.onSurface)
             val detail = relayStatusDetail(status, result?.message)
             if (detail != null) {
-                Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -269,22 +277,22 @@ private fun aggregateStatus(broadcasts: List<BroadcastEvent>): BroadcastStatus =
 @Composable
 private fun statusTint(status: BroadcastStatus): Color = when (status) {
     BroadcastStatus.IN_PROGRESS -> MaterialTheme.colorScheme.primary
-    BroadcastStatus.SUCCESS -> MaterialTheme.colorScheme.tertiary
-    BroadcastStatus.PARTIAL -> MaterialTheme.colorScheme.tertiary
+    BroadcastStatus.SUCCESS -> UmbraTheme.colors.secure
+    BroadcastStatus.PARTIAL -> UmbraTheme.colors.caution
     BroadcastStatus.FAILED -> MaterialTheme.colorScheme.error
 }
 
 @Composable
 private fun statusIconAndTint(status: BroadcastStatus): Pair<ImageVector, Color> = when (status) {
     BroadcastStatus.IN_PROGRESS -> Icons.Filled.Sync to MaterialTheme.colorScheme.primary
-    BroadcastStatus.SUCCESS -> Icons.Filled.Check to MaterialTheme.colorScheme.tertiary
-    BroadcastStatus.PARTIAL -> Icons.Filled.Warning to MaterialTheme.colorScheme.tertiary
+    BroadcastStatus.SUCCESS -> Icons.Filled.Check to UmbraTheme.colors.secure
+    BroadcastStatus.PARTIAL -> Icons.Filled.Warning to UmbraTheme.colors.caution
     BroadcastStatus.FAILED -> Icons.Filled.Error to MaterialTheme.colorScheme.error
 }
 
 @Composable
 private fun relayStatusIconAndTint(status: RelayBroadcastStatus): Pair<ImageVector, Color> = when (status) {
-    RelayBroadcastStatus.SUCCESS -> Icons.Filled.Check to MaterialTheme.colorScheme.tertiary
+    RelayBroadcastStatus.SUCCESS -> Icons.Filled.Check to UmbraTheme.colors.secure
     RelayBroadcastStatus.FAILED, RelayBroadcastStatus.TIMEOUT -> Icons.Filled.Error to MaterialTheme.colorScheme.error
     RelayBroadcastStatus.PENDING, RelayBroadcastStatus.RETRYING -> Icons.Filled.Sync to MaterialTheme.colorScheme.primary
 }

@@ -235,11 +235,6 @@ fun ProfileScreen(
         // Optional error banner + ProfileHero + ProfileTabsRow before notes section.
         (if (state.errorMessage != null) 1 else 0) + 2
     }
-    val notesHeaderText = when (selectedTab) {
-        ProfileTab.NOTES -> stringResource(R.string.profile_tab_notes_count, topLevelNotes.size)
-        ProfileTab.REPLIES -> stringResource(R.string.profile_tab_replies_count, replyNotes.size)
-        else -> null
-    }
     val emptyNotesTitle = when (selectedTab) {
         ProfileTab.REPLIES -> stringResource(R.string.profile_no_replies_yet)
         ProfileTab.PINNED -> stringResource(R.string.profile_no_pins)
@@ -380,7 +375,8 @@ fun ProfileScreen(
                         isLoading = selectedTab != ProfileTab.PINNED && state.isLoading,
                         isLoadingMore = selectedTab != ProfileTab.PINNED && state.isLoadingMore,
                         noOlderNotesFound = selectedTab != ProfileTab.PINNED && state.olderNotesExhausted,
-                        notesHeaderText = notesHeaderText,
+                        // The tab row already shows the count; a second header line repeated it.
+                        notesHeaderText = null,
                         emptyTitle = emptyNotesTitle,
                         showBottomSpacer = true,
                         torDataSourceFactory = viewModel.mediaCacheDataSourceFactory,
