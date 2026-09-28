@@ -71,7 +71,7 @@ Search: grep `logger\.(d|w)\s*\{` (and `client\.logger\.(d|w)\s*\{` — some `da
 
 ## Check 2: throwable dropped by using `d`/`w` instead of `e`
 
-The wrapper makes this check mechanical in a way a plain `Log.*` codebase can't: `e()` is the *only* method that accepts a `Throwable` at all. So the bug shape isn't "missing third argument" — it's "a catch block reaching for `logger.d`/`logger.w` with a manually-scrubbed message string, when `logger.e(throwable) { }` was available and drops the actual stack trace on the floor either way." This is exactly what `LOG-17` in `docs/CONCERNS.md`/`docs/TODO.md` catalogs — sites that lost throwable attachment during the migration to this wrapper.
+The wrapper makes this check mechanical in a way a plain `Log.*` codebase can't: `e()` is the *only* method that accepts a `Throwable` at all. So the bug shape isn't "missing third argument" — it's "a catch block reaching for `logger.d`/`logger.w` with a manually-scrubbed message string, when `logger.e(throwable) { }` was available and drops the actual stack trace on the floor either way."
 
 ```kotlin
 // ❌ FLAG — throwable is available (it's `e` in the catch clause) but never reaches the logger;
@@ -109,4 +109,3 @@ catch\s*\(\s*(e|t|throwable|cause)\s*:.*\{[^}]*(logger|client\.logger)\.(d|w)\s*
 ## Related
 
 - AUDIT.md — the authoritative logging rules this skill enforces; re-read it if a finding seems ambiguous rather than guessing.
-- `docs/CONCERNS.md` (LOG-17, LOG-18) and `docs/TODO.md` — the specific known instances of Check 1/Check 2 failures already catalogued in this codebase, useful as ground truth for what a real hit looks like.

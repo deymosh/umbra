@@ -84,13 +84,6 @@ CI (`.github/workflows/android-ci.yml`) runs `lintDebug`, `testDebugUnitTest`, a
 - **Attribution:** every commit ends with a `Co-Authored-By: <model name> <noreply@anthropic.com>` trailer naming the Claude model that did the work.
 - **Comments and commit bodies stand alone.** `.planning/` docs and git history can be deleted or rewritten, so never cite a GSD phase/plan/task id ("Plan 03-05 Task 2", "D-01") or a commit hash as the explanation — state the constraint or reason itself. A `{type}(phase-plan): ...` subject scope tag is fine.
 
-## Bug tracking
-
-Bugs and backlog items found mid-session are logged as they're found — open bugs in
-`docs/KNOWN_ISSUES.md`, backlog in `docs/TODO.md`, finished work in `docs/DONE.md` — with one
-global `LOG-<n>` counter across all three (never `#<n>`, which GitHub auto-links). Formats and
-status transitions: the `umbra-issue-log` skill.
-
 ## UI and design
 
 All UI work follows the `umbra-design` skill (tokens, components, copy, and the snapshot review

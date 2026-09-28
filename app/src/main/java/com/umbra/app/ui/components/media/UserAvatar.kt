@@ -199,7 +199,7 @@ private fun AnimatedUserAvatar(
         // reads painter.state directly, so this can't reuse rememberRetryingAsyncImagePainter's
         // return value — instead it calls the same runGatedImageLoad helper GatedImagePainter.kt
         // uses, one acquire/release pair per load attempt (keyed exactly like that engine's own
-        // LaunchedEffect(url, candidateIndex, retryAttempt)), preserving the LOG-2
+        // LaunchedEffect(url, candidateIndex, retryAttempt)), preserving the
         // acquire-before-try/release-in-finally discipline rather than leaving this path ungated.
         // The model above is withheld (kept null) until onDispatched actually flips hasDispatched,
         // so Coil doesn't dispatch the request over Tor until a gate permit is held.

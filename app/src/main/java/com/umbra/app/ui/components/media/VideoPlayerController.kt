@@ -27,7 +27,7 @@ internal object VideoPlaybackRegistry {
 }
 
 /**
- * The LOG-3 anamorphic-pixel aspect-ratio fix, extracted as a pure function so it's directly
+ * The anamorphic-pixel aspect-ratio correction (width scaled by the pixel aspect ratio), extracted as a pure function so it's directly
  * unit-testable without instantiating ExoPlayer. Returns null for a zero/negative dimension,
  * matching the guard the original listener used before updating its aspect-ratio state - a
  * caller must treat a null result as "no update", not as a fallback to some default ratio.
@@ -45,10 +45,10 @@ internal fun computeVideoAspectRatio(width: Int, height: Int, pixelWidthHeightRa
  *
  * Every callback here is byte-identical between the two current callers except
  * [onVideoSizeChanged]: the inline caller passes a real aspect-ratio callback backed by
- * [computeVideoAspectRatio] (the LOG-3 fix), while the fullscreen caller passes an explicit no-op,
+ * [computeVideoAspectRatio], while the fullscreen caller passes an explicit no-op,
  * since its player renders via `Modifier.fillMaxSize()` with no aspect-ratio-driven container to
  * update. Do not collapse this into one shared implementation - that would either silently add
- * pointless aspect-ratio computation to the fullscreen path or silently drop the LOG-3 fix from
+ * pointless aspect-ratio computation to the fullscreen path or silently drop the aspect-ratio correction from
  * the inline path, depending on which behavior "wins".
  */
 internal fun createVideoPlayerListener(

@@ -20,7 +20,7 @@ import org.junit.Test
 
 /**
  * Regression coverage for the three contracts [EventIngestCache]'s extraction most risks
- * breaking: replaceable-event superseding via `winsReplaceableRace` (LOG-1/LOG-6), the
+ * breaking: replaceable-event superseding via `winsReplaceableRace`, the
  * synchronous eviction-to-engagement-index contract, and the 250ms burst-coalescing snapshot
  * emitter. See [com.umbra.app.data.repository.cache.EventLruCacheTest]'s
  * `given eviction callback when it fires then mutation is visible synchronously with no lock
@@ -229,8 +229,8 @@ class EventIngestCacheTest {
         val directNewer = metadataRevision(id = "bbb2", pubkey = pubkey, createdAt = 200L)
 
         // Simulates a NIP-18 repost embedding an older revision of a kind-0/replaceable slot,
-        // cached via cacheRepostTarget rather than ingest() -- LOG-41's bug was that this path
-        // never updated latestReplaceableEventId, so a subsequent direct ingest of a newer
+        // cached via cacheRepostTarget rather than ingest() -- this path used to
+        // never update latestReplaceableEventId, so a subsequent direct ingest of a newer
         // revision for the same slot wouldn't know to evict this one.
         cache.cacheRepostTarget(repostCachedOlder)
         val outcomeNewer = cache.ingest(directNewer, relayA, currentUserPubkey = null)
@@ -248,7 +248,7 @@ class EventIngestCacheTest {
         val repostCachedOlder = metadataRevision(id = "aaa1", pubkey = pubkey, createdAt = 100L)
 
         cache.ingest(directNewer, relayA, currentUserPubkey = null)
-        // Before LOG-41's fix, cacheRepostTarget did an unconditional id-keyed put with no
+        // cacheRepostTarget used to do an unconditional id-keyed put with no
         // race check at all, so this older revision would silently coexist alongside the
         // already-ingested newer one instead of being dropped.
         cache.cacheRepostTarget(repostCachedOlder)
@@ -645,7 +645,7 @@ class EventIngestCacheTest {
         assertEquals(0, archive.deleteEventByIdCalls.size)
     }
 
-    // --- NIP-09 a-tag deletion resolves against the in-memory cache too (LOG-19/BUG-03) ---
+    // --- NIP-09 a-tag deletion resolves against the in-memory cache too ---
 
     @Test
     fun `given a non-owned addressable event resident only in the in-memory cache when an a-tag deletion targets it then it is removed from the cache`() = runTest {
