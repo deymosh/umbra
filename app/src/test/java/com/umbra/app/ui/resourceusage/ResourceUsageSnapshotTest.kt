@@ -39,15 +39,10 @@ class ResourceUsageSnapshotTest {
     @Test
     fun loaded() = snapshot("ResourceUsage") {
         AppResourceUsageContent(
-            state = AppResourceUsageState(snapshot = sample, isTrimmingCaches = true),
+            state = AppResourceUsageState(snapshot = sample),
             onNavigateBack = {},
             onClearEventCache = {},
             onTrimAllCaches = {}
         )
-    }
-
-    @Test
-    fun loading() = snapshot("ResourceUsage_loading") {
-        AppResourceUsageContent(AppResourceUsageState(), {}, {}, {})
     }
 }

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.ui.draw.clip
 import com.umbra.app.ui.theme.UmbraTheme
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -49,6 +50,8 @@ fun ReactionBar(
     // Null hides the chip entirely — quoting is currently scoped to kind-1 text notes only, see
     // EventCard's onQuote wiring.
     onQuote: (() -> Unit)? = null,
+    // Null hides the chip: shown only when the author has a Lightning address to zap.
+    onZap: (() -> Unit)? = null,
     isReposted: Boolean = false,
     eventKindLabel: String? = null
 ) {
@@ -82,6 +85,15 @@ fun ReactionBar(
             tint = if (isLiked) UmbraTheme.colors.like else writeIdle,
             onClick = onLike
         )
+        onZap?.let { zapAction ->
+            ActionChip(
+                icon = Icons.Outlined.Bolt,
+                contentDescription = stringResource(R.string.zap_cd),
+                tint = UmbraTheme.colors.zap.copy(alpha = if (canSign) 1f else 0.6f),
+                showCount = false,
+                onClick = zapAction
+            )
+        }
         onQuote?.let { quoteAction ->
             ActionChip(
                 icon = Icons.Rounded.FormatQuote,

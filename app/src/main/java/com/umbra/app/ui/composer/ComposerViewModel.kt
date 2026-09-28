@@ -401,9 +401,15 @@ class ComposerViewModel @Inject constructor(
 
         _state.update { it.copy(isPublishing = true) }
         viewModelScope.launch {
-            val eventJson = current.replyToEvent?.let {
-                NostrEventBuilder.reply(body, it, imetaTags = liveAttachments, sensitiveReason = sensitiveReason)
-            } ?: NostrEventBuilder.textNote(body, imetaTags = liveAttachments, sensitiveReason = sensitiveReason)
+            val target = current.replyToEvent
+            val eventJson = when {
+                target == null -> NostrEventBuilder.textNote(body, imetaTags = liveAttachments, sensitiveReason = sensitiveReason)
+                // NIP-10 replies are for kind-1 notes only; anything else (pictures, forum
+                // threads, comments) gets a NIP-22 comment.
+                target.kind == Event.KIND_TEXT_NOTE ->
+                    NostrEventBuilder.reply(body, target, imetaTags = liveAttachments, sensitiveReason = sensitiveReason)
+                else -> NostrEventBuilder.commentOn(target, body, imetaTags = liveAttachments, sensitiveReason = sensitiveReason)
+            }
             val signed = try {
                 amberSignerGateway.signEvent(eventJson, current.currentUserPubkey)
             } catch (e: Exception) {

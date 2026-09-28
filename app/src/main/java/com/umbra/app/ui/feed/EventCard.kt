@@ -65,6 +65,8 @@ import com.umbra.app.ui.components.media.UserAvatar
 import com.umbra.app.ui.components.computeTextRenderMetrics
 import com.umbra.app.ui.components.launchExternalUrl
 import com.umbra.app.ui.components.launchLightningInvoice
+import com.umbra.app.ui.zap.LocalZapLauncher
+import com.umbra.app.ui.zap.ZapTarget
 import com.umbra.app.ui.components.resolveEventReference
 import com.umbra.app.ui.components.resolveProfileReference
 import com.umbra.app.ui.components.truncatePublicKey
@@ -402,6 +404,15 @@ fun EventCard(
         if (isTextNote) ({ onQuoteState.value(event) }) else null
     }
     val shareAction = remember(event.id) { { onShareState.value(event) } }
+    val zapLauncher = LocalZapLauncher.current
+    val canZap = !userProfile?.lud16.isNullOrBlank() || !userProfile?.lud06.isNullOrBlank()
+    val zapAction = remember(event.id, userProfile, zapLauncher, canZap) {
+        if (canZap && zapLauncher != null) {
+            { zapLauncher(ZapTarget(recipientPubkey = event.pubkey, profile = userProfile, event = event)) }
+        } else {
+            null
+        }
+    }
 
     pendingExternalUrl?.let { url ->
         val isLightningInvoice = url.startsWith("lightning:", ignoreCase = true)
@@ -731,6 +742,7 @@ fun EventCard(
                     onLike = likeAction,
                     onRepost = repostAction,
                     onQuote = quoteAction,
+                    onZap = zapAction,
                     onShare = shareAction,
                     // Pull the first chip's touch padding back so its icon lines up with the text.
                     modifier = Modifier

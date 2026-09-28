@@ -46,6 +46,7 @@ import com.umbra.app.ui.broadcast.BroadcastViewModel
 import com.umbra.app.ui.components.BroadcastBanner
 import com.umbra.app.ui.composer.ComposerScreen
 import com.umbra.app.ui.composer.ComposerViewModel
+import com.umbra.app.ui.zap.ZapHost
 import com.umbra.app.ui.auth.LoginScreen
 import com.umbra.app.ui.feed.FeedScreen
 import com.umbra.app.ui.feed.ThreadScreen
@@ -321,6 +322,7 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
         }
     }
 
+    ZapHost {
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
         navController = navController,
@@ -479,5 +481,6 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
             .navigationBarsPadding()
             .padding(bottom = 16.dp)
     )
+    }
     }
 }

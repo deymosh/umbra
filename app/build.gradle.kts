@@ -96,6 +96,8 @@ android {
             all { test ->
                 test.dependsOn(prepareRobolectricRuntime)
                 test.systemProperty("robolectric.offline", "true")
+                // Snapshot goldens render clock times; pin the zone so they match on every machine.
+                test.systemProperty("user.timezone", "UTC")
                 test.systemProperty(
                     "robolectric.dependency.dir",
                     robolectricDependencyDir.get().asFile.absolutePath

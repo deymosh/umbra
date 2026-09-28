@@ -464,6 +464,56 @@ class NostrEventBuilderTest {
         assertEquals(Event.KIND_COMMENT.toString(), tags.getValue("k").first()[1].jsonPrimitive.content)
     }
 
+    @Test
+    fun `given comment target when commenting on it then root scope is copied and parent is the comment`() {
+        val rootId = "8".repeat(64)
+        val rootAuthor = "9".repeat(64)
+        val parentComment = Event(
+            id = "a".repeat(64),
+            pubkey = "b".repeat(64),
+            createdAt = 2L,
+            kind = Event.KIND_COMMENT,
+            tags = listOf(
+                listOf("E", rootId, "", rootAuthor),
+                listOf("K", "20"),
+                listOf("P", rootAuthor),
+                listOf("e", rootId),
+                listOf("k", "20"),
+                listOf("p", rootAuthor)
+            ),
+            content = "nice shot",
+            sig = "c".repeat(128)
+        )
+        val obj = parseObject(NostrEventBuilder.commentOn(parentComment, "agreed", sensitiveReason = ""))
+
+        assertEquals(Event.KIND_COMMENT, obj.getValue("kind").jsonPrimitive.content.toInt())
+        val tags = tagArrays(obj).groupBy { it[0].jsonPrimitive.content }
+        assertEquals(rootId, tags.getValue("E").single()[1].jsonPrimitive.content)
+        assertEquals("20", tags.getValue("K").single()[1].jsonPrimitive.content)
+        assertEquals(parentComment.id, tags.getValue("e").single()[1].jsonPrimitive.content)
+        assertEquals(Event.KIND_COMMENT.toString(), tags.getValue("k").single()[1].jsonPrimitive.content)
+        assertEquals(parentComment.pubkey, tags.getValue("p").single()[1].jsonPrimitive.content)
+        assertTrue(tags.containsKey("content-warning"))
+    }
+
+    @Test
+    fun `given picture target when commenting on it then it is both root and parent`() {
+        val picture = Event(
+            id = "d".repeat(64),
+            pubkey = "e".repeat(64),
+            createdAt = 1L,
+            kind = 20,
+            tags = emptyList(),
+            content = "sunset",
+            sig = "c".repeat(128)
+        )
+        val tags = tagArrays(parseObject(NostrEventBuilder.commentOn(picture, "wow")))
+            .groupBy { it[0].jsonPrimitive.content }
+        assertEquals(picture.id, tags.getValue("E").single()[1].jsonPrimitive.content)
+        assertEquals(picture.id, tags.getValue("e").single()[1].jsonPrimitive.content)
+        assertEquals("20", tags.getValue("K").single()[1].jsonPrimitive.content)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun `given kind1 root when building comment then throws`() {
         val note = sampleEvent(id = "7".repeat(64))

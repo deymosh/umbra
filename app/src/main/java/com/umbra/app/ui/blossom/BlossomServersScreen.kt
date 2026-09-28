@@ -13,12 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Close
@@ -31,7 +27,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -40,18 +35,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.umbra.app.R
 import com.umbra.app.ui.common.resolve
+import com.umbra.app.ui.components.InlineAddField
 import com.umbra.app.ui.components.InlineEmptyText
 import com.umbra.app.ui.components.LoadingSpinner
 import com.umbra.app.ui.components.SettingsGroup
@@ -172,61 +166,15 @@ internal fun BlossomServersContent(
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
                 }
-                AddServerRow(
+                InlineAddField(
                     value = state.newServerInput,
                     onValueChange = onInputChange,
-                    onAdd = onAdd
+                    placeholder = stringResource(R.string.blossom_server_url_label),
+                    onAdd = onAdd,
+                    keyboardType = KeyboardType.Uri
                 )
             }
             Spacer(Modifier.height(32.dp))
-        }
-    }
-}
-
-@Composable
-private fun AddServerRow(value: String, onValueChange: (String) -> Unit, onAdd: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Add,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(24.dp)
-        )
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            singleLine = true,
-            textStyle = MonoStyle.copy(
-                fontSize = MaterialTheme.typography.bodyMedium.fontSize,
-                color = MaterialTheme.colorScheme.onSurface
-            ),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Uri,
-                autoCorrectEnabled = false,
-                imeAction = ImeAction.Done
-            ),
-            keyboardActions = KeyboardActions(onDone = { onAdd() }),
-            modifier = Modifier.weight(1f).padding(vertical = 12.dp),
-            decorationBox = { inner ->
-                if (value.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.blossom_server_url_label),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                inner()
-            }
-        )
-        TextButton(onClick = onAdd, enabled = value.isNotBlank()) {
-            Text(stringResource(R.string.blossom_server_add))
         }
     }
 }
@@ -278,15 +226,16 @@ private fun BlossomServerRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(
+            val detail = server.substringAfter("://").trimEnd('/').takeIf { it != host }
+            if (isFirst || detail != null) Text(
                 text = buildAnnotatedString {
                     if (isFirst) {
                         withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
                             append(stringResource(R.string.blossom_server_primary))
                         }
-                        append(" · ")
+                        if (detail != null) append(" · ")
                     }
-                    append(server.substringAfter("://"))
+                    if (detail != null) append(detail)
                 },
                 style = MonoStyle,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -32,6 +32,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
@@ -78,6 +79,8 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.umbra.app.R
+import com.umbra.app.ui.zap.LocalZapLauncher
+import com.umbra.app.ui.zap.ZapTarget
 import com.umbra.app.domain.nip19.Bech32Encoder
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip25.ReactionEmoji
@@ -810,6 +813,22 @@ internal fun ProfileHero(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (!isOwnProfile) {
+                    val zapLauncher = LocalZapLauncher.current
+                    if (zapLauncher != null && (!profile?.lud16.isNullOrBlank() || !profile?.lud06.isNullOrBlank())) {
+                        IconButton(
+                            onClick = { zapLauncher(ZapTarget(recipientPubkey = pubkey, profile = profile)) },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .border(1.dp, UmbraTheme.colors.zap.copy(alpha = 0.6f), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Bolt,
+                                contentDescription = stringResource(R.string.zap_cd),
+                                tint = UmbraTheme.colors.zap,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                     if (canSign) {
                         IconButton(
                             onClick = onMuteUser,

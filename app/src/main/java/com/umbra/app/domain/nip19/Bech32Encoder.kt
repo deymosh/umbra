@@ -311,6 +311,15 @@ object Bech32Encoder {
     /**
      * Generic bech32 encoding (base32 + checksum)
      */
+    /** LUD-01: a bech32 `lnurl1…` string for an LNURL endpoint URL (no length limit applies). */
+    fun encodeLnurl(url: String): String = encodeBech32("lnurl", url.toByteArray(Charsets.UTF_8)).uppercase()
+
+    /** LUD-01: the endpoint URL inside an `lnurl1…` string, or null if it isn't one. */
+    fun decodeLnurl(lnurl: String): String? {
+        val (hrp, data) = decodeBech32(lnurl.trim().removePrefix("lightning:")) ?: return null
+        return if (hrp == "lnurl") data.toString(Charsets.UTF_8) else null
+    }
+
     private fun encodeBech32(hrp: String, data: ByteArray): String {
         return try {
             val fiveBitData = convertBits(data, 8, 5, true)

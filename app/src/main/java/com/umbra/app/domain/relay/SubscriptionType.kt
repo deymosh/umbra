@@ -39,7 +39,7 @@ enum class SubscriptionType(val family: SubscriptionFamily) {
     /** Pooled: every fetchEventById() lookup shares one channel (see NostrChannels.EVENT_LOOKUP). */
     EVENT_LOOKUP(SubscriptionFamily.OTHER),
 
-    /** Reserved — no channel emits this yet (fetching reactions/reposts for one specific event). */
+    /** An open thread's replies, NIP-22 comments and engagement (see NostrChannels.THREAD_PREFIX). */
     EVENT_INTERACTIONS(SubscriptionFamily.OTHER),
 
     /**
@@ -99,6 +99,8 @@ enum class SubscriptionType(val family: SubscriptionFamily) {
                 channelId.startsWith(NostrChannels.NEGENTROPY_SYNC_PREFIX) -> NEGENTROPY_SYNC
                 channelId.startsWith(NostrChannels.NEGENTROPY_FETCH_PREFIX) -> NEGENTROPY_FETCH
                 channelId.startsWith(NostrChannels.SEARCH) -> SEARCH_NOTES
+                channelId.startsWith(NostrChannels.THREAD_PREFIX) -> EVENT_INTERACTIONS
+                channelId.startsWith(NostrChannels.PAYMENT_TARGETS_PREFIX) -> PROFILE_LOOKUP
                 channelId.startsWith(NostrChannels.REFERENCED_AUTHOR_HYDRATION_PREFIX) -> PROFILE_LOOKUP
                 channelId.startsWith(NostrChannels.PROFILE_BACKFILL_NOTES_PREFIX) -> PROFILE_BACKFILL
                 channelId.startsWith(NostrChannels.PROFILE_BACKFILL_METADATA_PREFIX) ||

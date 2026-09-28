@@ -7,7 +7,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.umbra.app.domain.nip55.AmberSignerGateway
 import com.umbra.app.domain.nip19.Bech32Encoder
+import com.umbra.app.domain.model.NostrChannels
 import com.umbra.app.domain.nip01.Event
+import com.umbra.app.domain.usecase.BuildThreadFiltersUseCase
 import com.umbra.app.domain.nip01.NostrEventBuilder
 import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.domain.preferences.UserPreferences
@@ -113,6 +115,8 @@ class ThreadViewModel @Inject constructor(
     private var viewportPrefetchJob: Job? = null
     private val roomSeedEvents = MutableStateFlow<List<Event>>(emptyList())
     private val anchorEventId = MutableStateFlow<String?>(null)
+    private val buildThreadFilters = BuildThreadFiltersUseCase()
+    private var threadChannelId: String? = null
 
     private val _state = MutableStateFlow(ThreadState(eventId = eventRef))
     val state: StateFlow<ThreadState> = _state.asStateFlow()
@@ -230,6 +234,7 @@ class ThreadViewModel @Inject constructor(
                 return@launch
             }
             anchorEventId.value = anchor.id
+            subscribeToThread(anchor)
             val seedEvents = buildLocalThreadSeed(anchor)
             roomSeedEvents.value = seedEvents
             // viewModelScope defaults to Dispatchers.Main.immediate — without this hop, the
@@ -528,9 +533,22 @@ class ThreadViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Asks relays for everything pointing at this thread (replies, NIP-22 comments, engagement)
+     * instead of relying on whatever the feed happened to have cached — a thread opened from a
+     * profile, link or notification otherwise shows few or no replies.
+     */
+    private fun subscribeToThread(anchor: Event) {
+        val channelId = NostrChannels.thread(anchor.id)
+        threadChannelId = channelId
+        eventRepository.subscribeChannel(channelId, buildThreadFilters(anchor.id, anchor.threadRootId()))
+    }
+
     private fun collectDescendants(anchorId: String, allEvents: List<Event>): List<Event> {
+        // NIP-10 replies and NIP-22 comments both hang off their parent's id (a comment's
+        // lowercase `e` tag is its parent), so one parent map covers both.
         val byParent = allEvents
-            .filter { it.kind == Event.KIND_TEXT_NOTE && it.isReply() }
+            .filter { (it.kind == Event.KIND_TEXT_NOTE && it.isReply()) || it.kind == Event.KIND_COMMENT }
             .groupBy { it.getParentEventId() }
 
         val out = mutableListOf<Event>()
@@ -623,6 +641,7 @@ class ThreadViewModel @Inject constructor(
     fun getUrlMetadata(url: String) = urlPrefetcher?.getMetadata(url)
 
     override fun onCleared() {
+        threadChannelId?.let(eventRepository::clearChannel)
         viewportPrefetchJob?.cancel()
         imagePrefetcher?.resetScope(THREAD_VIEWPORT_PREFETCH_SCOPE)
         urlPrefetcher?.resetScope(THREAD_VIEWPORT_URL_PREFETCH_SCOPE)

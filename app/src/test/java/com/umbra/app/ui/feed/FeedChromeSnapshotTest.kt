@@ -30,6 +30,36 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [SNAPSHOT_SDK], application = Application::class, qualifiers = PHONE)
 class FeedChromeSnapshotTest {
     @Test
+    fun coldStart() {
+        snapshot("FeedChrome_coldStart") {
+            Box(Modifier.fillMaxSize()) {
+                Column(Modifier.fillMaxSize().statusBarsPadding()) {
+                    FeedTopBar(
+                        currentProfile = SnapshotFixtures.bob,
+                        currentPubkey = SnapshotFixtures.BOB,
+                        searchVisible = false,
+                        relayCount = 0,
+                        isConnected = false,
+                        isTorConnected = false,
+                        isTorStarting = true,
+                        onAvatarClick = {},
+                        onToggleSearch = {}
+                    )
+                    com.umbra.app.ui.components.EmptyState(
+                        title = androidx.compose.ui.res.stringResource(com.umbra.app.R.string.no_events_yet),
+                        message = androidx.compose.ui.res.stringResource(com.umbra.app.R.string.connecting_relays),
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                QuickActionBottomBar(
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    onGoTop = {}, onCompose = {}, onRelays = {}, onSettings = {}, onFilters = {}
+                )
+            }
+        }
+    }
+
+    @Test
     fun feedScreen() {
         snapshot("FeedChrome_feedScreen") {
             SnapshotHost {
