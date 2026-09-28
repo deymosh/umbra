@@ -83,12 +83,15 @@ fun QuotedNoteCard(
     }
     // Same rationale as EventCard's fullLightningInvoices — a collapsed quote card must still
     // parse any invoice in its content correctly, not just whatever survived truncation.
-    val fullLightningInvoices = remember(quotedEvent.id, normalizedQuoteContent) {
-        parseInlineMediaSegments(normalizedQuoteContent).filterIsInstance<InlineMediaSegment.LightningInvoice>().map { it.invoice }
+    val quoteSegments = remember(quotedEvent.id, normalizedQuoteContent) {
+        parseInlineMediaSegments(normalizedQuoteContent)
+    }
+    val fullLightningInvoices = remember(quoteSegments) {
+        quoteSegments.filterIsInstance<InlineMediaSegment.LightningInvoice>().map { it.invoice }
     }
     // Same rationale as fullLightningInvoices above, for LNURL strings.
-    val fullLnurlReferences = remember(quotedEvent.id, normalizedQuoteContent) {
-        parseInlineMediaSegments(normalizedQuoteContent).filterIsInstance<InlineMediaSegment.LnurlReference>().map { it.lnurl }
+    val fullLnurlReferences = remember(quoteSegments) {
+        quoteSegments.filterIsInstance<InlineMediaSegment.LnurlReference>().map { it.lnurl }
     }
     Surface(
         shape = MaterialTheme.shapes.medium,

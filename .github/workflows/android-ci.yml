@@ -43,7 +43,17 @@ jobs:
         run: chmod +x gradlew
 
       - name: Lint, Test, and Assemble
-        run: ./gradlew --continue lintDebug testDebugUnitTest assembleBenchmark
+        # verifyRoborazziDebug runs the whole unit-test suite and also fails on any UI snapshot
+        # that differs from its committed golden in app/src/test/snapshots/ (docs/UI_SNAPSHOTS.md).
+        run: ./gradlew --continue lintDebug verifyRoborazziDebug assembleBenchmark
+
+      - name: Upload snapshot diffs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: roborazzi-diffs
+          path: app/build/outputs/roborazzi
+          if-no-files-found: ignore
 
       - name: Upload Benchmark APK
         # archive: false uploads the raw .apk itself instead of wrapping it in a zip — needs

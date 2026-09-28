@@ -1,5 +1,6 @@
 package com.umbra.app.ui.components.media
 
+import com.umbra.app.ui.theme.UmbraTheme
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -43,7 +44,6 @@ internal val IMAGE_GALLERY_CORNER = RoundedCornerShape(12.dp)
 
 // Matches UserIdentityBadge.kt's NIP-05-pending badge exactly, so "queued" reads as the same
 // visual language everywhere in the app rather than inventing a second one.
-private val PENDING_AMBER = Color(0xFFF9A825)
 
 @Composable
 fun ImageGalleryAttachment(
@@ -238,7 +238,7 @@ private fun GalleryImageCell(
                     Icon(
                         imageVector = Icons.Default.Schedule,
                         contentDescription = null,
-                        tint = PENDING_AMBER,
+                        tint = UmbraTheme.colors.caution,
                         modifier = Modifier.size(20.dp)
                     )
                 }

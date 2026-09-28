@@ -1,5 +1,6 @@
 package com.umbra.app.ui.components.media
 
+import com.umbra.app.ui.theme.UmbraTheme
 import android.graphics.drawable.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -63,7 +64,6 @@ private const val BLURHASH_DECODE_WIDTH = 32
 
 // Matches UserIdentityBadge.kt's NIP-05-pending badge exactly, so "queued" reads as the same
 // visual language everywhere in the app rather than inventing a second one.
-private val PENDING_AMBER = Color(0xFFF9A825)
 
 /**
  * Small top-end corner status badge drawn over a blurhash placeholder — the placeholder already
@@ -92,7 +92,7 @@ private fun BoxScope.BlurHashStatusBadge(icon: androidx.compose.ui.graphics.vect
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isError) MaterialTheme.colorScheme.error else PENDING_AMBER,
+                tint = if (isError) MaterialTheme.colorScheme.error else UmbraTheme.colors.caution,
                 modifier = Modifier.size(12.dp)
             )
         }
@@ -249,7 +249,7 @@ fun ImageAttachment(
                             Icon(
                                 imageVector = Icons.Default.Schedule,
                                 contentDescription = null,
-                                tint = PENDING_AMBER,
+                                tint = UmbraTheme.colors.caution,
                                 modifier = Modifier.size(28.dp)
                             )
                         }

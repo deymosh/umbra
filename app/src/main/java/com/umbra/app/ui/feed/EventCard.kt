@@ -298,20 +298,25 @@ fun EventCard(
     // textMetrics.collapsedText while collapsed) so the fullscreen image viewer can always swipe
     // to every image in the note — including ones past the "Show more" cutoff — not just whatever
     // survived truncation. See NostrTextRenderer's fullImageUrls param.
-    val fullImageUrls = remember(event.id, normalizedContent) {
-        parseInlineMediaSegments(normalizedContent).filterIsInstance<InlineMediaSegment.ImageUrl>().map { it.url }
+    // Parsed once per note and shared by the three derived lists below (this used to re-parse the
+    // full content once per list, three regex passes per card on every feed bind).
+    val fullContentSegments = remember(event.id, normalizedContent) {
+        parseInlineMediaSegments(normalizedContent)
+    }
+    val fullImageUrls = remember(fullContentSegments) {
+        fullContentSegments.filterIsInstance<InlineMediaSegment.ImageUrl>().map { it.url }
     }
     // Same rationale as fullImageUrls above: computeTextRenderMetrics already keeps an invoice
     // intact when it straddles the collapse cutoff, but this is a defense-in-depth correctness net
     // for NostrTextRenderer to swap in the full, correctly-parsed invoice string wherever the
     // (possibly still-truncated) displayText's own parse only captured a prefix of it. See
     // NostrTextRenderer's fullLightningInvoices param.
-    val fullLightningInvoices = remember(event.id, normalizedContent) {
-        parseInlineMediaSegments(normalizedContent).filterIsInstance<InlineMediaSegment.LightningInvoice>().map { it.invoice }
+    val fullLightningInvoices = remember(fullContentSegments) {
+        fullContentSegments.filterIsInstance<InlineMediaSegment.LightningInvoice>().map { it.invoice }
     }
     // Same rationale as fullLightningInvoices above, for LNURL strings.
-    val fullLnurlReferences = remember(event.id, normalizedContent) {
-        parseInlineMediaSegments(normalizedContent).filterIsInstance<InlineMediaSegment.LnurlReference>().map { it.lnurl }
+    val fullLnurlReferences = remember(fullContentSegments) {
+        fullContentSegments.filterIsInstance<InlineMediaSegment.LnurlReference>().map { it.lnurl }
     }
 
     val isTextNote = remember(event.kind) { event.kind == Event.KIND_TEXT_NOTE }

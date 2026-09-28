@@ -49,7 +49,6 @@ private val settingsScreenLogger = UmbraLog.tag("SettingsScreen")
  * Settings screen main menu (NIP-01 compliant client configuration)
  * Provides navigation to relay configuration and feed settings
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel) {
     val scope = rememberCoroutineScope()
@@ -59,6 +58,46 @@ fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel)
         PrivacyLogoutProgressDialog()
     }
 
+    SettingsContent(
+        onBack = {
+            val popped = navController.popBackStack()
+            if (!popped) {
+                navController.navigate(Screen.Feed.route) {
+                    launchSingleTop = true
+                }
+            }
+        },
+        onOpen = { route -> navController.navigate(route) },
+        onLogout = {
+            if (isLoggingOut) return@SettingsContent
+            scope.launch {
+                try {
+                    isLoggingOut = true
+                    loginViewModel.logout()
+                } catch (e: Exception) {
+                    // A failed logout must not be silently indistinguishable
+                    // from a successful one — still proceed to the login screen
+                    // below since there's no in-app state left to usefully retry
+                    // from, but at least record that it happened.
+                    settingsScreenLogger.e(e) { "Logout failed" }
+                }
+                isLoggingOut = false
+                navController.navigate(Screen.Login.route) {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsContent(
+    onBack: () -> Unit,
+    onOpen: (route: String) -> Unit,
+    onLogout: () -> Unit,
+    versionName: String = BuildConfig.VERSION_NAME
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -68,14 +107,7 @@ fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel)
         UmbraTopAppBar(
             title = { Text(stringResource(R.string.settings_title)) },
             navigationIcon = {
-                UmbraTopAppBarDefaults.BackNavigationIcon(onClick = {
-                    val popped = navController.popBackStack()
-                    if (!popped) {
-                        navController.navigate(Screen.Feed.route) {
-                            launchSingleTop = true
-                        }
-                    }
-                })
+                UmbraTopAppBarDefaults.BackNavigationIcon(onClick = onBack)
             }
         )
 
@@ -89,31 +121,31 @@ fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel)
                         icon = Icons.Outlined.Hub,
                         title = stringResource(R.string.settings_configure_relays_title),
                         subtitle = stringResource(R.string.settings_configure_relays_subtitle),
-                        onClick = { navController.navigate(Screen.RelayConfig.route) }
+                        onClick = { onOpen(Screen.RelayConfig.route) }
                     )
                     MenuItemRow(
                         icon = Icons.Outlined.CloudUpload,
                         title = stringResource(R.string.settings_configure_blossom_servers_title),
                         subtitle = stringResource(R.string.settings_configure_blossom_servers_subtitle),
-                        onClick = { navController.navigate(Screen.BlossomServers.route) },
+                        onClick = { onOpen(Screen.BlossomServers.route) },
                         showDivider = false
                     )
                 }
             }
 
             item {
-                SettingsGroup(title = stringResource(R.string.settings_feed_preferences)) {
+                SettingsGroup(title = stringResource(R.string.settings_group_feed)) {
                     MenuItemRow(
                         icon = Icons.Outlined.Tune,
                         title = stringResource(R.string.settings_feed_preferences),
                         subtitle = stringResource(R.string.settings_feed_preferences_subtitle),
-                        onClick = { navController.navigate(Screen.FeedConfig.route) }
+                        onClick = { onOpen(Screen.FeedConfig.route) }
                     )
                     MenuItemRow(
                         icon = Icons.Outlined.Palette,
                         title = stringResource(R.string.settings_appearance_title),
                         subtitle = stringResource(R.string.settings_appearance_subtitle),
-                        onClick = { navController.navigate(Screen.Appearance.route) },
+                        onClick = { onOpen(Screen.Appearance.route) },
                         showDivider = false
                     )
                 }
@@ -125,19 +157,19 @@ fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel)
                         icon = Icons.Outlined.Code,
                         title = stringResource(R.string.settings_developer_options_title),
                         subtitle = stringResource(R.string.settings_developer_options_subtitle),
-                        onClick = { navController.navigate(Screen.DeveloperOptions.route) }
+                        onClick = { onOpen(Screen.DeveloperOptions.route) }
                     )
                     MenuItemRow(
                         icon = Icons.Outlined.Memory,
                         title = stringResource(R.string.settings_app_resource_usage_title),
                         subtitle = stringResource(R.string.settings_app_resource_usage_subtitle),
-                        onClick = { navController.navigate(Screen.AppResourceUsage.route) }
+                        onClick = { onOpen(Screen.AppResourceUsage.route) }
                     )
                     MenuItemRow(
                         icon = Icons.Outlined.Storage,
                         title = stringResource(R.string.settings_db_inspector_title),
                         subtitle = stringResource(R.string.settings_db_inspector_subtitle),
-                        onClick = { navController.navigate(Screen.DbInspector.route) },
+                        onClick = { onOpen(Screen.DbInspector.route) },
                         showDivider = false
                     )
                 }
@@ -147,7 +179,7 @@ fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel)
                 SettingsGroup(title = stringResource(R.string.settings_about_umbra)) {
                     SettingInfoItem(
                         title = stringResource(R.string.settings_version),
-                        value = BuildConfig.VERSION_NAME
+                        value = versionName
                     )
                     SettingInfoItem(
                         title = stringResource(R.string.settings_privacy),
@@ -169,25 +201,7 @@ fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel)
                         subtitle = stringResource(R.string.settings_logout_subtitle),
                         danger = true,
                         showDivider = false,
-                        onClick = {
-                            if (isLoggingOut) return@MenuItemRow
-                            scope.launch {
-                                try {
-                                    isLoggingOut = true
-                                    loginViewModel.logout()
-                                } catch (e: Exception) {
-                                    // A failed logout must not be silently indistinguishable
-                                    // from a successful one — still proceed to the login screen
-                                    // below since there's no in-app state left to usefully retry
-                                    // from, but at least record that it happened.
-                                    settingsScreenLogger.e(e) { "Logout failed" }
-                                }
-                                isLoggingOut = false
-                                navController.navigate(Screen.Login.route) {
-                                    popUpTo(0) { inclusive = true }
-                                }
-                            }
-                        }
+                        onClick = onLogout
                     )
                 }
             }
