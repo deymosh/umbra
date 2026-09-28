@@ -32,16 +32,23 @@ Privacy and censorship resistance are what Nostr is for, and Umbra doesn't compr
 
 ## Features
 
-- **Feed** — chronological notes with images, video, hashtags, mentions, replies, reposts, reactions, and thread support
-- **Profiles** — inspect any Nostr identity with recent notes, metadata, counters, and NIP-05 verification state
+- **Feed** — chronological notes and picture posts (NIP-68) with images, video, hashtags, mentions, replies, reposts, reactions, and thread support
+- **Threads & comments** — full reply trees for notes, plus NIP-22 comments rendered and composed for anything that isn't a plain note
+- **Composer** — replies, quotes, mentions, media attachments, a "mark as sensitive" toggle, and drafts that survive leaving the screen
+- **Zaps** — NIP-57 zaps signed with Amber and paid in your own wallet; NIP-A3 payment targets offered when the recipient publishes them
+- **Notifications** — replies, mentions, reactions, reposts and zaps grouped per note, with an unread marker
+- **Profiles** — notes, replies, pictures, pinned notes, counters (NIP-45 COUNT where relays support it) and NIP-05 verification state
 - **Profile editing** — update your own name, about, website, NIP-05, and LUD-16, published via Amber
+- **Hashtag feeds, bookmarks and read later** — follow a tag, save notes to your NIP-51 bookmark list, or keep a private on-device reading queue
 - **Mute list & feed filters** — mute/unmute users with a dedicated review UI (NIP-51), plus editable feed filters (NSFW, excluded hashtags/tags/content) with sensible-but-removable defaults — moderation is always user-controlled, never enforced by the app
 - **Search** — search events by content, author, or profile name (NIP-50 relay search)
-- **Relays** — connect to clearnet and .onion relays, always routed through TOR
+- **Relays** — connect to clearnet and .onion relays, always routed through TOR; per-relay details, subscriptions, logs and what each relay stores for you
+- **Transparency** — per-relay network usage, app resource usage, and an on-device database inspector
+- **Privacy extras** — tracking parameters stripped from opened links, and an optional panic wipe
 - **Signing** — Amber integration for key management; `nsec` never touches Umbra
 - **Anonymous mode** — read-only usage without providing identity
 - **Blossom media uploads** — profile/banner and composer media upload path via NIP-B7/Blossom with upload server selection, fallback retrieval, and EXIF stripping before upload
-- **Media metadata** — outgoing NIP-92 `imeta` tag generation and inline image enrichment for composer and rendering flows
+- **Media metadata** — NIP-92 `imeta` generation for uploads, and alt text, aspect ratio, blurhash and extensionless-media detection when rendering
 - **NIP-17 / NIP-44 groundwork** — relay-list domain model and partial DM/privacy transport scaffolding is present, though the full encrypted messaging UI is still planned
 
 ---
@@ -136,29 +143,29 @@ Requires JDK 21 and Android SDK 37. Use the included Gradle wrapper; do not rely
 | NIP-18 | Reposts | ✅ Implemented | Event thread and mention rendering |
 | NIP-19 | Bech32 Encoding | ✅ Implemented | `npub`/`note` encoding and decoding helpers; link resolution is wired through the resolver stack |
 | NIP-21 | `nostr:` URI handling | ✅ Implemented | URI resolution and deep-link routing for profile/thread flows |
-| NIP-22 | Comments | ⏳ Partial | Tag shape builder/parser exist; compose/thread UI integration still pending |
+| NIP-22 | Comments | ✅ Implemented | Kind-1111 comments render in feeds and threads (root `E`/`A`/`I` scopes, `#E` thread subscription) and are composed when replying to anything that isn't a kind-1 note |
 | NIP-25 | Reactions | ✅ Implemented | Reaction event types and engagement flow are in the domain and feed path |
 | NIP-27 | Text Note References | ✅ Implemented | Mention/reference parsing and rendering, plus outgoing `p`/`q` tagging on compose |
-| NIP-30 | Custom Emoji | ⏳ Partial | Domain parser/helpers exist; UI integration pending |
+| NIP-30 | Custom Emoji | ⏳ Partial | `:shortcode:` emoji render in notes and can be sent as custom-emoji reactions; emoji sets (`10030`/`30030`) and composer insertion pending |
 | NIP-36 | Sensitive Content | ✅ Implemented | Reads/builds the `content-warning` tag; wired into the feed's NSFW filter and the composer's "mark as sensitive" toggle |
 | NIP-42 | Client Authentication | ✅ Implemented | AUTH challenge/response, with active subscriptions replayed to the relay after a successful login |
 | NIP-44 | Encrypted payloads | ⏳ Partial | Envelope model and domain scaffold exist; cryptographic payload pipeline remains incomplete |
-| NIP-45 | Counting results | ⏳ Partial | COUNT integrated for profile note and follower counters; broader rollout pending |
+| NIP-45 | Counting results | ✅ Implemented | COUNT asked only of relays advertising NIP-45; profile note/follower counts (merged by maximum, never summed) and per-relay "stored for you" counts on Relay details. Threads count from the events they already download. HyperLogLog (`hll`) merging not supported |
 | NIP-46 | Nostr Connect | ❌ Not applicable | Umbra signs via **NIP-55** (Amber local Android-intent signing), not NIP-46 relay-based remote signing; no NIP-46 code path exists |
 | NIP-50 | Search | ✅ Implemented | Full-text event search via relays — a relay-side filter capability negotiated per-relay, not a `domain/nip50` package, since there's no event/tag shape to model |
-| NIP-51 | Lists | ⏳ Partial | Public mute list (`10000`) and pin list (`10001`) have full repository + UI; remaining list kinds are builder/parser-only |
+| NIP-51 | Lists | ⏳ Partial | Mute (`10000`), pin (`10001`) and bookmark (`10003`) lists have repository + UI, edited as deltas so other clients' entries survive; remaining list kinds are builder/parser-only and the addressable sets (`30000`/`30003`/`30015`) are missing |
 | NIP-55 | Android Signer Application | ✅ Implemented | Amber-only signing via Android intents; `nsec` never touches the device |
-| NIP-57 | Lightning Zaps | ⏳ Partial | Kinds are recognized and consumed in display logic; payment/zap-request UX is pending |
+| NIP-57 | Lightning Zaps | ✅ Implemented | Zap requests signed with Amber, LNURL-pay over Tor, invoice handed to the user's wallet; receipts counted on notes and grouped in Notifications |
 | NIP-65 | Relay List Metadata | ✅ Implemented | Domain model and relay metadata workflow in place |
 | NIP-67 | EOSE Completeness Hint | ✅ Implemented | Parses EOSE's optional completeness hint; a `more` hint withholds the feed's per-relay resume watermark instead of assuming full coverage |
-| NIP-68 | Picture-first feeds | ⏳ Partial | Kind-20 events parsed into title/images/description/content-warning; not yet in any feed subscription filter or gallery UI |
+| NIP-68 | Picture-first feeds | ✅ Implemented | Kind-20 posts in the home feed and a Pictures tab on profiles, rendered with `imeta` aspect ratio/blurhash/alt; composing kind-20 posts is not offered |
 | NIP-77 | Negentropy Syncing | ✅ Implemented | Set-reconciliation sync of the signed-in user's own event history against their write relays, gated on relay NIP-77 support — not a general backfill feature |
-| NIP-92 | Media Attachments Metadata | ⏳ Partial | `imeta` tags parsed and generated for composer/rendering; not yet used to detect extensionless media URLs |
-| NIP-7D | Forum Threads | ⏳ Partial | Thread title tag and builder exist; no compose/thread UI wired up yet |
-| NIP-92 | Media attachments metadata | ⏳ Partial | `imeta` parsing and generation are present for composer and rendering flows; extensionless-media detection is still a follow-up |
-| NIP-A4 | Public Messages | ⏳ Partial | Kind-24 public-message builder/parser exist; no compose/notification UI surfaces it yet |
+| NIP-92 | Media Attachments Metadata | ✅ Implemented | `imeta` parsed and generated; drives alt text, aspect ratio, blurhash, and detection of extensionless image/video URLs |
+| NIP-A3 | Payment Targets | ⏳ Partial | Recipients' kind-`10133` targets are fetched and offered in the zap sheet as `payto:` wallet links; editing your own list is pending |
+| NIP-7D | Forum Threads | 🕒 Pending | Kind-11 builder/parser only; no feed, thread or compose UI |
+| NIP-A4 | Public Messages | 🕒 Pending | Kind-24 builder/parser only; not subscribed to, rendered, or composed |
 | NIP-B7 | Blossom media server protocol | ✅ Implemented | Upload/list/delete/mirror fallback support is visible in the upload and profile media flows |
-| NIP-C7 | Chats | ⏳ Partial | Kind-9 chat message builder/parser exist; no chat UI yet |
+| NIP-C7 | Chats | 🕒 Pending | Kind-9 builder/parser only; no chat UI |
 
 ---
 
