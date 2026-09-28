@@ -1,6 +1,6 @@
 ---
 name: umbra-feed-patterns
-description: Use when adding or modifying a feed (home, thread, profile), working with FeedFilter/FeedViewModel.notesFlow, EventRepository.observeFeedNotes, or wiring mute/follow-list filtering into a feed. Adapted from a broader feed-patterns skill built around a FeedFilter<T>/ChangesFlowFilter abstraction layer — Umbra has no such layer; filtering is parameters into one repository method, not a class hierarchy.
+description: Adding/changing a feed (home, thread, profile), FeedFilter/notesFlow, observeFeedNotes, mute/follow filtering.
 ---
 
 # Feed patterns in Umbra
@@ -55,7 +55,7 @@ Pinned notes are checked separately and overlaid into `_uiState`/`computedFeedFl
 
 1. Decide the query shape: does it need a new `EventRepository.observeFeedNotes(...)` parameter, or does existing `authors`/`mutedPubkeys`/`desiredTagsLower` already cover it?
 2. Subscribe the underlying relay channel — see [`umbra-relay-client`](../umbra-relay-client/SKILL.md) for `NostrChannels`/`subscribeChannel` wiring; there's no `ComposeSubscriptionManager`, it's a direct `init{}` call in the ViewModel.
-3. Build the `combine(...) → flatMapLatest → flowOn(IO) → shareIn(WhileSubscribed(5_000), replay = 1)` chain following `FeedViewModel.notesFlow`'s shape (see [`kotlin-flow-state-event-modeling`](../kotlin-flow-state-event-modeling/SKILL.md) for why that specific `shareIn` config is correct for an async-only-collected feed).
+3. Build the `combine(...) → flatMapLatest → flowOn(IO) → shareIn(WhileSubscribed(5_000), replay = 1)` chain following `FeedViewModel.notesFlow`'s shape (see [`umbra-kotlin-patterns`](../umbra-kotlin-patterns/SKILL.md) for why that specific `shareIn` config is correct for an async-only-collected feed).
 4. Apply stable `LazyColumn` keys/`contentType` in the screen (`key = { it.id }, contentType = { it.kind }`, matching `NotesFeedSection.kt`/`ThreadScreen.kt`) — this is already load-bearing perf work, see [`nostr-performance-review`](../nostr-performance-review/SKILL.md).
 
 ## Don't

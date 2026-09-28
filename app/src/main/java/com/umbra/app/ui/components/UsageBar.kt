@@ -1,5 +1,6 @@
 package com.umbra.app.ui.components
 
+import com.umbra.app.ui.theme.UmbraTheme
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -8,10 +9,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
-private val WarningColor = Color(0xFFFFB74D)
 
 /**
  * A thin, threshold-colored progress bar for a used/max ratio (e.g. heap usage). Green below
@@ -26,13 +25,13 @@ fun UsageBar(
 ) {
     val color = when {
         fraction >= criticalThreshold -> MaterialTheme.colorScheme.error
-        fraction >= warningThreshold -> WarningColor
-        else -> MaterialTheme.colorScheme.secondary
+        fraction >= warningThreshold -> UmbraTheme.colors.caution
+        else -> UmbraTheme.colors.secure
     }
     LinearProgressIndicator(
         progress = { fraction.coerceIn(0f, 1f) },
         color = color,
-        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         modifier = modifier
             .fillMaxWidth()
             .height(8.dp)

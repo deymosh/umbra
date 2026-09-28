@@ -1,8 +1,8 @@
 package com.umbra.app.ui.components.media
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -127,7 +127,7 @@ internal fun rememberRetryingAsyncImagePainter(
             .build()
     }
     val painter = rememberAsyncImagePainter(model = if (hasDispatched) imageRequest else null)
-    val painterState by painter.state.collectAsState()
+    val painterState by painter.state.collectAsStateWithLifecycle()
 
     // See runGatedImageLoad's doc comment for why the acquire/await/release lifecycle lives in
     // one coroutine's try/finally rather than three separately-keyed effects.

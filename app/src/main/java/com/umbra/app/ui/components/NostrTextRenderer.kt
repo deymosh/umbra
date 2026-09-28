@@ -2,9 +2,7 @@ package com.umbra.app.ui.components
 
 import com.umbra.app.R
 import com.umbra.app.domain.nip01.Event
-import com.umbra.app.domain.nip30.CustomEmoji
 import com.umbra.app.domain.nip30.extractCustomEmojis
-import com.umbra.app.domain.nip92.ImetaTag
 import com.umbra.app.domain.nip92.extractImetaTags
 import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.domain.repository.UserRepository
@@ -15,9 +13,7 @@ import com.umbra.app.ui.components.media.FullscreenVideoDialogOptIn
 import com.umbra.app.ui.components.media.RenderInlineMediaSegments
 import android.content.ClipData
 import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -25,7 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember

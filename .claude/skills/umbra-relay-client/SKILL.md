@@ -1,6 +1,6 @@
 ---
 name: umbra-relay-client
-description: Use when wiring a new relay subscription (SubscriptionType, NostrChannels, EventRepository.subscribeChannel), or working with UmbraNostrClient's connect/reconnect/cooldown logic. Adapted from a broader relay-client skill built around a ComposeSubscriptionManager/Subscribable abstraction — Umbra has no such abstraction; a new subscription is a direct EventRepository.subscribeChannel() call from a ViewModel's init{}, same as every existing one.
+description: Wiring a relay subscription (SubscriptionType, NostrChannels, subscribeChannel) or UmbraNostrClient reconnect logic.
 ---
 
 # Relay subscriptions in Umbra

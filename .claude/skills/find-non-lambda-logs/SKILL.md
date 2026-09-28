@@ -1,6 +1,6 @@
 ---
 name: find-non-lambda-logs
-description: Use when auditing or reviewing logger.d/w/e calls in Umbra — checks two things, not three: (1) unscrubbed relay URL/pubkey/hex/nsec-shaped content reaching log calls (AUDIT.md violation, the most important check here), (2) catch blocks that lose the throwable by calling logger.d/w with a scrubbed message string instead of logger.e(throwable) { }. Umbra uses a lambda-taking wrapper (UmbraLog.tag(TAG) → Logger, implementing the domain-layer UmbraLogger interface) with Log.isLoggable gating built into the wrapper itself — there is no plain android.util.Log call site left anywhere outside the wrapper's own implementation file, and no manual isLoggable guard for callers to add.
+description: "Auditing logger.d/w/e calls: unscrubbed relay URLs/pubkeys/content in logs, and catch blocks that drop the throwable."
 ---
 
 # Auditing log calls in Umbra
@@ -71,7 +71,7 @@ Search: grep `logger\.(d|w)\s*\{` (and `client\.logger\.(d|w)\s*\{` — some `da
 
 ## Check 2: throwable dropped by using `d`/`w` instead of `e`
 
-The wrapper makes this check mechanical in a way a plain `Log.*` codebase can't: `e()` is the *only* method that accepts a `Throwable` at all. So the bug shape isn't "missing third argument" — it's "a catch block reaching for `logger.d`/`logger.w` with a manually-scrubbed message string, when `logger.e(throwable) { }` was available and drops the actual stack trace on the floor either way." This is exactly what `LOG-17` in `docs/CONCERNS.md`/`docs/TODO.md` catalogs — sites that lost throwable attachment during the migration to this wrapper.
+The wrapper makes this check mechanical in a way a plain `Log.*` codebase can't: `e()` is the *only* method that accepts a `Throwable` at all. So the bug shape isn't "missing third argument" — it's "a catch block reaching for `logger.d`/`logger.w` with a manually-scrubbed message string, when `logger.e(throwable) { }` was available and drops the actual stack trace on the floor either way."
 
 ```kotlin
 // ❌ FLAG — throwable is available (it's `e` in the catch clause) but never reaches the logger;
@@ -109,4 +109,3 @@ catch\s*\(\s*(e|t|throwable|cause)\s*:.*\{[^}]*(logger|client\.logger)\.(d|w)\s*
 ## Related
 
 - AUDIT.md — the authoritative logging rules this skill enforces; re-read it if a finding seems ambiguous rather than guessing.
-- `docs/CONCERNS.md` (LOG-17, LOG-18) and `docs/TODO.md` — the specific known instances of Check 1/Check 2 failures already catalogued in this codebase, useful as ground truth for what a real hit looks like.

@@ -45,7 +45,7 @@ You are the development agent for Umbra — a privacy-first Nostr client for And
   assume Windows by default.
 - Java must be on PATH. On Windows, if `java` is not found, remind the user to run:
   ```powershell
-  $env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-17.0.18.8-hotspot"
+  $env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21-hotspot"
   $env:Path = $env:Path + ";$env:JAVA_HOME\bin"
   ```
   On Linux without a JDK/Android SDK yet, run `scripts/install-toolchain.sh` once instead.

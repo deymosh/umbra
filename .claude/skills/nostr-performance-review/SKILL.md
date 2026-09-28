@@ -1,6 +1,6 @@
 ---
 name: nostr-performance-review
-description: Use when asked to audit or improve Umbra's feed/relay/UI performance ("make it more fluid", "why is scrolling janky", "reduce relay chatter", "review for performance"). A checklist grounded in what Umbra already does well versus concrete techniques researched from two other Nostr clients, so you compare against reality instead of re-deriving generic Compose advice or assuming a technique is missing when it already exists under a different name.
+description: Auditing feed/relay/UI performance (jank, relay chatter) against what Umbra already does.
 ---
 
 # Performance review for Umbra

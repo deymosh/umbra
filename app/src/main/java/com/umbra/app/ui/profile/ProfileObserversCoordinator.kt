@@ -4,6 +4,7 @@ package com.umbra.app.ui.profile
 
 import com.umbra.app.domain.model.NostrChannels
 import com.umbra.app.domain.nip01.Event
+import com.umbra.app.domain.usecase.ObserveRemoteCountUseCase
 import com.umbra.app.domain.nip01.EventFilter
 import com.umbra.app.domain.nip01.NostrValidation
 import com.umbra.app.domain.preferences.UserPreferences
@@ -98,8 +99,8 @@ internal class ProfileObserversCoordinator(
     private var followsHydrationCloseJob: Job? = null
     private var queuedFollowHydrationAuthors: Set<String> = emptySet()
     private val localNotesCount = MutableStateFlow(0)
-    private val remoteNotesCountByRelay = MutableStateFlow<Map<String, Long>>(emptyMap())
-    private val remoteFollowersCountByRelay = MutableStateFlow<Map<String, Long>>(emptyMap())
+    private val remoteNotesBest = MutableStateFlow(0L)
+    private val remoteFollowersBest = MutableStateFlow<Long?>(null)
 
     private data class FollowedProfilesSnapshot(
         val followedPubkeys: List<String>,
@@ -310,65 +311,24 @@ internal class ProfileObserversCoordinator(
         }
     }
 
+    private val observeRemoteCount = ObserveRemoteCountUseCase(eventRepository, relayRepository)
+
+    /** NIP-45 note count for this author, merged with the local count (see recomputeTotalNotesCount). */
     internal fun observeNip45NoteCounts() {
         scope.launch {
-            eventRepository.observeRelayCounts()
-                .filter { it.subscriptionId == profileNoteCountSubscriptionId }
-                .collect { result ->
-                    val sanitizedCount = result.count.coerceAtLeast(0L)
-                    remoteNotesCountByRelay.update { previous ->
-                        previous + (result.relayUrl.lowercase() to sanitizedCount)
-                    }
-                    recomputeTotalNotesCount()
-                }
-        }
-    }
-
-    internal fun requestNip45NoteCountsOnRelayChanges() {
-        scope.launch {
-            combine(
-                relayRepository.getAllRelays(),
-                eventRepository.observeConnectedRelayUrls()
-            ) { allRelays, connectedUrls ->
-                val connectedNormalized = connectedUrls.map { normalizeRelayUrl(it) }.toSet()
-                // NIP-45 COUNT is an optional relay feature — only send it to relays that have
-                // actually advertised support via their NIP-11 document. A relay we haven't
-                // fetched info for yet, or one that doesn't list 45, gets skipped rather than
-                // assumed-supported: an unsupported COUNT is a wasted REQ at best and, per relay,
-                // sometimes an error/NOTICE response.
-                allRelays
-                    .asSequence()
-                    .map { normalizeRelayUrl(it.url) to it }
-                    .filter { (url, _) -> url in connectedNormalized }
-                    .filter { (_, relay) -> relay.relayInfo?.supportedNips?.contains(45) == true }
-                    .map { (url, _) -> url }
-                    .toSet()
+            observeRemoteCount(
+                profileNoteCountSubscriptionId,
+                listOf(EventFilter(authors = setOf(pubkey), kinds = setOf(Event.KIND_TEXT_NOTE)))
+            ).collect { best ->
+                remoteNotesBest.value = best
+                recomputeTotalNotesCount()
             }
-                .distinctUntilChanged()
-                .collect { nip45Relays ->
-                    if (nip45Relays.isEmpty()) return@collect
-
-                    val countFilters = listOf(
-                        EventFilter(
-                            authors = setOf(pubkey),
-                            kinds = setOf(Event.KIND_TEXT_NOTE)
-                        )
-                    )
-
-                    nip45Relays.forEach { relayUrl ->
-                        eventRepository.requestCount(
-                            relayUrl = relayUrl,
-                            subscriptionId = profileNoteCountSubscriptionId,
-                            filters = countFilters
-                        )
-                    }
-                }
         }
     }
 
     internal fun recomputeTotalNotesCount() {
         val local = localNotesCount.value
-        val remoteBest = bestRemoteCount(remoteNotesCountByRelay.value.values)
+        val remoteBest = bestRemoteCount(listOf(remoteNotesBest.value))
         val merged = maxOf(local, remoteBest)
         state.update { current ->
             if (current.totalNotesCount == merged) current else current.copy(totalNotesCount = merged)
@@ -380,57 +340,18 @@ internal class ProfileObserversCoordinator(
     // least one relay has actually answered.
     internal fun observeNip45FollowersCount() {
         scope.launch {
-            eventRepository.observeRelayCounts()
-                .filter { it.subscriptionId == profileFollowersCountSubscriptionId }
-                .collect { result ->
-                    val sanitizedCount = result.count.coerceAtLeast(0L)
-                    remoteFollowersCountByRelay.update { previous ->
-                        previous + (result.relayUrl.lowercase() to sanitizedCount)
-                    }
-                    recomputeFollowersCount()
-                }
-        }
-    }
-
-    internal fun requestNip45FollowersCountOnRelayChanges() {
-        scope.launch {
-            combine(
-                relayRepository.getAllRelays(),
-                eventRepository.observeConnectedRelayUrls()
-            ) { allRelays, connectedUrls ->
-                val connectedNormalized = connectedUrls.map { normalizeRelayUrl(it) }.toSet()
-                allRelays
-                    .asSequence()
-                    .map { normalizeRelayUrl(it.url) to it }
-                    .filter { (url, _) -> url in connectedNormalized }
-                    .filter { (_, relay) -> relay.relayInfo?.supportedNips?.contains(45) == true }
-                    .map { (url, _) -> url }
-                    .toSet()
+            observeRemoteCount(
+                profileFollowersCountSubscriptionId,
+                listOf(EventFilter(kinds = setOf(Event.KIND_CONTACT_LIST), tagFilters = mapOf("p" to setOf(pubkey))))
+            ).collect { best ->
+                remoteFollowersBest.value = best
+                recomputeFollowersCount()
             }
-                .distinctUntilChanged()
-                .collect { nip45Relays ->
-                    if (nip45Relays.isEmpty()) return@collect
-
-                    val countFilters = listOf(
-                        EventFilter(
-                            kinds = setOf(Event.KIND_CONTACT_LIST),
-                            tagFilters = mapOf("p" to setOf(pubkey))
-                        )
-                    )
-
-                    nip45Relays.forEach { relayUrl ->
-                        eventRepository.requestCount(
-                            relayUrl = relayUrl,
-                            subscriptionId = profileFollowersCountSubscriptionId,
-                            filters = countFilters
-                        )
-                    }
-                }
         }
     }
 
     internal fun recomputeFollowersCount() {
-        val remoteBest = bestRemoteCount(remoteFollowersCountByRelay.value.values)
+        val remoteBest = remoteFollowersBest.value?.let { bestRemoteCount(listOf(it)) }
         state.update { current ->
             if (current.followersCount == remoteBest) current else current.copy(followersCount = remoteBest)
         }

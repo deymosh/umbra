@@ -1,5 +1,6 @@
 package com.umbra.app.ui.components
 
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
@@ -25,7 +26,7 @@ fun InfoIcon(title: String, message: String, modifier: Modifier = Modifier) {
 
     IconButton(onClick = { showDialog = true }, modifier = modifier) {
         Icon(
-            imageVector = Icons.Default.Info,
+            imageVector = Icons.Outlined.Info,
             contentDescription = title,
             modifier = Modifier.size(16.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -35,8 +36,14 @@ fun InfoIcon(title: String, message: String, modifier: Modifier = Modifier) {
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
-            title = { Text(text = title) },
-            text = { Text(text = message) },
+            title = { Text(text = title, style = MaterialTheme.typography.titleLarge) },
+            text = {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
             confirmButton = {
                 TextButton(onClick = { showDialog = false }) {
                     Text(text = stringResource(R.string.dismiss))

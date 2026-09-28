@@ -1,38 +1,33 @@
 ---
 name: umbra-coroutines
-description: Use when working with Umbra's WebSocket-to-Flow bridge, debounce/conflate/flowOn usage in the relay/repository layer, or deciding where a new coroutine-based data flow should live. Adapted from a broader kotlin-coroutines skill built around a relay pool on callbackFlow + supervisorScope; Umbra's isn't (zero usages of either), it's WebSocketListener callbacks feeding class-scoped MutableSharedFlows plus per-@Singleton CoroutineScopes.
+description: Coroutine scopes and structured concurrency (stored scopes, init launches, runBlocking, swallowed cancellation), the WebSocket-to-Flow bridge, debounce/conflate/flowOn in data-layer code.
 ---
 
-# Coroutines in Umbra's data layer
+# Coroutines in Umbra
 
-Umbra's relay/data layer coroutine shape is genuinely different from a callbackFlow-based relay pool — don't port `callbackFlow`/`supervisorScope`-based patterns here expecting them to match existing code, because neither is used anywhere in the codebase today.
+## Scope ownership
 
-## The WebSocket-to-Flow bridge: `WebSocketListener`, not `callbackFlow`
+- **ViewModels**: use `viewModelScope.launch { }` for UI events. This is the correct UI ↔ state-holder boundary, not fire-and-forget.
+- **`@Singleton` repositories/managers own their scope by convention**: `private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO /* or Default */)`.
+  - Examples: `EventRepositoryImpl`, `FeedRepositoryImpl`, `UserRepositoryImpl`, `RelayRepositoryImpl`, the Mute/Pin/ContactList repositories, `BroadcastRepositoryImpl`, `NostrSessionManager`, `TorRuntimeManager`, `UmbraNostrClient.clientScope`, `TrackReferencedAuthorUseCase`, `UrlPrefetcher`, `ImagePrefetcher`.
+  - Their lifecycle is the process lifecycle. New singletons follow the same shape.
+  - Don't "fix" existing ones into `suspend` APIs as a drive-by.
+- **Any non-singleton (screen- or request-scoped) class storing its own scope is a real bug.** It must be `suspend`-only or take an externally owned scope. Once a stored scope is cancelled, every later `launch` silently does nothing.
+- `UmbraApp.onCreate` launches a one-shot prewarm on `CoroutineScope(Dispatchers.Default)`. That is deliberate. Adding `SupervisorJob()` there is optional.
 
-`data/nostr/UmbraNostrClient.kt` uses a plain `okhttp3.WebSocketListener` inner class (`WebSocketListenerImpl`) whose `onOpen`/`onMessage`/`onClosing`/`onClosed`/`onFailure` overrides delegate into long-lived, class-scoped `MutableSharedFlow` properties:
+## Always bugs, anywhere
 
-```kotlin
-protected val _eventFlow = MutableSharedFlow<Event>()
-override val eventFlow: SharedFlow<Event> = _eventFlow.asSharedFlow()
-protected val _relayIssueFlow = MutableSharedFlow<RelayIssue>(replay = 3000, extraBufferCapacity = 128)
-```
+- **Swallowed cancellation**: `catch (e: Exception)` / `Throwable` around a suspend call without rethrowing. Add `catch (e: CancellationException) { throw e }` first. The only carve-out is a narrow catch of your own `withTimeout`.
+- **`runBlocking`** in app code: make the caller `suspend`. Tests use `runTest`.
+- **`init { scope.launch { } }`** in a non-singleton: use an explicit `suspend fun` the caller awaits.
 
-If you're adding a new WebSocket-driven data stream, extend this shape — a new `MutableSharedFlow` property fed from the listener callbacks — rather than wrapping the connection in a `callbackFlow`. See [`kotlin-flow-state-event-modeling`](../kotlin-flow-state-event-modeling/SKILL.md)'s "In Umbra" section for why `_relayIssueFlow`'s large replay/buffer is deliberate (multi-consumer, not a copy-paste default).
+## WebSocket → Flow bridge
 
-## `@Singleton` classes own their `CoroutineScope` — this is Umbra's actual convention
+`UmbraNostrClient` uses a plain `okhttp3.WebSocketListener` (`WebSocketListenerImpl`). Its callbacks feed class-scoped `MutableSharedFlow`s (`_eventFlow`, and `_relayIssueFlow` with its deliberate replay 3000 for multiple consumers). New WebSocket-driven streams extend that shape. No `callbackFlow` exists in the codebase, so don't introduce one without a reason.
 
-Unlike the generic "scopes shouldn't be stored on the callee" guidance, Umbra's `@Singleton` repositories/managers consistently store their own `CoroutineScope(SupervisorJob() + Dispatchers.IO_or_Default)` — `EventRepositoryImpl`, `FeedRepositoryImpl`, `UserRepositoryImpl`, `RelayRepositoryImpl`, `MuteListRepositoryImpl`, `PinListRepositoryImpl`, `ContactListRepositoryImpl`, `BroadcastRepositoryImpl`, `NostrSessionManager`, `TorRuntimeManager`, `UmbraNostrClient` (`clientScope`), `TrackReferencedAuthorUseCase`, `UrlPrefetcher`, `ImagePrefetcher` all do this. **Read [`kotlin-coroutines-structured-concurrency`](../kotlin-coroutines-structured-concurrency/SKILL.md)'s "In Umbra" section before treating a new instance of this pattern as a bug** — it's the established, consistent shape for this codebase's singleton layer (their lifecycle is the process lifecycle), not the generic anti-pattern that skill otherwise warns about.
+## Operators in real use
 
-## Real operator examples, by purpose
-
-- **`debounce`** — `NostrSessionManager.kt`: `.debounce(RELAY_SET_DEBOUNCE_MS).distinctUntilChanged { old, new -> old.signature() == new.signature() }.collect { ... reconcile(...) }` — coalesces a burst of relay-set changes (discovered relays can land one at a time) into one reconcile pass, avoiding a reapply storm.
-- **`conflate()`** — `FeedViewModel.kt`: `eventRepository.subscribeToEvents(emptyList()).conflate().distinctUntilChanged { ... }`, with an in-code comment explaining `conflate` is safe there specifically because persistence already happened upstream in `EventRepositoryImpl.subscribeToEvents()` — dropping intermediate emissions here doesn't drop data, only redundant UI refresh signals. **Don't copy `conflate()` onto a new flow without checking whether persistence already happened upstream the same way** — `EventRepositoryImpl` also has a documented case (a relay-list/profile transform stage) that deliberately does *not* conflate, because those emissions must not be dropped.
-- **`flowOn(Dispatchers.IO)`** — `EventRepositoryImpl.kt`/`FeedRepositoryImpl.kt`, on `Flow`s that decode Room-stored JSON (`encryptedEventDao.observeCountEventsByPubkeyAndKind(...).flowOn(Dispatchers.IO)`). A Room-backed `Flow<List<T>>` repository method with per-item JSON/parsing work in a `.map{}` and no `flowOn` is a documented past bug shape (main-thread JSON decoding scaling with row count) — see [`nostr-performance-review`](../nostr-performance-review/SKILL.md) for the two concrete instances already fixed this way.
-- **ViewModel-owned coroutines** use plain `viewModelScope.launch { }` throughout — no custom scope ownership at the ViewModel layer, matching the UI ↔ state-holder boundary carve-out in `kotlin-coroutines-structured-concurrency`.
-- **No `Channel(...)` construction anywhere** — buffering is done via `MutableSharedFlow(extraBufferCapacity = ...)` instead. If a new one-shot, single-consumer event stream is needed, check `kotlin-flow-state-event-modeling` for when a `Channel` would actually be the better fit before defaulting to Umbra's existing `MutableSharedFlow` habit.
-
-## Don't
-
-- Don't introduce `callbackFlow` for a new WebSocket/callback-based integration without a specific reason — the existing `WebSocketListener` + class-scoped `MutableSharedFlow` shape is what every current relay-facing class uses, and mixing patterns makes the data layer harder to reason about, not easier.
-- Don't add `conflate()` to a flow without checking whether the emissions it would drop matter (persisted already vs not) — see the `FeedViewModel` vs "deliberately not conflated" example above.
-- Don't flag a new `@Singleton`'s stored `CoroutineScope(SupervisorJob() + Dispatchers.X)` as the generic anti-pattern — it's the establishment convention here. Do flag a *non-singleton*, shorter-lived class doing the same thing; that's still the real bug the generic guidance describes.
+- **`debounce` + `distinctUntilChanged`**: `NostrSessionManager` coalesces relay-set bursts into one reconcile pass.
+- **`conflate()`**: `FeedViewModel`'s event subscription. It's safe *only* because `EventRepositoryImpl` already persisted upstream. Some `EventRepositoryImpl` stages deliberately don't conflate. Check that dropped emissions don't matter before adding it.
+- **`flowOn(Dispatchers.IO)`**: goes on Room-backed flows that decode JSON per row in `.map {}`. Leaving it out is a past bug shape (main-thread decode scaling with row count).
+- **Buffering**: done with `MutableSharedFlow(extraBufferCapacity = ...)`. For a single-consumer one-shot event, a `Channel` can fit better; see `umbra-kotlin-patterns`.

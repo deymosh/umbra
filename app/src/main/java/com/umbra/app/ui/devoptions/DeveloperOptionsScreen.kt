@@ -1,5 +1,9 @@
 package com.umbra.app.ui.devoptions
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,7 +20,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,7 +35,7 @@ fun DeveloperOptionsScreen(
     onNavigateBack: () -> Unit,
     viewModel: DeveloperOptionsViewModel
 ) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -71,18 +74,18 @@ fun DeveloperOptionsScreen(
 }
 
 @Composable
-private fun DeveloperToggleRow(
+internal fun DeveloperToggleRow(
     toggle: DeveloperToggleItem,
     onToggle: (Boolean) -> Unit
 ) {
-    Column {
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
-                    RoundedCornerShape(20.dp)
-                )
+                .clip(MaterialTheme.shapes.large)
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                // The whole row flips the switch — a bigger target than the switch alone.
+                .toggleable(value = toggle.enabled, onValueChange = onToggle, role = Role.Switch)
                 .padding(horizontal = 18.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -90,7 +93,7 @@ private fun DeveloperToggleRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(toggle.titleRes),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
@@ -99,11 +102,7 @@ private fun DeveloperToggleRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Switch(checked = toggle.enabled, onCheckedChange = onToggle)
+            Switch(checked = toggle.enabled, onCheckedChange = null)
         }
-        HorizontalDivider(
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-            modifier = Modifier.padding(vertical = 8.dp)
-        )
     }
 }

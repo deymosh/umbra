@@ -3,6 +3,7 @@ package com.umbra.app.domain.nip01
 import com.umbra.app.domain.nip21.NostrUriEntity
 import com.umbra.app.domain.nip21.resolveNostrUri
 import com.umbra.app.domain.nip30.CustomEmoji
+import com.umbra.app.domain.nip30.emojiTagsFor
 import com.umbra.app.domain.nip36.contentWarningTag
 import com.umbra.app.domain.nip92.ImetaTag
 import com.umbra.app.domain.nip92.toTag
@@ -89,7 +90,8 @@ object NostrEventBuilder {
         content: String,
         replyTo: Event? = null,
         imetaTags: List<ImetaTag> = emptyList(),
-        sensitiveReason: String? = null
+        sensitiveReason: String? = null,
+        emojis: List<CustomEmoji> = emptyList()
     ): String {
         val sanitizedContent = TrackingTokenSanitizer.sanitizeText(content.trim())
         val replyTags = if (replyTo != null) {
@@ -109,7 +111,7 @@ object NostrEventBuilder {
         val tags = replyTags +
             mentionTags(sanitizedContent, alreadyTaggedPubkeys) +
             imetaTags.map { it.toTag() } +
-            attachmentTags(sensitiveReason)
+            attachmentTags(sensitiveReason, sanitizedContent, emojis)
         return buildUnsignedJson(
             kind = Event.KIND_TEXT_NOTE,
             tags = tags,
@@ -118,8 +120,9 @@ object NostrEventBuilder {
     }
 
     /** `[contentWarningTag(reason)]` when [sensitiveReason] is non-null, else empty. */
-    private fun attachmentTags(sensitiveReason: String?): List<List<String>> =
-        if (sensitiveReason != null) listOf(contentWarningTag(sensitiveReason)) else emptyList()
+    private fun attachmentTags(sensitiveReason: String?, content: String, emojis: List<CustomEmoji>): List<List<String>> =
+        (if (sensitiveReason != null) listOf(contentWarningTag(sensitiveReason)) else emptyList()) +
+            emojiTagsFor(content, emojis)
 
     /**
      * NIP-7D: Forum thread (kind 11). Replies use NIP-22 comments (see
@@ -146,7 +149,8 @@ object NostrEventBuilder {
         replyToEvent: Event,
         replyToRelayUrl: String = "",
         imetaTags: List<ImetaTag> = emptyList(),
-        sensitiveReason: String? = null
+        sensitiveReason: String? = null,
+        emojis: List<CustomEmoji> = emptyList()
     ): String {
         val sanitizedContent = TrackingTokenSanitizer.sanitizeText(content.trim())
         val rootId = replyToEvent.getRootEventId() ?: replyToEvent.id
@@ -208,7 +212,7 @@ object NostrEventBuilder {
                 })
             }
 
-            attachmentTags(sensitiveReason).forEach { tag ->
+            attachmentTags(sensitiveReason, sanitizedContent, emojis).forEach { tag ->
                 add(buildJsonArray {
                     tag.forEach { add(JsonPrimitive(it)) }
                 })
@@ -294,6 +298,47 @@ object NostrEventBuilder {
             tags = tags
         )
     }
+
+    /**
+     * NIP-22 comment on [target], resolving the thread root without a network round trip: when
+     * [target] is itself a comment its root scope (uppercase `E`/`A`/`I`, `K`, `P` tags, identical
+     * across a thread) is copied verbatim; otherwise [target] is the root. Carries the same
+     * mention, `imeta` and content-warning tags as [reply].
+     */
+    fun commentOn(
+        target: Event,
+        content: String,
+        imetaTags: List<ImetaTag> = emptyList(),
+        sensitiveReason: String? = null,
+        emojis: List<CustomEmoji> = emptyList()
+    ): String {
+        require(target.kind != Event.KIND_TEXT_NOTE) {
+            "NIP-22 comments must not target kind 1 text notes — use NostrEventBuilder.reply()"
+        }
+        val sanitizedContent = TrackingTokenSanitizer.sanitizeText(content.trim())
+        val rootTags = if (target.kind == Event.KIND_COMMENT) {
+            target.tags.filter { it.firstOrNull() in COMMENT_ROOT_TAG_NAMES }
+        } else {
+            null
+        }
+        val mentioned = mentionTags(sanitizedContent, alreadyTaggedPubkeys = setOf(target.pubkey.lowercase()))
+
+        val tags = buildJsonArray {
+            if (rootTags.isNullOrEmpty()) {
+                appendCommentScope(target, uppercase = true)
+            } else {
+                rootTags.forEach { tag -> add(buildJsonArray { tag.forEach { add(JsonPrimitive(it)) } }) }
+            }
+            appendCommentScope(target, uppercase = false)
+            (mentioned + imetaTags.map { it.toTag() } + attachmentTags(sensitiveReason, sanitizedContent, emojis)).forEach { tag ->
+                add(buildJsonArray { tag.forEach { add(JsonPrimitive(it)) } })
+            }
+        }
+
+        return buildUnsignedEvent(kind = Event.KIND_COMMENT, content = sanitizedContent, tags = tags)
+    }
+
+    private val COMMENT_ROOT_TAG_NAMES = setOf("E", "A", "I", "K", "P")
 
     /**
      * NIP-A4: Public message (kind 24) — a plaintext message to one or more receivers, `p`-tagged,
@@ -519,6 +564,69 @@ object NostrEventBuilder {
         }
         return buildUnsignedEvent(kind = Event.KIND_INTERESTS_LIST, content = "", tags = tags)
     }
+
+    /**
+     * NIP-57: zap request (kind 9734). Never published to relays: it is signed and sent to the
+     * recipient's LNURL callback, which embeds it in the zap receipt it publishes once paid.
+     * [relays] are where that receipt should go; [target] is the zapped note, or null for a
+     * profile zap.
+     */
+    fun zapRequest(
+        recipientPubkey: String,
+        amountMsat: Long,
+        lnurl: String,
+        relays: List<String>,
+        target: Event? = null,
+        comment: String = ""
+    ): String {
+        val tags = buildJsonArray {
+            add(buildJsonArray {
+                add(JsonPrimitive("relays"))
+                relays.distinct().take(MAX_ZAP_RECEIPT_RELAYS).forEach { add(JsonPrimitive(it)) }
+            })
+            add(buildJsonArray { add(JsonPrimitive("amount")); add(JsonPrimitive(amountMsat.toString())) })
+            add(buildJsonArray { add(JsonPrimitive("lnurl")); add(JsonPrimitive(lnurl)) })
+            add(buildJsonArray { add(JsonPrimitive("p")); add(JsonPrimitive(recipientPubkey.lowercase())) })
+            if (target != null) {
+                if (target.kind in 30000..39999) {
+                    val identifier = target.getTagValue("d").orEmpty()
+                    add(buildJsonArray { add(JsonPrimitive("a")); add(JsonPrimitive("${target.kind}:${target.pubkey}:$identifier")) })
+                } else {
+                    add(buildJsonArray { add(JsonPrimitive("e")); add(JsonPrimitive(target.id)) })
+                }
+                add(buildJsonArray { add(JsonPrimitive("k")); add(JsonPrimitive(target.kind.toString())) })
+            }
+        }
+        return buildUnsignedEvent(
+            kind = Event.KIND_ZAP_REQUEST,
+            content = TrackingTokenSanitizer.sanitizeText(comment.trim()),
+            tags = tags
+        )
+    }
+
+    private const val MAX_ZAP_RECEIPT_RELAYS = 8
+
+    /** NIP-A3: the user's payment targets (kind 10133), one `payto` tag each. */
+    fun paymentTargets(targets: List<com.umbra.app.domain.nipa3.PaymentTarget>): String {
+        val tags = buildJsonArray {
+            targets.distinct().forEach { target ->
+                add(buildJsonArray {
+                    add(JsonPrimitive("payto"))
+                    add(JsonPrimitive(target.type.trim().lowercase()))
+                    add(JsonPrimitive(target.address.trim()))
+                })
+            }
+        }
+        return buildUnsignedEvent(kind = com.umbra.app.domain.nipa3.KIND_PAYMENT_TARGETS, content = "", tags = tags)
+    }
+
+    /** An unsigned list event of [kind] with exactly [tags] and [content] (see applyListEdit). */
+    fun listEvent(kind: Int, content: String, tags: List<List<String>>): String =
+        buildUnsignedEvent(
+            kind = kind,
+            content = content,
+            tags = buildJsonArray { tags.forEach { tag -> add(buildJsonArray { tag.forEach { add(JsonPrimitive(it)) } }) } }
+        )
 
     /**
      * NIP-42: relay authentication event (kind 22242).

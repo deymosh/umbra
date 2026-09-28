@@ -1,14 +1,25 @@
 package com.umbra.app.ui.settings
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.outlined.LocalFireDepartment
+import androidx.compose.material3.Switch
+import com.umbra.app.ui.auth.rememberPrivacyLogout
+import androidx.compose.material.icons.outlined.DataUsage
+import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.outlined.CloudUpload
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.ui.unit.sp
+import com.umbra.app.ui.components.EclipseMark
+import com.umbra.app.ui.components.SettingsGroup
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -16,8 +27,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.navigation.NavController
 import com.umbra.app.BuildConfig
@@ -25,34 +34,50 @@ import com.umbra.app.R
 import com.umbra.app.ui.Screen
 import com.umbra.app.ui.auth.LoginViewModel
 import com.umbra.app.ui.components.MenuItemRow
-import com.umbra.app.ui.components.PrivacyLogoutProgressDialog
-import com.umbra.app.ui.components.SectionHeader
 import com.umbra.app.ui.components.UmbraTopAppBar
 import com.umbra.app.ui.components.UmbraTopAppBarDefaults
 import kotlin.OptIn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.umbra.app.util.logging.UmbraLog
 
-private val settingsScreenLogger = UmbraLog.tag("SettingsScreen")
 
 /**
  * Settings screen main menu (NIP-01 compliant client configuration)
  * Provides navigation to relay configuration and feed settings
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel) {
-    val scope = rememberCoroutineScope()
-    var isLoggingOut by remember { mutableStateOf(false) }
+    val logout = rememberPrivacyLogout(navController, loginViewModel)
+    val panicWipeEnabled by loginViewModel.panicWipeEnabled.collectAsStateWithLifecycle()
 
-    if (isLoggingOut) {
-        PrivacyLogoutProgressDialog()
-    }
+    SettingsContent(
+        onBack = {
+            val popped = navController.popBackStack()
+            if (!popped) {
+                navController.navigate(Screen.Feed.route) {
+                    launchSingleTop = true
+                }
+            }
+        },
+        onOpen = { route -> navController.navigate(route) },
+        onLogout = logout,
+        panicWipeEnabled = panicWipeEnabled,
+        onPanicWipeChange = loginViewModel::setPanicWipeEnabled
+    )
+}
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsContent(
+    onBack: () -> Unit,
+    onOpen: (route: String) -> Unit,
+    onLogout: () -> Unit,
+    versionName: String = BuildConfig.VERSION_NAME,
+    panicWipeEnabled: Boolean = false,
+    onPanicWipeChange: (Boolean) -> Unit = {}
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -62,163 +87,131 @@ fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel)
         UmbraTopAppBar(
             title = { Text(stringResource(R.string.settings_title)) },
             navigationIcon = {
-                UmbraTopAppBarDefaults.BackNavigationIcon(onClick = {
-                    val popped = navController.popBackStack()
-                    if (!popped) {
-                        navController.navigate(Screen.Feed.route) {
-                            launchSingleTop = true
-                        }
-                    }
-                })
+                UmbraTopAppBarDefaults.BackNavigationIcon(onClick = onBack)
             }
         )
 
-        // Settings menu
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 32.dp)
         ) {
             item {
-                SectionHeader(title = stringResource(R.string.settings_network_configuration))
+                SettingsGroup(title = stringResource(R.string.settings_network_configuration)) {
+                    MenuItemRow(
+                        icon = Icons.Outlined.Hub,
+                        title = stringResource(R.string.settings_configure_relays_title),
+                        subtitle = stringResource(R.string.settings_configure_relays_subtitle),
+                        onClick = { onOpen(Screen.RelayConfig.route) }
+                    )
+                    MenuItemRow(
+                        icon = Icons.Outlined.CloudUpload,
+                        title = stringResource(R.string.settings_configure_blossom_servers_title),
+                        subtitle = stringResource(R.string.settings_configure_blossom_servers_subtitle),
+                        onClick = { onOpen(Screen.BlossomServers.route) }
+                    )
+                    MenuItemRow(
+                        icon = Icons.Outlined.DataUsage,
+                        title = stringResource(R.string.network_usage_title),
+                        subtitle = stringResource(R.string.settings_network_usage_subtitle),
+                        onClick = { onOpen(Screen.NetworkUsage.route) },
+                        showDivider = false
+                    )
+                }
             }
 
             item {
-                MenuItemRow(
-                    icon = Icons.Default.Build,
-                    title = stringResource(R.string.settings_configure_relays_title),
-                    subtitle = stringResource(R.string.settings_configure_relays_subtitle),
-                    onClick = { navController.navigate(Screen.RelayConfig.route) }
-                )
+                SettingsGroup(title = stringResource(R.string.settings_group_feed)) {
+                    MenuItemRow(
+                        icon = Icons.Outlined.Tune,
+                        title = stringResource(R.string.settings_feed_preferences),
+                        subtitle = stringResource(R.string.settings_feed_preferences_subtitle),
+                        onClick = { onOpen(Screen.FeedConfig.route) }
+                    )
+                    MenuItemRow(
+                        icon = Icons.Outlined.Palette,
+                        title = stringResource(R.string.settings_appearance_title),
+                        subtitle = stringResource(R.string.settings_appearance_subtitle),
+                        onClick = { onOpen(Screen.Appearance.route) },
+                        showDivider = false
+                    )
+                }
             }
 
             item {
-                SectionHeader(title = stringResource(R.string.settings_feed_preferences))
+                SettingsGroup(title = stringResource(R.string.settings_developer)) {
+                    MenuItemRow(
+                        icon = Icons.Outlined.Code,
+                        title = stringResource(R.string.settings_developer_options_title),
+                        subtitle = stringResource(R.string.settings_developer_options_subtitle),
+                        onClick = { onOpen(Screen.DeveloperOptions.route) }
+                    )
+                    MenuItemRow(
+                        icon = Icons.Outlined.Memory,
+                        title = stringResource(R.string.settings_app_resource_usage_title),
+                        subtitle = stringResource(R.string.settings_app_resource_usage_subtitle),
+                        onClick = { onOpen(Screen.AppResourceUsage.route) }
+                    )
+                    MenuItemRow(
+                        icon = Icons.Outlined.Storage,
+                        title = stringResource(R.string.settings_db_inspector_title),
+                        subtitle = stringResource(R.string.settings_db_inspector_subtitle),
+                        onClick = { onOpen(Screen.DbInspector.route) },
+                        showDivider = false
+                    )
+                }
             }
 
             item {
-                MenuItemRow(
-                    icon = Icons.Default.Build,
-                    title = stringResource(R.string.settings_feed_preferences),
-                    subtitle = stringResource(R.string.settings_feed_preferences_subtitle),
-                    onClick = { navController.navigate(Screen.FeedConfig.route) }
-                )
+                SettingsGroup(title = stringResource(R.string.settings_about_umbra)) {
+                    SettingInfoItem(
+                        title = stringResource(R.string.settings_version),
+                        value = versionName
+                    )
+                    SettingInfoItem(
+                        title = stringResource(R.string.settings_privacy),
+                        value = stringResource(R.string.settings_privacy_value)
+                    )
+                    SettingInfoItem(
+                        title = stringResource(R.string.settings_architecture),
+                        value = stringResource(R.string.settings_architecture_value),
+                        showDivider = false
+                    )
+                }
             }
 
             item {
-                SectionHeader(title = stringResource(R.string.settings_media))
+                SettingsGroup(title = stringResource(R.string.settings_account_security)) {
+                    MenuItemRow(
+                        icon = Icons.Outlined.LocalFireDepartment,
+                        title = stringResource(R.string.settings_panic_wipe_title),
+                        subtitle = stringResource(R.string.settings_panic_wipe_subtitle),
+                        onClick = { onPanicWipeChange(!panicWipeEnabled) },
+                        trailing = { Switch(checked = panicWipeEnabled, onCheckedChange = null) }
+                    )
+                    MenuItemRow(
+                        icon = Icons.AutoMirrored.Outlined.Logout,
+                        title = stringResource(R.string.settings_logout),
+                        subtitle = stringResource(R.string.settings_logout_subtitle),
+                        danger = true,
+                        showDivider = false,
+                        onClick = onLogout
+                    )
+                }
             }
 
             item {
-                MenuItemRow(
-                    icon = Icons.Default.Build,
-                    title = stringResource(R.string.settings_configure_blossom_servers_title),
-                    subtitle = stringResource(R.string.settings_configure_blossom_servers_subtitle),
-                    onClick = { navController.navigate(Screen.BlossomServers.route) }
-                )
-            }
-
-            item {
-                SectionHeader(title = stringResource(R.string.settings_appearance))
-            }
-
-            item {
-                MenuItemRow(
-                    icon = Icons.Default.Build,
-                    title = stringResource(R.string.settings_appearance_title),
-                    subtitle = stringResource(R.string.settings_appearance_subtitle),
-                    onClick = { navController.navigate(Screen.Appearance.route) }
-                )
-            }
-
-            item {
-                SectionHeader(title = stringResource(R.string.settings_developer))
-            }
-
-            item {
-                MenuItemRow(
-                    icon = Icons.Default.Build,
-                    title = stringResource(R.string.settings_developer_options_title),
-                    subtitle = stringResource(R.string.settings_developer_options_subtitle),
-                    onClick = { navController.navigate(Screen.DeveloperOptions.route) }
-                )
-            }
-
-            item {
-                MenuItemRow(
-                    icon = Icons.Default.Build,
-                    title = stringResource(R.string.settings_app_resource_usage_title),
-                    subtitle = stringResource(R.string.settings_app_resource_usage_subtitle),
-                    onClick = { navController.navigate(Screen.AppResourceUsage.route) }
-                )
-            }
-
-            item {
-                MenuItemRow(
-                    icon = Icons.Default.Build,
-                    title = stringResource(R.string.settings_db_inspector_title),
-                    subtitle = stringResource(R.string.settings_db_inspector_subtitle),
-                    onClick = { navController.navigate(Screen.DbInspector.route) }
-                )
-            }
-
-            item {
-                SectionHeader(title = stringResource(R.string.settings_about_umbra))
-            }
-
-            item {
-                SettingInfoItem(
-                    title = stringResource(R.string.settings_version),
-                    value = BuildConfig.VERSION_NAME
-                )
-            }
-
-            item {
-                SettingInfoItem(
-                    title = stringResource(R.string.settings_privacy),
-                    value = stringResource(R.string.settings_privacy_value)
-                )
-            }
-
-            item {
-                SettingInfoItem(
-                    title = stringResource(R.string.settings_architecture),
-                    value = stringResource(R.string.settings_architecture_value)
-                )
-            }
-
-            item {
-                SectionHeader(title = stringResource(R.string.settings_account_security))
-            }
-
-            item {
-                MenuItemRow(
-                    icon = Icons.AutoMirrored.Filled.ExitToApp,
-                    title = stringResource(R.string.settings_logout),
-                    subtitle = stringResource(R.string.settings_logout_subtitle),
-                    danger = true,
-                    showDivider = false,
-                    onClick = {
-                        if (isLoggingOut) return@MenuItemRow
-                        scope.launch {
-                            try {
-                                isLoggingOut = true
-                                loginViewModel.logout()
-                            } catch (e: Exception) {
-                                // A failed logout must not be silently indistinguishable
-                                // from a successful one — still proceed to the login screen
-                                // below since there's no in-app state left to usefully retry
-                                // from, but at least record that it happened.
-                                settingsScreenLogger.e(e) { "Logout failed" }
-                            }
-                            isLoggingOut = false
-                            navController.navigate(Screen.Login.route) {
-                                popUpTo(0) { inclusive = true }
-                            }
-                        }
-                    }
-                )
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(top = 36.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    EclipseMark(size = 40.dp)
+                    Text(
+                        text = stringResource(R.string.app_name).lowercase(),
+                        style = MaterialTheme.typography.displaySmall.copy(fontSize = 26.sp, lineHeight = 28.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
@@ -230,33 +223,30 @@ fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel)
 @Composable
 private fun SettingInfoItem(
     title: String,
-    value: String
+    value: String,
+    showDivider: Boolean = true
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)),
-        shape = RoundedCornerShape(20.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Text(
-                text = value,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.End
-            )
-        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.End
+        )
+    }
+    if (showDivider) {
+        HorizontalDivider(modifier = Modifier.padding(start = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
     }
 }

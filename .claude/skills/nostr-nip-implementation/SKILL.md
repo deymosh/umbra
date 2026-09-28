@@ -1,65 +1,79 @@
 ---
 name: nostr-nip-implementation
-description: Use when implementing or extending a Nostr NIP in Umbra (new kind, new domain/nipXX module, new list type, new repository). Encodes the established ContactList/MuteList pattern plus concrete kind constants and tag semantics cross-referenced from two other Nostr clients (named in the Reference clients section below) so new NIP work is consistent with the rest of the codebase and protocol-correct.
+description: Looking up a NIP/kind/tag spec, or implementing/extending one (new kind, domain/nipXX package, list type, repository, signing wiring).
 ---
 
-# Implementing a NIP in Umbra
+# NIPs in Umbra
 
-Read [AUDIT.md](../../../AUDIT.md) first — its rules (TOR-only, Amber-only signing, Clean Architecture layering) are absolute and override anything below.
+AUDIT.md's rules (Tor-only, Amber-only signing, Clean Architecture) override everything here.
 
-## Reference clients
+## 1. Read the spec, not memory
 
-Two other Kotlin/Compose Nostr clients are useful prior art — fetch their source with `gh api repos/<owner>/<repo>/contents/<path>` (both are public, no auth needed beyond a logged-in `gh`) rather than guessing tag layouts from memory:
+```bash
+gh api repos/nostr-protocol/nips/readme --jq '.content' | base64 -d        # NIP list + kind table
+gh api repos/nostr-protocol/nips/contents/51.md --jq '.content' | base64 -d # one NIP
+# (or https://raw.githubusercontent.com/nostr-protocol/nips/master/51.md)
+```
 
-- **Amethyst** (`vitorpamplona/amethyst`) — the most NIP-complete Android client that exists. Its README's "Supported Features" checklist is the best single reference for whether a NIP is worth prioritizing and what a mature implementation covers. Architecture differs from Umbra on purpose (mutable in-memory Note/User object graph, LiveData/Flow per-object) — don't port that pattern, Umbra's immutable-state + Room design is a deliberate, stricter choice for auditability. Use Amethyst for *protocol* correctness and *feature scope*, not for *architecture*.
-- **Wisp** (`barrydeen/wisp`) — architecturally close to Umbra: Kotlin, Compose, MVVM, StateFlow-only (no LiveData/RxJava), NIP-55/Amber remote-signer abstraction, each NIP as a standalone object with pure parse/build functions (`app/src/main/kotlin/com/wisp/app/nostr/NipXX.kt`). When a NIP has non-obvious tag structure (list kinds, private/encrypted tags, addressable events), read Wisp's `NipXX.kt` for the parse+build pair before writing your own — it's the closest analog to how Umbra's `domain/nipXX/` packages are organized.
+- The README kind table isn't exhaustive. `nostr-protocol/registry-of-kinds` is.
+- Fetch dependent NIPs too (NIP-51 private tags → NIP-44; NIP-17 → NIP-59 + NIP-44).
+- Prior art:
+  - **Amethyst** (`vitorpamplona/amethyst`) for protocol correctness and feature scope. Don't port its architecture.
+  - **Wisp** (`barrydeen/wisp`, `nostr/NipXX.kt`) for parse/build pairs shaped like Umbra's `domain/nipXX/`.
 
-## The established pattern (NIP-02 ContactList → NIP-51 MuteList)
+Kind ranges (NIP-01) decide storage:
 
-For a "the user publishes a replaceable list of pubkeys/values" NIP (contact lists, mute lists, pin lists, bookmark lists, relay sets, follow sets...), follow the shape already used by `ContactListRepositoryImpl` and `MuteListRepositoryImpl` exactly:
+| Range | Behaviour |
+|---|---|
+| 1, 2, 4–44, 1000–9999 | regular (all stored) |
+| 0, 3, 10000–19999 | replaceable: latest per (pubkey, kind); ties → lowest id |
+| 20000–29999 | ephemeral (e.g. 22242 AUTH) |
+| 30000–39999 | addressable: latest per (kind, pubkey, `d`) |
 
-1. **Domain model** — `domain/nipXX/<Thing>.kt`: a plain data class (`ownerPubkey`, the set/list of values, `updatedAt`). No Room/Android types.
-2. **Repository interface** — `domain/repository/<Thing>Repository.kt`: `getX(pubkey): Flow<X?>`, mutation methods returning `Result<Unit>`, plus any `isX()`/`getCurrentX()` convenience reads.
-3. **Repository impl** — `data/repository/<Thing>RepositoryImpl.kt`, `@Singleton @Inject constructor(userPreferences, eventRepository)`:
-   - `init {}` subscribes to two things: `eventRepository.observeRecentEvents(limit = 4000)` (catches other people's lists as they arrive) and a `userPreferences.getPublicKeyFlow().flatMapLatest { eventRepository.observeEventsByPubkeyAndKind(owner, KIND, limit = 32) }` (keeps the logged-in user's own list hot from the encrypted archive).
-   - Both funnel into one `ingestXEvents(events: List<Event>)`: group by `pubkey.lowercase()`, pick the max by `compareBy { createdAt }.thenBy { tags.size }.thenBy { id }` per owner (latest-event-wins), parse tags, `updateCache()`.
-   - Mutation methods (`mute`/`follow`/etc.) read-modify-write an in-memory `MutableStateFlow<Map<ownerPubkey, X>>` — they do **not** sign or publish. Signing happens in the ViewModel (see below).
-   - `resolveX(ownerPubkey)` bootstraps from `eventRepository.observeEventsByPubkeyAndKind(owner, KIND, limit = 1).first().firstOrNull()` when the in-memory cache is cold.
-4. **Event builder** — add a function to `domain/nip01/NostrEventBuilder.kt` (`fun xList(values: Set<String>): String`) mirroring `contactList()`/`muteList()`: normalize (lowercase, filter valid length, `distinct().sorted()`), build tags, `buildUnsignedEvent(kind, content, tags)`.
-5. **DI** — add the `@Binds` pair in `di/RepositoryModule.kt` next to the existing repository bindings.
-6. **ViewModel wiring — this is where signing happens.** Both `FeedViewModel` and `ProfileViewModel` manually construct their own `InteractionActionsCoordinator` (`ui/common/InteractionActionsCoordinator.kt`, never Hilt-injected — the shared sign/publish primitive both ViewModels use) and call its `requestSignAndPublish(...)`, committing the repository mutation inside the `onSigned` callback — i.e. state only changes *after* Amber confirms the signature, never optimistically beforehand. This is now the **one** established idiom, used consistently by every mute/pin/follow/like/repost/delete action in both ViewModels:
-   ```kotlin
-   interactionActionsCoordinator.requestSignAndPublish(
-       buildEventJson = { NostrEventBuilder.xList(currentSet + or - target) },  // lazy — see below
-       currentUserHex = userPreferences.getPublicKey(),
-       onSigned = { /* commit the repository mutation here, only now */ },
-   )
-   ```
-   Older guidance describing a `ProfileViewModel`-specific optimistic-update-then-rollback path (`pendingXAction`, `handleSignResult()` rolling back on rejection) or a `FeedViewModel`-specific `pendingSignQueue`/`PendingSignEntry` queue is **obsolete** — both were deleted when `ProfileViewModel` converged onto `FeedViewModel`'s commit-after-sign shape; neither exists in the codebase anymore. Use `buildEventJson`'s **lazy** form (a suspend lambda, not a pre-built string) whenever the event content is derived from a caller-owned list/set that could change during Amber's unbounded approval wait — rebuilding from the live list right before signing, rather than a stale pre-wait snapshot, is what prevents two overlapping same-kind actions from reverting each other (see [`umbra-signer`](../umbra-signer/SKILL.md) for the concrete regression this fixed).
-   - **Never** sign or call `AmberConnector`/`AmberSignerGateway` outside a ViewModel (AUDIT.md §2.6), and never publish without going through `PublishSignedEventUseCase` — `requestSignAndPublish` already does this internally, don't bypass it.
-7. **Read-side wiring into the feed** — if the new list should gate what's shown (like mutes), add a `Flow<Set<String>>`/`Flow<X>` sourced from the repository into `FeedViewModel`'s `combine(...)` that builds `notesFlow`, and fold it into the `mutedPubkeys`/filter arguments passed to `eventRepository.observeFeedNotes(...)`. Don't filter in `EventRepositoryImpl` internals — it already takes these as caller-supplied parameters by design.
-8. **Tests** — one test file per repository (`data/repository/<Thing>RepositoryImplTest.kt`) covering: latest-event-wins ingestion, mutate-then-read, and the "no authenticated user" failure path. Plus a `NostrEventBuilderTest` case for the new builder function. When writing a fake `EventRepository.observeEventsByPubkeyAndKind`, make sure it actually sorts by `createdAt` descending and respects `limit` — the real implementation does, and a fake that returns unsorted/unlimited results will make bootstrap-path tests flaky in a way that looks like a repository bug but isn't (this bit a real test during MuteListRepositoryImplTest development — see git history).
+NIP-51 `1000x` *lists* (one per user) are not `3000x` *sets* (many, keyed by `d`). Check which one a spec kind is before designing the repository.
 
-## NIP-51 kind/tag reference (cross-checked against a reference client's NIP-51 implementation)
+Already implemented:
+- kinds 0, 1, 3, 5 (`DeleteNoteUseCase`), 6, 7, 1111 (NIP-22)
+- 10000 mute, 10001 pin, 10002 NIP-65, 10050 DM relays
+- 22242 AUTH
 
-Umbra has kind 10000 (mute list) done. Remaining NIP-51 kinds, if picked up next, with a reference client's field/tag shapes as a starting point (adapt to Umbra's plain-`p`-tag-only style used so far — no NIP-44 private tags yet, since Umbra's NIP-44 support is still partial):
+`docs/nip-social-coverage.md` is the source of truth. Candidate NIP-51 kinds and their tags:
 
-| Kind | Purpose | Tags |
-|---|---|---|
-| 10001 | Pin list | `e` (event id, optional relay hint) |
-| 10003 | Bookmark list | `e` (events), `a` (addressable coordinates), `t` (hashtags) |
-| 10006 | Blocked relays | `relay` |
-| 10007 | Search relays | `relay` |
-| 10012 | Favorite relays | `relay` |
-| 30000 | Follow set (addressable, needs `d` tag) | `d`, `title`/`name`, `p` (members) |
-| 30002 | Relay set (addressable) | `d`, `title`/`name`, `relay` |
-| 30003 | Bookmark set (addressable) | `d`, `title`/`name`, `e`, `a`, `t` |
-| 30015 | Interest set (addressable) | `d`, `title`/`name`, `t` (hashtags, lowercased) |
+| Kind | Tags |
+|---|---|
+| 10003 bookmarks | `e`, `a`, `t` |
+| 10006 / 10007 / 10012 blocked / search / favourite relays | `relay` |
+| 30000 follow set | `d`, `title`, `p` |
+| 30002 relay set | `d`, `title`, `relay` |
+| 30003 bookmark set | `d`, `title`, `e`, `a`, `t` |
+| 30015 interest set | `d`, `title`, `t` (lowercase) |
 
-Addressable kinds (3000x) need a `d` tag and are looked up by `(kind, pubkey, d)`, not just `(kind, pubkey)` — check whether `EventRepository` has an addressable-event lookup (`getLatestAddressableEvent`) before adding a new one; it already exists and is used elsewhere.
+For addressable lookups, use the existing `EventRepository.getLatestAddressableEvent`.
+
+## 2. The established pattern (ContactList / MuteList / PinList)
+
+1. **Model**: `domain/nipXX/<Thing>.kt`, a plain data class (`ownerPubkey`, values, `updatedAt`) with no Android or Room types.
+2. **Interface**: `domain/repository/<Thing>Repository.kt`. It exposes `getX(pubkey): Flow<X?>`, mutations returning `Result<Unit>`, and convenience reads.
+3. **Impl**: `data/repository/<Thing>RepositoryImpl.kt`, `@Singleton`.
+   - `init` subscribes to `eventRepository.observeRecentEvents(4000)` plus the owner's own `observeEventsByPubkeyAndKind(owner, KIND, 32)` via `getPublicKeyFlow().flatMapLatest`.
+   - Both feed one `ingestXEvents`: group by lowercase pubkey, latest wins by `createdAt`, then `tags.size`, then `id`.
+   - Mutations only edit the in-memory `MutableStateFlow` cache. **They never sign.**
+   - When the cache is cold, bootstrap from `observeEventsByPubkeyAndKind(owner, KIND, 1).first()`.
+4. **Builder**: add a function to `NostrEventBuilder` (normalize, lowercase, `distinct().sorted()`, `buildUnsignedEvent`).
+5. **DI**: add the `@Binds` in `di/RepositoryModule.kt`.
+6. **Signing happens in the ViewModel**, through `InteractionActionsCoordinator.requestSignAndPublish(buildEventJson = { ... }, currentUserHex, onSigned = { commit mutation })`.
+   - Commit only after Amber signs.
+   - Use the *lazy* `buildEventJson` whenever content derives from a list that can change during Amber's wait, so overlapping actions don't revert each other.
+   - Never touch Amber outside a ViewModel, and never bypass `PublishSignedEventUseCase`. See `umbra-signer`.
+7. **Feed gating** (like mutes): combine the repository flow into `FeedViewModel.notesFlow` and pass it to `observeFeedNotes(...)`. Don't filter inside `EventRepositoryImpl`.
+   - Any user-visible hiding must be user-editable (`FeedFilter` style), never hardcoded.
+8. **Tests**:
+   - Repository tests cover latest-wins, mutate-then-read, and the no-user failure path.
+   - Add a `NostrEventBuilderTest` case.
+   - Fake `observeEventsByPubkeyAndKind` must sort by `createdAt` descending and respect `limit`.
 
 ## Don't
 
-- Don't introduce a `LocalSigner`/on-device-nsec path to match another client — Umbra's Amber-only constraint is intentional and stricter, not a gap.
-- Don't port a mutable global object graph (`Note`/`User` singletons) — conflicts with AUDIT.md's `@Immutable` state + Clean Architecture rules.
-- Don't duplicate the ingestion/latest-wins logic per NIP — if a third or fourth list type shows up, consider extracting the common "replaceable-list-of-pubkeys" scaffolding, but two instances (contact, mute) isn't enough repetition yet to justify it.
+- Add an on-device signer or nsec path.
+- Port a mutable global Note/User object graph.
+- Copy the ingestion scaffolding per NIP without reason. Extract it once repetition genuinely justifies it.

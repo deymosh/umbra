@@ -1,5 +1,12 @@
 package com.umbra.app.ui.components
 
+import androidx.compose.ui.graphics.Color
+import com.umbra.app.ui.theme.UmbraTheme
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.Icons
 import android.content.ClipData
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
@@ -9,7 +16,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -53,12 +59,12 @@ fun LightningInvoiceCard(invoice: String, onPay: (String) -> Unit) {
     val expired = decoded?.isExpired(now) ?: false
 
     Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, UmbraTheme.colors.zap.copy(alpha = 0.3f)),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Box(modifier = Modifier.padding(10.dp)) {
+        Box(modifier = Modifier.padding(14.dp)) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -67,7 +73,12 @@ fun LightningInvoiceCard(invoice: String, onPay: (String) -> Unit) {
                     modifier = Modifier.fillMaxWidth().padding(end = 30.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(text = "⚡", style = MaterialTheme.typography.titleMedium)
+                    Icon(
+                        imageVector = Icons.Filled.Bolt,
+                        contentDescription = null,
+                        tint = UmbraTheme.colors.zap,
+                        modifier = Modifier.size(20.dp)
+                    )
                     Text(
                         text = stringResource(R.string.event_lightning_invoice),
                         style = MaterialTheme.typography.labelLarge,
@@ -80,8 +91,8 @@ fun LightningInvoiceCard(invoice: String, onPay: (String) -> Unit) {
                     } ?: stringResource(R.string.event_lightning_any_amount),
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    style = MaterialTheme.typography.headlineSmall.copy(fontFeatureSettings = "tnum"),
+                    color = UmbraTheme.colors.zap
                 )
                 val description = decoded?.description
                 if (!description.isNullOrBlank()) {
@@ -105,7 +116,11 @@ fun LightningInvoiceCard(invoice: String, onPay: (String) -> Unit) {
                 Button(
                     onClick = { onPay("lightning:$invoice") },
                     enabled = !expired,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = UmbraTheme.colors.zap,
+                        contentColor = Color(0xFF231A07)
+                    )
                 ) {
                     Text(stringResource(R.string.event_lightning_pay))
                 }

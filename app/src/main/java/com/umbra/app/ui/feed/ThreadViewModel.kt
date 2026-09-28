@@ -5,9 +5,11 @@ import com.umbra.app.R
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.umbra.app.domain.nip55.AmberSignerGateway
 import com.umbra.app.domain.nip19.Bech32Encoder
+import com.umbra.app.domain.model.NostrChannels
+import com.umbra.app.ui.common.InteractionActionsCoordinator
 import com.umbra.app.domain.nip01.Event
+import com.umbra.app.domain.usecase.BuildThreadFiltersUseCase
 import com.umbra.app.domain.nip01.NostrEventBuilder
 import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.domain.preferences.UserPreferences
@@ -16,11 +18,7 @@ import com.umbra.app.domain.nip30.CustomEmoji
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.repository.ReactionEmojiRepository
 import com.umbra.app.domain.repository.EventRepository
-import com.umbra.app.domain.usecase.PublishSignedEventUseCase
-import com.umbra.app.domain.usecase.DeleteNoteUseCase
-import com.umbra.app.domain.usecase.RemoveDeletedNoteFromCacheUseCase
 import com.umbra.app.domain.usecase.TrackReferencedAuthorUseCase
-import com.umbra.app.domain.usecase.BuildEventShareUrlUseCase
 import com.umbra.app.domain.media.VideoCacheDataSourceProvider
 import com.umbra.app.ui.common.UiMessage
 import com.umbra.app.ui.common.collectViewportHttpPrefetchUrls
@@ -29,7 +27,6 @@ import com.umbra.app.ui.common.futureEventRecheckTicker
 import com.umbra.app.ui.common.mergeBounded
 import com.umbra.app.ui.common.requestViewportMentionedProfiles
 import com.umbra.app.ui.common.resolveViewportQuotedEvents
-import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.ImagePrefetcher
 import com.umbra.app.util.UrlPrefetcher
 import com.umbra.app.util.logging.UmbraLog
@@ -88,16 +85,16 @@ class ThreadViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val reactionEmojiRepository: ReactionEmojiRepository,
     private val userPreferences: UserPreferences,
-    private val amberSignerGateway: AmberSignerGateway,
-    private val publishSignedEventUseCase: PublishSignedEventUseCase,
     private val videoCacheDataSourceProvider: VideoCacheDataSourceProvider,
-    private val deleteNoteUseCase: DeleteNoteUseCase,
-    private val removeDeletedNoteFromCacheUseCase: RemoveDeletedNoteFromCacheUseCase,
     private val trackReferencedAuthorUseCase: TrackReferencedAuthorUseCase,
     private val imagePrefetcher: ImagePrefetcher? = null,
     private val urlPrefetcher: UrlPrefetcher? = null,
-    private val buildEventShareUrlUseCase: BuildEventShareUrlUseCase
+    coordinatorFactory: InteractionActionsCoordinator.Factory
 ) : ViewModel() {
+
+    // Shared sign/publish/delete/share path (same one Feed and Profile use): signs through Amber,
+    // rethrows cancellation, and commits a deletion only once Amber has actually signed it.
+    private val actions = coordinatorFactory.create(viewModelScope)
 
     companion object {
         private const val TAG = "UmbraThreadVM"
@@ -113,6 +110,8 @@ class ThreadViewModel @Inject constructor(
     private var viewportPrefetchJob: Job? = null
     private val roomSeedEvents = MutableStateFlow<List<Event>>(emptyList())
     private val anchorEventId = MutableStateFlow<String?>(null)
+    private val buildThreadFilters = BuildThreadFiltersUseCase()
+    private var threadChannelId: String? = null
 
     private val _state = MutableStateFlow(ThreadState(eventId = eventRef))
     val state: StateFlow<ThreadState> = _state.asStateFlow()
@@ -145,7 +144,7 @@ class ThreadViewModel @Inject constructor(
 
     fun shareEvent(event: Event) {
         viewModelScope.launch {
-            _shareUrlEffect.emit(buildEventShareUrlUseCase(event.id))
+            _shareUrlEffect.emit(actions.buildShareUrl(event.id))
         }
     }
 
@@ -180,40 +179,22 @@ class ThreadViewModel @Inject constructor(
 
     fun deleteEvent(event: Event) {
         val currentUserPubkey = userPreferences.getPublicKey()?.lowercase() ?: return
-        val eventJson = deleteNoteUseCase(event, currentUserPubkey).getOrElse { return }
-        requestSignEvent(eventJson, currentUserPubkey)
-        _state.update { current ->
-            current.copy(events = current.events.filter { it.id != event.id })
-        }
-        viewModelScope.launch {
-            removeDeletedNoteFromCacheUseCase(event.id)
-                .onFailure {
-                    _state.update { current ->
-                        current.copy(errorMessage = UiMessage.Res(R.string.error_delete_note_failed))
-                    }
-                }
-        }
+        actions.deleteEvent(
+            event = event,
+            currentUserHex = currentUserPubkey,
+            onDeleteConfirmed = {
+                _state.update { current -> current.copy(events = current.events.filter { it.id != event.id }) }
+            },
+            onCacheRemoveFailure = {
+                _state.update { it.copy(errorMessage = UiMessage.Res(R.string.error_delete_note_failed)) }
+            }
+        )
     }
 
-    fun requestSignEvent(eventJson: String, currentUserHex: String? = null) {
-        viewModelScope.launch {
-            val signedEvent = try {
-                amberSignerGateway.signEvent(eventJson, currentUserHex)
-            } catch (e: Exception) {
-                logger.d { "Error requesting signed event: ${scrubThrowableMessageForLogs(e)}" }
-                null
-            }
-            if (signedEvent != null) publishSignedEvent(signedEvent)
-        }
-    }
+    fun requestSignEvent(eventJson: String, currentUserHex: String? = null) =
+        actions.requestSignAndPublish(eventJson, currentUserHex)
 
-    fun publishSignedEvent(signedJson: String) {
-        viewModelScope.launch {
-            publishSignedEventUseCase(signedJson).onFailure { e ->
-                logger.d { "Publish failed: ${scrubThrowableMessageForLogs(e)}" }
-            }
-        }
-    }
+    fun publishSignedEvent(signedJson: String) = actions.publishSignedEvent(signedJson)
 
     init {
         bootstrapFromRoom()
@@ -230,6 +211,7 @@ class ThreadViewModel @Inject constructor(
                 return@launch
             }
             anchorEventId.value = anchor.id
+            subscribeToThread(anchor)
             val seedEvents = buildLocalThreadSeed(anchor)
             roomSeedEvents.value = seedEvents
             // viewModelScope defaults to Dispatchers.Main.immediate — without this hop, the
@@ -528,9 +510,22 @@ class ThreadViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Asks relays for everything pointing at this thread (replies, NIP-22 comments, engagement)
+     * instead of relying on whatever the feed happened to have cached — a thread opened from a
+     * profile, link or notification otherwise shows few or no replies.
+     */
+    private fun subscribeToThread(anchor: Event) {
+        val channelId = NostrChannels.thread(anchor.id)
+        threadChannelId = channelId
+        eventRepository.subscribeChannel(channelId, buildThreadFilters(anchor.id, anchor.threadRootId()))
+    }
+
     private fun collectDescendants(anchorId: String, allEvents: List<Event>): List<Event> {
+        // NIP-10 replies and NIP-22 comments both hang off their parent's id (a comment's
+        // lowercase `e` tag is its parent), so one parent map covers both.
         val byParent = allEvents
-            .filter { it.kind == Event.KIND_TEXT_NOTE && it.isReply() }
+            .filter { (it.kind == Event.KIND_TEXT_NOTE && it.isReply()) || it.kind == Event.KIND_COMMENT }
             .groupBy { it.getParentEventId() }
 
         val out = mutableListOf<Event>()
@@ -623,6 +618,7 @@ class ThreadViewModel @Inject constructor(
     fun getUrlMetadata(url: String) = urlPrefetcher?.getMetadata(url)
 
     override fun onCleared() {
+        threadChannelId?.let(eventRepository::clearChannel)
         viewportPrefetchJob?.cancel()
         imagePrefetcher?.resetScope(THREAD_VIEWPORT_PREFETCH_SCOPE)
         urlPrefetcher?.resetScope(THREAD_VIEWPORT_URL_PREFETCH_SCOPE)

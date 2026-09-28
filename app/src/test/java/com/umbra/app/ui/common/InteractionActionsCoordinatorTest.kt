@@ -11,6 +11,7 @@ import com.umbra.app.domain.repository.FeedRepository
 import com.umbra.app.domain.repository.MuteListRepository
 import com.umbra.app.domain.repository.PinListRepository
 import com.umbra.app.domain.usecase.BuildEventShareUrlUseCase
+import com.umbra.app.domain.usecase.BuildOwnListEditUseCase
 import com.umbra.app.domain.usecase.DeleteNoteUseCase
 import com.umbra.app.domain.usecase.PublishSignedEventUseCase
 import com.umbra.app.domain.usecase.RemoveDeletedNoteFromCacheUseCase
@@ -89,6 +90,7 @@ class InteractionActionsCoordinatorTest {
         deleteNoteUseCase = deleteNoteUseCase,
         removeDeletedNoteFromCacheUseCase = RemoveDeletedNoteFromCacheUseCase(eventRepository),
         buildEventShareUrlUseCase = BuildEventShareUrlUseCase(),
+        buildOwnListEdit = BuildOwnListEditUseCase(eventRepository, userPreferences),
         scope = scope
     )
 

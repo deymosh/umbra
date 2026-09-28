@@ -1,11 +1,18 @@
 package com.umbra.app.ui.feed
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Surface
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,7 +24,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -25,10 +31,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.umbra.app.R
@@ -159,40 +163,14 @@ fun ThreadScreen(
             return@Scaffold
         }
 
-        state.errorMessage?.let { message ->
-            ErrorBanner(
-                message = message.resolve(context),
-                onDismiss = { viewModel.clearError() },
-                modifier = Modifier.padding(innerPadding)
-            )
-        }
-
         if (state.anchor == null && !state.isLoading) {
-            Box(
+            EmptyState(
+                title = stringResource(R.string.note_not_found_title),
+                message = stringResource(R.string.note_not_found_message),
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.padding(32.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.note_not_found_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = stringResource(R.string.note_not_found_message),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
+                    .padding(innerPadding)
+            )
             return@Scaffold
         }
 
@@ -206,11 +184,23 @@ fun ThreadScreen(
             return@Scaffold
         }
 
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+        // In the column (not overlaid on the list) so it never covers the first note.
+        state.errorMessage?.let { message ->
+            ErrorBanner(
+                message = message.resolve(context),
+                onDismiss = { viewModel.clearError() }
+            )
+        }
         LazyColumn(
             state = listState,
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
+                .weight(1f)
+                .fillMaxWidth(),
             verticalArrangement = Arrangement.Top
         ) {
             items(
@@ -224,6 +214,7 @@ fun ThreadScreen(
 
                 EventCard(
                     event = event,
+                    highlighted = event.id == state.anchor?.id,
                     enableEventClick = false,
                     initiallyExpanded = true,
                     userProfile = state.profiles[event.pubkey],
@@ -255,7 +246,43 @@ fun ThreadScreen(
                 )
             }
         }
+        state.anchor?.let { anchor ->
+            ThreadReplyBar(
+                authorName = state.profiles[anchor.pubkey]?.getUserDisplayName(),
+                onClick = { onReplyStable(anchor) }
+            )
+        }
+        }
     }
 
 }
 
+/** A tap target shaped like a text field that opens the composer as a reply to the focal note. */
+@Composable
+internal fun ThreadReplyBar(authorName: String?, onClick: () -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.background) {
+        Column {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text(
+                text = if (authorName != null) {
+                    stringResource(R.string.thread_reply_hint, authorName)
+                } else {
+                    stringResource(R.string.reply_note_hint)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .clickable(onClick = onClick)
+                    .padding(horizontal = 18.dp, vertical = 14.dp)
+            )
+        }
+    }
+}

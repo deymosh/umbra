@@ -4,11 +4,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MoreHoriz
+import com.umbra.app.ui.theme.UmbraTheme
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,15 +55,14 @@ fun RepostBanner(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(bottom = 4.dp),
+            .clickable(onClick = onClick),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Outlined.Repeat,
             contentDescription = stringResource(R.string.event_repost_icon_cd),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = UmbraTheme.colors.repost,
             modifier = Modifier.size(14.dp)
         )
         UserAvatar(
@@ -82,7 +81,7 @@ fun RepostBanner(
             } else {
                 reposterLabel
             },
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -91,11 +90,11 @@ fun RepostBanner(
             Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
                 // Matches NoteHeader's own kebab (EventCard.kt) in size/icon/tint for touch-target
                 // and visual consistency between a repost banner's menu and a normal note's menu.
-                IconButton(onClick = onMenuClick, modifier = Modifier.size(36.dp)) {
+                IconButton(onClick = onMenuClick, modifier = Modifier.size(32.dp)) {
                     Icon(
-                        imageVector = Icons.Default.MoreVert,
+                        imageVector = Icons.Default.MoreHoriz,
                         contentDescription = stringResource(R.string.repost_banner_more_actions),
-                        modifier = Modifier.size(22.dp),
+                        modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

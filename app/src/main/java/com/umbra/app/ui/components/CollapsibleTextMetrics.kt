@@ -125,10 +125,11 @@ internal fun ShowMoreLessToggle(isExpanded: Boolean, onToggle: () -> Unit, modif
         } else {
             stringResource(R.string.event_show_more)
         },
-        style = MaterialTheme.typography.labelSmall,
+        style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.primary,
         modifier = modifier
-            .padding(top = 8.dp, start = 4.dp)
+            .padding(top = 6.dp)
             .clickable(onClick = onToggle)
+            .padding(vertical = 4.dp)
     )
 }

@@ -1,5 +1,8 @@
 package com.umbra.app.ui.relay
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.umbra.app.ui.components.UmbraIcons
+import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,11 +12,9 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ChevronRight
@@ -24,14 +25,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.umbra.app.R
-import com.umbra.app.domain.nip01.Event
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.material.icons.outlined.Info
+import com.umbra.app.ui.theme.MonoStyle
+import com.umbra.app.ui.theme.UmbraTheme
 import com.umbra.app.domain.nip11.RelayInfo
 import com.umbra.app.domain.nip77.SyncDirection
 import com.umbra.app.domain.relay.Relay
@@ -62,7 +68,7 @@ fun RelayConfigScreen(
     navController: NavController,
     viewModel: RelayConfigViewModel
 ) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var pendingExternalUrl by remember { mutableStateOf<String?>(null) }
 
@@ -93,23 +99,6 @@ fun RelayConfigScreen(
             navigationIcon = {
                 UmbraTopAppBarDefaults.BackNavigationIcon(onClick = { navController.popBackStack() })
             },
-            actions = {
-                if (hasUnpublishedChanges || state.isPublishing) {
-                    IconButton(
-                        onClick = { viewModel.publishRelayLists() },
-                        enabled = hasUnpublishedChanges && !state.isPublishing
-                    ) {
-                        if (state.isPublishing) {
-                            LoadingSpinner(size = 20.dp, strokeWidth = 2.dp)
-                        } else {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Send,
-                                contentDescription = stringResource(R.string.relay_publish_lists_action)
-                            )
-                        }
-                    }
-                }
-            }
         )
 
         // Error message
@@ -118,6 +107,33 @@ fun RelayConfigScreen(
                 message = state.errorMessage!!.resolve(context),
                 onDismiss = { viewModel.clearError() }
             )
+        }
+
+        // In the page flow (it used to be emitted after this Column, which drew it over the top
+        // app bar instead).
+        if (state.isAnonymousSession) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Info,
+                    contentDescription = null,
+                    tint = UmbraTheme.colors.caution,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = stringResource(R.string.relay_anonymous_inbox_dm_disabled),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         // Relays list — relayBuckets/relayConnectionStates/telemetrySnapshot are computed in
@@ -147,10 +163,10 @@ fun RelayConfigScreen(
         val indexEmpty = stringResource(R.string.relay_section_index_relays_empty)
         val discoveredEmpty = stringResource(R.string.relay_section_discovered_empty)
 
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
@@ -375,22 +391,34 @@ fun RelayConfigScreen(
                 }
             }
         }
-    }
 
-    if (state.isAnonymousSession) {
-        Surface(
-            tonalElevation = 0.dp,
-            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f),
+        // Relay-list edits are local until published (signed via Amber): say so plainly with
+        // one clear action instead of a lone icon in the top bar.
+        androidx.compose.animation.AnimatedVisibility(
+            visible = hasUnpublishedChanges || state.isPublishing,
+            enter = fadeIn() + slideInVertically { it },
+            exit = fadeOut() + slideOutVertically { it },
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp)
         ) {
-            Text(
-                text = stringResource(R.string.relay_anonymous_inbox_dm_disabled),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
-            )
+            Button(
+                onClick = { viewModel.publishRelayLists() },
+                enabled = !state.isPublishing,
+                modifier = Modifier.height(52.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = UmbraTheme.colors.corona),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
+            ) {
+                if (state.isPublishing) {
+                    LoadingSpinner(size = 18.dp, strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                } else {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(stringResource(R.string.relay_publish_lists_action), style = MaterialTheme.typography.titleSmall)
+            }
+        }
         }
     }
 
@@ -414,13 +442,13 @@ fun RelayConfigScreen(
  * elsewhere in this screen is a read-only display chip, not a selection control.
  */
 @Composable
-private fun NegentropySyncCard(direction: SyncDirection, onDirectionChange: (SyncDirection) -> Unit) {
+internal fun NegentropySyncCard(direction: SyncDirection, onDirectionChange: (SyncDirection) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(12.dp),
+            .clip(MaterialTheme.shapes.large)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
@@ -455,13 +483,13 @@ private fun NegentropySyncCard(direction: SyncDirection, onDirectionChange: (Syn
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RelayTelemetryCard(telemetry: RelayTelemetrySnapshot, onSubscriptionsClick: () -> Unit) {
+internal fun RelayTelemetryCard(telemetry: RelayTelemetrySnapshot, onSubscriptionsClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(12.dp),
+            .clip(MaterialTheme.shapes.large)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
@@ -499,7 +527,7 @@ private fun RelayTelemetryCard(telemetry: RelayTelemetrySnapshot, onSubscription
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RelayCard(
+internal fun RelayCard(
     relay: Relay,
     relayInfo: RelayInfo?,
     relayConnectionState: RelayConnectionIndicatorState,
@@ -515,15 +543,10 @@ private fun RelayCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(color = MaterialTheme.colorScheme.surfaceContainerHigh)
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                shape = RoundedCornerShape(14.dp)
-            )
+            .clip(MaterialTheme.shapes.large)
+            .background(color = MaterialTheme.colorScheme.surfaceContainer)
             .clickable(onClick = onOpenDetails)
-            .padding(11.dp)
+            .padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp)
     ) {
         // Header row
         Row(
@@ -538,7 +561,8 @@ private fun RelayCard(
             ) {
                 RelayIcon(
                     iconUrl = relayInfo?.icon,
-                    relayConnectionState = relayConnectionState
+                    relayConnectionState = relayConnectionState,
+                    isOnion = relay.isOnion || relay.url.contains(".onion")
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -550,7 +574,7 @@ private fun RelayCard(
                     )
                     Text(
                         text = formatRelayUrl(relay.url),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MonoStyle,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -578,38 +602,31 @@ private fun RelayCard(
                     onCheckedChange = { newValue ->
                         optimisticChecked = newValue
                         onToggle(newValue)
-                    },
-                    modifier = Modifier.scale(0.70f)
+                    }
                 )
+                // Removing a role is reversible (re-add it), so it's a quiet icon — not a red
+                // trash can shouting from every row. The whole card opens details, no chevron.
                 if (onDelete != null) {
-                    IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier.size(32.dp)
-                    ) {
+                    IconButton(onClick = onDelete) {
                         Icon(
-                            imageVector = Icons.Default.Delete,
+                            imageVector = Icons.Outlined.RemoveCircleOutline,
                             contentDescription = stringResource(R.string.delete),
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(18.dp)
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
-                )
             }
         }
     }
 }
 
 @Composable
-private fun RelayIconFallback() {
+private fun RelayIconFallback(isOnion: Boolean = false) {
     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
         Icon(
-            imageVector = Icons.Default.Language,
+            // Onion relays are reached inside the Tor network itself, so they get the onion.
+            imageVector = if (isOnion) UmbraIcons.Onion else Icons.Default.Language,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(18.dp)
@@ -620,13 +637,14 @@ private fun RelayIconFallback() {
 @Composable
 internal fun RelayIcon(
     iconUrl: String?,
-    relayConnectionState: RelayConnectionIndicatorState? = null
+    relayConnectionState: RelayConnectionIndicatorState? = null,
+    isOnion: Boolean = false
 ) {
-    Box(modifier = Modifier.size(34.dp)) {
+    Box(modifier = Modifier.size(38.dp)) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.surfaceContainerHighest
         ) {
             if (!iconUrl.isNullOrBlank()) {
                 // A relay-declared icon URL can still fail to load (slow/unreachable over Tor,
@@ -638,12 +656,12 @@ internal fun RelayIcon(
                     contentDescription = null,
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(8.dp)),
-                    loading = { RelayIconFallback() },
-                    error = { RelayIconFallback() }
+                        .clip(MaterialTheme.shapes.small),
+                    loading = { RelayIconFallback(isOnion) },
+                    error = { RelayIconFallback(isOnion) }
                 )
             } else {
-                RelayIconFallback()
+                RelayIconFallback(isOnion)
             }
         }
 
@@ -652,19 +670,19 @@ internal fun RelayIcon(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .offset(x = 2.dp, y = (-2).dp)
-                    .size(10.dp)
+                    .size(11.dp)
                     .clip(CircleShape)
                     .background(
                         when (relayConnectionState) {
-                            RelayConnectionIndicatorState.CONNECTED -> MaterialTheme.colorScheme.tertiary
-                            RelayConnectionIndicatorState.CONNECTING -> MaterialTheme.colorScheme.secondary
+                            RelayConnectionIndicatorState.CONNECTED -> UmbraTheme.colors.secure
+                            RelayConnectionIndicatorState.CONNECTING -> UmbraTheme.colors.caution
                             RelayConnectionIndicatorState.FAILED -> MaterialTheme.colorScheme.error
                             RelayConnectionIndicatorState.DISABLED -> MaterialTheme.colorScheme.outline
                         }
                     )
                     .border(
                         width = 1.dp,
-                        color = MaterialTheme.colorScheme.surface,
+                        color = MaterialTheme.colorScheme.surfaceContainer,
                         shape = CircleShape
                     )
             )

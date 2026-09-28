@@ -1,5 +1,6 @@
 package com.umbra.app.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import android.content.ClipData
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -66,8 +67,8 @@ fun SimpleLinkCard(
                 }
             ),
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 2.dp
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(modifier = Modifier.padding(10.dp)) {
             Text(

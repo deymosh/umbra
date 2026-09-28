@@ -1,0 +1,22 @@
+# One line ending everywhere: LF in the repository and in every working copy, Windows included
+# (Android Studio, Gradle and git all handle LF natively). Without this the tree had drifted to a
+# mix of CRLF and LF files, so any scripted or cross-platform edit produced whole-file diffs.
+* text=auto eol=lf
+
+# cmd.exe needs CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets: never normalised or diffed as text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ttf binary
+*.otf binary
+*.jar binary
+*.apk binary
+*.aab binary
+*.keystore binary
+*.jks binary

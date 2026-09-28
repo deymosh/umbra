@@ -37,6 +37,8 @@ import com.umbra.app.domain.usecase.DetermineMissingHydrationKindsUseCase
 import com.umbra.app.domain.usecase.ResolveProfileRelayHintsUseCase
 import com.umbra.app.domain.usecase.PublishSignedEventUseCase
 import com.umbra.app.domain.usecase.BuildEventShareUrlUseCase
+import com.umbra.app.domain.usecase.BuildOwnListEditUseCase
+import com.umbra.app.ui.common.InteractionActionsCoordinator
 import com.umbra.app.domain.nip05.Nip05VerificationState
 import com.umbra.app.util.MainDispatcherRule
 import kotlinx.coroutines.CompletableDeferred
@@ -158,11 +160,20 @@ class ProfileNip05VerificationStateTest {
             relayRepository = relayRepository,
             userPreferences = FakeUserPreferences(pubkey),
             amberSignerGateway = FakeAmberSignerGateway(),
-            publishSignedEventUseCase = PublishSignedEventUseCase(eventRepository, FakeBroadcastRepository(), NoOpUmbraLogger),
+            coordinatorFactory = InteractionActionsCoordinator.Factory(
+                userPreferences = FakeUserPreferences(pubkey),
+                muteListRepository = muteListRepository,
+                pinListRepository = FakePinListRepository(),
+                feedRepository = FakeFeedRepository(),
+                amberSignerGateway = FakeAmberSignerGateway(),
+                publishSignedEventUseCase = PublishSignedEventUseCase(eventRepository, FakeBroadcastRepository(), NoOpUmbraLogger),
+                deleteNoteUseCase = DeleteNoteUseCase(),
+                removeDeletedNoteFromCacheUseCase = RemoveDeletedNoteFromCacheUseCase(eventRepository),
+                buildEventShareUrlUseCase = BuildEventShareUrlUseCase(),
+                buildOwnListEdit = BuildOwnListEditUseCase(eventRepository, FakeUserPreferences(pubkey))
+            ),
             mediaDataSourceProvider = FakeMediaDataSourceProvider(),
             videoCacheDataSourceProvider = FakeVideoCacheDataSourceProvider(),
-            deleteNoteUseCase = DeleteNoteUseCase(),
-            removeDeletedNoteFromCacheUseCase = RemoveDeletedNoteFromCacheUseCase(eventRepository),
             backfillProfileUseCase = BackfillProfileUseCase(
                 eventRepository,
                 userRepository,
@@ -180,8 +191,7 @@ class ProfileNip05VerificationStateTest {
                 userRepository,
                 hydrationRequestsUseCase,
                 missingHydrationKindsUseCase
-            ),
-            buildEventShareUrlUseCase = BuildEventShareUrlUseCase()
+            )
         )
     }
 

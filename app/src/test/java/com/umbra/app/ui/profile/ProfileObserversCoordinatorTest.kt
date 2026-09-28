@@ -338,7 +338,7 @@ class ProfileObserversCoordinatorTest {
     // --- Test 3: recomputeTotalNotesCount (via observeLocalNotesCount + the NIP-45 note-count observers) ---
 
     @Test
-    fun `given a local count of 5 and a remote relay count of 12 when both note-count observers run then totalNotesCount reflects the higher remote value`() = runTest {
+    fun `given a local count of 5 and a remote relay count of 12 when the note-count observers run then totalNotesCount reflects the higher remote value`() = runTest {
         val relayUrl = "wss://relay-a.example"
         val eventRepository = FakeEventRepository(
             localNotesCountFlow = flowOf(5),
@@ -352,7 +352,6 @@ class ProfileObserversCoordinatorTest {
 
         coordinator.observeLocalNotesCount()
         coordinator.observeNip45NoteCounts()
-        coordinator.requestNip45NoteCountsOnRelayChanges()
         advanceUntilIdle()
 
         val subscriptionId = eventRepository.requestCountCalls.single().second
@@ -366,7 +365,7 @@ class ProfileObserversCoordinatorTest {
     }
 
     @Test
-    fun `given a local count of 20 with remote relay counts all below it when both note-count observers run then totalNotesCount stays at the local value`() = runTest {
+    fun `given a local count of 20 with remote relay counts all below it when the note-count observers run then totalNotesCount stays at the local value`() = runTest {
         val relayUrl = "wss://relay-a.example"
         val eventRepository = FakeEventRepository(
             localNotesCountFlow = flowOf(20),
@@ -380,7 +379,6 @@ class ProfileObserversCoordinatorTest {
 
         coordinator.observeLocalNotesCount()
         coordinator.observeNip45NoteCounts()
-        coordinator.requestNip45NoteCountsOnRelayChanges()
         advanceUntilIdle()
 
         val subscriptionId = eventRepository.requestCountCalls.single().second

@@ -29,6 +29,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import okhttp3.Dispatcher
+import com.umbra.app.data.network.TrafficCountingInterceptor
+import com.umbra.app.data.network.TrafficMeter
 import okhttp3.OkHttpClient
 
 @Module
@@ -56,8 +58,11 @@ object NetworkModule {
     @Provides
     @Singleton
     @Named("tor")
-    fun provideTorOkHttpClient(): OkHttpClient {
+    fun provideTorOkHttpClient(trafficMeter: TrafficMeter): OkHttpClient {
         return OkHttpClient.Builder()
+            // Network (not application) interceptor so it sees the bytes that actually cross Tor,
+            // including redirects, for the Network usage screen.
+            .addNetworkInterceptor(TrafficCountingInterceptor(trafficMeter))
             // OkHttp's Dispatcher defaults to maxRequests=64 / maxRequestsPerHost=5 — fine for a
             // typical REST client, but every relay WebSocket is a long-lived "call" from the
             // Dispatcher's point of view (it never completes until closed), and this single

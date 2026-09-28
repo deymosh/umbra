@@ -53,6 +53,7 @@ internal data class PendingEventInsert(
 internal val USEFUL_PERSISTED_KINDS = setOf(
     Event.KIND_METADATA,
     Event.KIND_TEXT_NOTE,
+    Event.KIND_PICTURE,
     Event.KIND_CONTACT_LIST,
     Event.KIND_MUTED_USERS,
     Event.KIND_RELAY_LIST_METADATA,
@@ -216,7 +217,7 @@ internal class EventIngestCache(
 
     /**
      * Atomically ingests [event] delivered by [relayUrl]: resolves NIP-01/33 replaceable-event
-     * superseding (LOG-1/LOG-6), indexes engagement, stores into the LRU cache, and records relay
+     * superseding, indexes engagement, stores into the LRU cache, and records relay
      * provenance — all inside one [cachedEventsMutex] acquisition, so the atomicity across all
      * three structures is the fix, not something layered on top of it. [currentUserPubkey] gates
      * whether this author/session combination is eligible for in-memory caching at all
@@ -239,12 +240,12 @@ internal class EventIngestCache(
 
     /**
      * The replaceable-key-aware half of [ingest]: resolves NIP-01/33 replaceable-event superseding
-     * (LOG-1/LOG-6) against [latestReplaceableEventId] and either stores [event] (indexing it into
+     * against [latestReplaceableEventId] and either stores [event] (indexing it into
      * [cachedEngagementIndex] and [cachedEvents]) or drops it as a losing revision, returning which
      * happened. Must only be called while already holding [cachedEventsMutex] — shared by [ingest]
      * and [cacheRepostTarget] so a replaceable/parameterized-replaceable event cached via a NIP-18
      * repost participates in the exact same one-revision-per-slot invariant as a directly-ingested
-     * one (LOG-41), rather than bypassing it via a plain id-keyed `cachedEvents.put`.
+     * one, rather than bypassing it via a plain id-keyed `cachedEvents.put`.
      */
     private fun storeEventLocked(event: Event): Boolean {
         val replaceableKey = event.replaceableKey()
@@ -293,7 +294,7 @@ internal class EventIngestCache(
      * logic [ingest] uses) rather than an unconditional id-keyed put, so a repost-embedded
      * replaceable/parameterized-replaceable event (a long-form article, list, or live-status
      * event) participates in the same one-revision-per-slot invariant as a directly-ingested
-     * revision instead of silently coexisting alongside it (LOG-41). No relay provenance is
+     * revision instead of silently coexisting alongside it. No relay provenance is
      * recorded here — unlike [ingest], this event wasn't delivered by any specific relay.
      */
     suspend fun cacheRepostTarget(target: Event) {
@@ -471,7 +472,8 @@ internal class EventIngestCache(
         // not the unconditional hardcoded defaults isUsefulClientNote() falls back to for callers
         // with no live filter to pass (e.g. ProfileScreen).
         val filter = activeFeedFilter()
-        if (event.kind == Event.KIND_TEXT_NOTE &&
+        // Picture posts (NIP-68) go through the same user-owned hashtag/prefix filters as notes.
+        if ((event.kind == Event.KIND_TEXT_NOTE || event.kind == Event.KIND_PICTURE) &&
             !event.isUsefulClientNote(
                 excludedHashtags = filter.excludedHashtags,
                 excludedTagNamePrefixes = filter.excludedTags,
@@ -541,7 +543,7 @@ internal class EventIngestCache(
         // launch here let the new job's delay begin before the old job was cancelled, leaving a
         // narrow window where both were alive at once and could each independently flush their
         // own ownEventArchive.writeBatch() instead of the one coalesced batch this debounce exists
-        // to produce (LOG-40).
+        // to produce.
         insertDebounceJob.launchReplacing(repoScope) {
             withContext(Dispatchers.IO) {
                 delay(INSERT_DEBOUNCE_MS)

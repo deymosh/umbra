@@ -4,9 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,6 +16,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.umbra.app.R
+import com.umbra.app.ui.theme.MonoStyle
+import com.umbra.app.ui.theme.UmbraTheme
 import com.umbra.app.domain.nip11.RelayInfo
 import com.umbra.app.domain.relay.Relay
 import com.umbra.app.ui.components.InfoIcon
@@ -56,6 +55,7 @@ internal fun RelayEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         title = {
             Text(
                 if (relay == null) {
@@ -72,8 +72,11 @@ internal fun RelayEditDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                TextField(
+                OutlinedTextField(
                     value = url,
+                    singleLine = true,
+                    textStyle = MonoStyle.copy(fontSize = MaterialTheme.typography.bodyMedium.fontSize),
+                    placeholder = { Text("wss://", style = MonoStyle) },
                     onValueChange = {
                         url = it
                         urlError = if (it.isBlank() || isValidRelayUrl(it)) {
@@ -98,47 +101,29 @@ internal fun RelayEditDialog(
                         } else if (isOnion) {
                             Text(
                                 stringResource(R.string.relay_onion_help),
-                                color = MaterialTheme.colorScheme.secondary,
+                                color = UmbraTheme.colors.secure,
                                 style = MaterialTheme.typography.labelSmall
                             )
                         }
                     }
                 )
 
-                HorizontalDivider()
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.relay_read), style = MaterialTheme.typography.bodySmall)
-                        InfoIcon(title = stringResource(R.string.relay_read), message = stringResource(R.string.relay_help_inbox_body))
-                    }
-                    Switch(checked = canRead, onCheckedChange = { canRead = it })
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.relay_write), style = MaterialTheme.typography.bodySmall)
-                        InfoIcon(title = stringResource(R.string.relay_write), message = stringResource(R.string.relay_help_outbox_body))
-                    }
-                    Switch(checked = canWrite, onCheckedChange = { canWrite = it })
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.relay_dm), style = MaterialTheme.typography.bodySmall)
-                        InfoIcon(title = stringResource(R.string.relay_dm), message = stringResource(R.string.relay_help_dm_body))
-                    }
-                    Switch(
+                Column {
+                    RoleSwitchRow(
+                        label = stringResource(R.string.relay_read),
+                        help = stringResource(R.string.relay_help_inbox_body),
+                        checked = canRead,
+                        onCheckedChange = { canRead = it }
+                    )
+                    RoleSwitchRow(
+                        label = stringResource(R.string.relay_write),
+                        help = stringResource(R.string.relay_help_outbox_body),
+                        checked = canWrite,
+                        onCheckedChange = { canWrite = it }
+                    )
+                    RoleSwitchRow(
+                        label = stringResource(R.string.relay_dm),
+                        help = stringResource(R.string.relay_help_dm_body),
                         checked = canDm,
                         enabled = dmAllowedTransport,
                         onCheckedChange = {
@@ -146,40 +131,25 @@ internal fun RelayEditDialog(
                             if (it) dmAuthRequired = true
                         }
                     )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(stringResource(R.string.relay_auth_nip42), style = MaterialTheme.typography.bodySmall)
-                    Switch(
+                    // Mirrors the DM switch: NIP-42 auth is always required for DM relays.
+                    RoleSwitchRow(
+                        label = stringResource(R.string.relay_auth_nip42),
                         checked = canDm,
                         enabled = false,
                         onCheckedChange = {}
                     )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.relay_search), style = MaterialTheme.typography.bodySmall)
-                        InfoIcon(title = stringResource(R.string.relay_search), message = stringResource(R.string.relay_help_search_body))
-                    }
-                    Switch(checked = canSearch, onCheckedChange = { canSearch = it })
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.relay_index), style = MaterialTheme.typography.bodySmall)
-                        InfoIcon(title = stringResource(R.string.relay_index), message = stringResource(R.string.relay_help_index_body))
-                    }
-                    Switch(checked = canIndex, onCheckedChange = { canIndex = it })
+                    RoleSwitchRow(
+                        label = stringResource(R.string.relay_search),
+                        help = stringResource(R.string.relay_help_search_body),
+                        checked = canSearch,
+                        onCheckedChange = { canSearch = it }
+                    )
+                    RoleSwitchRow(
+                        label = stringResource(R.string.relay_index),
+                        help = stringResource(R.string.relay_help_index_body),
+                        checked = canIndex,
+                        onCheckedChange = { canIndex = it }
+                    )
                 }
 
                 if (canDm && !dmAllowedTransport) {
@@ -193,6 +163,7 @@ internal fun RelayEditDialog(
         },
         confirmButton = {
             Button(
+                enabled = url.isNotBlank() && urlError == null && (!canDm || dmAllowedTransport),
                 onClick = {
                     val isUrlValid = isValidRelayUrl(url)
                     if (!isUrlValid) {
@@ -303,4 +274,31 @@ internal fun relayDisplayName(relay: Relay, relayInfo: RelayInfo?): String {
     return relayInfo?.name?.takeIf { it.isNotBlank() }
         ?: runCatching { java.net.URI(relay.url).host }.getOrNull()?.takeIf { it.isNotBlank() }
         ?: formatRelayUrl(relay.url)
+}
+
+@Composable
+private fun RoleSwitchRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    help: String? = null,
+    enabled: Boolean = true
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (help != null) InfoIcon(title = label, message = help)
+        }
+        Switch(checked = checked, enabled = enabled, onCheckedChange = onCheckedChange)
+    }
 }

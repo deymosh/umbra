@@ -691,7 +691,7 @@ class EventRepositoryImpl @Inject constructor(
         // ever showed up if its *target* note happened to already be visible (fetched purely as
         // an engagement-count signal via BuildEngagementFiltersUseCase, never rendered as its own
         // feed item). See selectHybridFeedNotes/buildIndexedNoteViews for the unwrap+dedup step.
-        val feedKinds = setOf(Event.KIND_TEXT_NOTE, Event.KIND_EVENT_DELETION, Event.KIND_REPOST, Event.KIND_GENERIC_REPOST)
+        val feedKinds = setOf(Event.KIND_TEXT_NOTE, Event.KIND_PICTURE, Event.KIND_EVENT_DELETION, Event.KIND_REPOST, Event.KIND_GENERIC_REPOST)
         // Profile kinds: metadata of logged user.
         val profileKinds = setOf(Event.KIND_METADATA)
         // User social graph kinds (replaceable): follows, mute list, relay list, search/index
@@ -699,7 +699,9 @@ class EventRepositoryImpl @Inject constructor(
         val socialGraphKinds = setOf(
             Event.KIND_CONTACT_LIST,       // 3  — NIP-02 follows
             Event.KIND_MUTED_USERS,        // 10000 — NIP-51 mute list
+            Event.KIND_PINNED_EVENTS,      // 10001 — NIP-51 pin list
             Event.KIND_RELAY_LIST_METADATA, // 10002 — NIP-65 relay list
+            Event.KIND_BOOKMARK_LIST,      // 10003 — NIP-51 bookmarks
             Event.KIND_SEARCH_RELAYS,      // 10007 — NIP-51 search relay list
             Event.KIND_DM_RELAY_LIST,      // 10050 — NIP-17 DM relay list
             Event.KIND_INDEX_RELAYS,       // 10086 — index relay list
@@ -1455,6 +1457,27 @@ class EventRepositoryImpl @Inject constructor(
                     .toList()
             }.distinctUntilChanged().flowOn(Dispatchers.Default)
         }
+
+    override fun observeInbox(pubkey: String, limit: Int): Flow<List<Event>> =
+        observeCachedEvents(limit) { event ->
+            !event.pubkey.equals(pubkey, ignoreCase = true) && event.hasTag("p", pubkey)
+        }
+
+    override fun observeEventsWithTag(tagName: String, value: String, kinds: Set<Int>, limit: Int): Flow<List<Event>> =
+        observeCachedEvents(limit) { event -> event.kind in kinds && event.hasTag(tagName, value) }
+
+    /** Newest-first slice of the in-memory event cache matching [predicate]. */
+    private fun observeCachedEvents(limit: Int, predicate: (Event) -> Boolean): Flow<List<Event>> =
+        eventIngestCache.cachedEventsFlow.map { events ->
+            events.asSequence()
+                .filter(predicate)
+                .sortedWith(compareByDescending<Event> { it.createdAt }.thenBy { it.id })
+                .take(limit)
+                .toList()
+        }.distinctUntilChanged().flowOn(Dispatchers.Default)
+
+    private fun Event.hasTag(name: String, value: String): Boolean =
+        tags.any { it.size >= 2 && it[0] == name && it[1].equals(value, ignoreCase = true) }
 
     override fun observeCountEventsByPubkeyAndKind(pubkey: String, kind: Int): Flow<Int> =
         if (isCurrentUserPubkey(pubkey)) {

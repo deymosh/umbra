@@ -1,13 +1,14 @@
 package com.umbra.app
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.umbra.app.domain.preferences.AppearancePreferences
 import com.umbra.app.ui.UmbraNavHost
@@ -32,7 +33,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Umbra is dark-only, so the bar icons must always be light. The no-argument default
+        // follows the *system* theme, which on a light-mode phone drew dark status-bar icons on
+        // Umbra's black background.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        )
         requestBatteryOptimizationExemptionOnce()
         // NIP-21: nostr: URI deep link, if this activity was launched from one (see the VIEW
         // intent-filter in AndroidManifest.xml) — resolved once the app finishes its normal
@@ -43,7 +50,7 @@ class MainActivity : ComponentActivity() {
                 LocalMediaLoadPriorityGate provides mediaLoadPriorityGate,
                 LocalImageLoadGate provides imageLoadGate
             ) {
-                val selectedTheme by appearancePreferences.observeSelectedTheme().collectAsState()
+                val selectedTheme by appearancePreferences.observeSelectedTheme().collectAsStateWithLifecycle()
                 UmbraTheme(themeOption = selectedTheme.toUmbraThemeOption()) {
                     UmbraNavHost(deepLinkUri = deepLinkUri)
                 }

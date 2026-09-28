@@ -8,6 +8,8 @@ import com.umbra.app.domain.repository.FeedRepository
 import com.umbra.app.domain.repository.MuteListRepository
 import com.umbra.app.domain.repository.PinListRepository
 import com.umbra.app.domain.usecase.BuildEventShareUrlUseCase
+import com.umbra.app.domain.usecase.BuildOwnListEditUseCase
+import com.umbra.app.domain.nip51.ListEdit
 import com.umbra.app.domain.usecase.DeleteNoteUseCase
 import com.umbra.app.domain.usecase.PublishSignedEventUseCase
 import com.umbra.app.domain.usecase.RemoveDeletedNoteFromCacheUseCase
@@ -18,6 +20,7 @@ import com.umbra.app.util.logging.UmbraLog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * Shared sign/publish/repository-mutation primitives for the interaction-action methods
@@ -34,7 +37,7 @@ import kotlinx.coroutines.launch
  * performs, for every caller, commits only after Amber confirms the signature; there is no
  * optimistic-apply-then-rollback path anywhere in this coordinator.
  */
-internal class InteractionActionsCoordinator(
+class InteractionActionsCoordinator(
     private val userPreferences: UserPreferences,
     private val muteListRepository: MuteListRepository,
     private val pinListRepository: PinListRepository,
@@ -44,9 +47,40 @@ internal class InteractionActionsCoordinator(
     private val deleteNoteUseCase: DeleteNoteUseCase,
     private val removeDeletedNoteFromCacheUseCase: RemoveDeletedNoteFromCacheUseCase,
     private val buildEventShareUrlUseCase: BuildEventShareUrlUseCase,
+    private val buildOwnListEdit: BuildOwnListEditUseCase,
     private val scope: CoroutineScope
 ) {
     private val logger = UmbraLog.tag("InteractionActionsCoordinator")
+
+    /**
+     * Injectable so a ViewModel asks for one dependency instead of repeating the coordinator's
+     * nine, then binds it to its own scope with [create].
+     */
+    class Factory @Inject constructor(
+        private val userPreferences: UserPreferences,
+        private val muteListRepository: MuteListRepository,
+        private val pinListRepository: PinListRepository,
+        private val feedRepository: FeedRepository,
+        private val amberSignerGateway: AmberSignerGateway,
+        private val publishSignedEventUseCase: PublishSignedEventUseCase,
+        private val deleteNoteUseCase: DeleteNoteUseCase,
+        private val removeDeletedNoteFromCacheUseCase: RemoveDeletedNoteFromCacheUseCase,
+        private val buildEventShareUrlUseCase: BuildEventShareUrlUseCase,
+        private val buildOwnListEdit: BuildOwnListEditUseCase
+    ) {
+        fun create(scope: CoroutineScope) = InteractionActionsCoordinator(
+            userPreferences, muteListRepository, pinListRepository, feedRepository, amberSignerGateway,
+            publishSignedEventUseCase, deleteNoteUseCase, removeDeletedNoteFromCacheUseCase,
+            buildEventShareUrlUseCase, buildOwnListEdit, scope
+        )
+    }
+
+    /**
+     * The next version of one of the user's lists as an edit of their latest published one — see
+     * BuildOwnListEditUseCase for why other clients' tags and private content must survive.
+     */
+    suspend fun buildListEdit(kind: Int, edit: ListEdit, fallbackValues: Set<String>): String =
+        buildOwnListEdit(kind, edit, fallbackValues)
 
     fun canSignEvents(): Boolean = userPreferences.canSignWithAmber()
 

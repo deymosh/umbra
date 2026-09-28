@@ -1,5 +1,8 @@
 package com.umbra.app.ui.components
 
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -56,12 +59,20 @@ fun EmojiReactionPickerSheet(
 ) {
     var isAdding by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(onDismissRequest = onDismissRequest) {
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).padding(bottom = 16.dp)) {
             Text(
                 text = stringResource(R.string.reaction_picker_title),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 12.dp)
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = stringResource(R.string.reaction_picker_remove_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
             )
             LazyVerticalGrid(
                 columns = GridCells.Fixed(6),
@@ -74,19 +85,28 @@ fun EmojiReactionPickerSheet(
                         is ReactionEmoji.Custom -> "custom"
                     }
                 }) { entry ->
+                    // Uniform round tiles: every emoji gets the same 48dp target regardless of
+                    // glyph width, and the press ripple reads as a button.
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .combinedClickable(
+                                onClick = {
+                                    when (entry) {
+                                        is ReactionEmoji.Unicode -> onSelect(entry.emoji, null)
+                                        is ReactionEmoji.Custom -> onSelect(":${entry.emoji.shortcode}:", entry.emoji)
+                                    }
+                                    onDismissRequest()
+                                },
+                                onLongClick = { onRemoveReactionEmoji(entry.key) }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
                     when (entry) {
                         is ReactionEmoji.Unicode -> Text(
                             text = entry.emoji,
-                            style = MaterialTheme.typography.headlineSmall,
-                            modifier = Modifier
-                                .combinedClickable(
-                                    onClick = {
-                                        onSelect(entry.emoji, null)
-                                        onDismissRequest()
-                                    },
-                                    onLongClick = { onRemoveReactionEmoji(entry.key) }
-                                )
-                                .padding(8.dp)
+                            style = MaterialTheme.typography.headlineSmall
                         )
 
                         is ReactionEmoji.Custom -> AsyncImage(
@@ -94,22 +114,15 @@ fun EmojiReactionPickerSheet(
                             contentDescription = entry.emoji.shortcode,
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
-                                .combinedClickable(
-                                    onClick = {
-                                        onSelect(":${entry.emoji.shortcode}:", entry.emoji)
-                                        onDismissRequest()
-                                    },
-                                    onLongClick = { onRemoveReactionEmoji(entry.key) }
-                                )
-                                .padding(8.dp)
                                 .size(28.dp)
                                 .aspectRatio(1f)
                         )
                     }
+                    }
                 }
             }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
 
             if (isAdding) {
                 AddReactionEmojiRow(

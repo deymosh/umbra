@@ -99,7 +99,7 @@ internal class RelayCrudCoordinator(
                     }
 
                     if (existingRelay != null) {
-                        // Same per-relay-id Mutex updateRelayRole uses (LOG-42/WR-03) — a role
+                        // Same per-relay-id Mutex updateRelayRole uses — a role
                         // toggle in flight for this relay id must not have its write silently
                         // discarded by this merge, or vice versa.
                         relayRoleMutexes.computeIfAbsent(existingRelay.id) { Mutex() }.withLock {
@@ -143,7 +143,7 @@ internal class RelayCrudCoordinator(
                         addRelayUseCase(newRelay)
                     }
                 } else {
-                    // Same per-relay-id Mutex updateRelayRole uses (LOG-42/WR-03).
+                    // Same per-relay-id Mutex updateRelayRole uses.
                     relayRoleMutexes.computeIfAbsent(relay.id) { Mutex() }.withLock {
                         updateRelayUseCase(sanitizedRelay)
                     }
@@ -181,13 +181,13 @@ internal class RelayCrudCoordinator(
         scope.launch {
             try {
                 state.update { it.copy(isLoading = true) }
-                // Same per-relay-id Mutex updateRelayRole uses (LOG-42/WR-03) — a role toggle in
+                // Same per-relay-id Mutex updateRelayRole uses — a role toggle in
                 // flight for this relay id must not race the removal itself.
                 relayRoleMutexes.computeIfAbsent(relayId) { Mutex() }.withLock {
                     removeRelayUseCase(relayId)
                 }
                 // Pruned only once the removal above has fully completed and the lock is
-                // released (LOG-45) — relayRoleMutexes otherwise grows one entry per distinct
+                // released — relayRoleMutexes otherwise grows one entry per distinct
                 // relay id ever toggled, for this coordinator's whole lifetime. A caller that
                 // races in for this now-deleted id right after this line gets a fresh, unlocked
                 // Mutex from computeIfAbsent and no-ops harmlessly once updateRelayRole's own
@@ -226,7 +226,7 @@ internal class RelayCrudCoordinator(
      * chokepoint acquires the per-relay-id [relayRoleMutexes] lock and re-reads the relay fresh
      * from [relayRepository] rather than the throttled `state.relays` mirror; a call here that
      * bypassed it (as this method's own previous implementation did) could silently lose a
-     * concurrent role change to the same relay id (LOG-37/LOG-29).
+     * concurrent role change to the same relay id.
      */
     fun removeRelayRole(relayId: String, role: RelayRole) {
         if ((role == RelayRole.INBOX || role == RelayRole.DM) && userPreferences.isAnonymousSession()) {

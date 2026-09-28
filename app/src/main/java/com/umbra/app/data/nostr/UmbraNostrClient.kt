@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import com.umbra.app.data.network.TrafficMeter
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.WebSocket
@@ -91,7 +92,8 @@ internal fun scanEventFrame(text: String): ScannedEventFrame? {
 @Singleton
 class UmbraNostrClient @Inject constructor(
     @Named("tor") protected val torClient: OkHttpClient,
-    protected val orBotCheck: OrBotConnectivityCheck
+    protected val orBotCheck: OrBotConnectivityCheck,
+    internal val trafficMeter: TrafficMeter = TrafficMeter()
 ) : NostrClient {
 
     companion object {
@@ -470,6 +472,13 @@ class UmbraNostrClient @Inject constructor(
         }
     }
 
+    /** Every outgoing frame goes through here, so traffic accounting has one choke point. */
+    private fun sendFrame(relayUrl: String, webSocket: WebSocket, payload: String): Boolean {
+        val sent = webSocket.send(payload)
+        if (sent) trafficMeter.recordRelaySent(relayUrl, payload.toByteArray(Charsets.UTF_8).size)
+        return sent
+    }
+
     override fun subscribe(relayUrl: String, subscriptionId: String, filters: List<EventFilter>) {
         val webSocket = webSockets[relayUrl]
         if (webSocket == null) {
@@ -479,7 +488,7 @@ class UmbraNostrClient @Inject constructor(
 
         val subscribePayload = NostrRequestBuilder.req(subscriptionId, filters)
         logger.d { "REQ relay=${scrubUrlForLogs(relayUrl)} subId=$subscriptionId filters=${filters.size}" }
-        webSocket.send(subscribePayload)
+        sendFrame(relayUrl, webSocket, subscribePayload)
         logger.d { "Subscribed to ${scrubUrlForLogs(relayUrl)} with ID: $subscriptionId" }
 
         _reqFlow.tryEmit(
@@ -498,24 +507,24 @@ class UmbraNostrClient @Inject constructor(
             return
         }
 
-        webSocket.send(NostrRequestBuilder.count(subscriptionId, filters))
+        sendFrame(relayUrl, webSocket, NostrRequestBuilder.count(subscriptionId, filters))
         logger.d { "COUNT relay=${scrubUrlForLogs(relayUrl)} subId=$subscriptionId filters=${filters.size}" }
     }
 
     override fun negOpen(relayUrl: String, subscriptionId: String, filter: EventFilter, initialMessageHex: String) {
         val webSocket = webSockets[relayUrl] ?: return
-        webSocket.send(NostrRequestBuilder.negOpen(subscriptionId, filter, initialMessageHex))
+        sendFrame(relayUrl, webSocket, NostrRequestBuilder.negOpen(subscriptionId, filter, initialMessageHex))
         logger.d { "NEG-OPEN relay=${scrubUrlForLogs(relayUrl)} subId=$subscriptionId" }
     }
 
     override fun negMsg(relayUrl: String, subscriptionId: String, messageHex: String) {
         val webSocket = webSockets[relayUrl] ?: return
-        webSocket.send(NostrRequestBuilder.negMsg(subscriptionId, messageHex))
+        sendFrame(relayUrl, webSocket, NostrRequestBuilder.negMsg(subscriptionId, messageHex))
     }
 
     override fun negClose(relayUrl: String, subscriptionId: String) {
         val webSocket = webSockets[relayUrl] ?: return
-        webSocket.send(NostrRequestBuilder.negClose(subscriptionId))
+        sendFrame(relayUrl, webSocket, NostrRequestBuilder.negClose(subscriptionId))
         logger.d { "NEG-CLOSE relay=${scrubUrlForLogs(relayUrl)} subId=$subscriptionId" }
     }
 
@@ -526,7 +535,7 @@ class UmbraNostrClient @Inject constructor(
             return
         }
 
-        webSocket.send(NostrRequestBuilder.event(event))
+        sendFrame(relayUrl, webSocket, NostrRequestBuilder.event(event))
         logger.d { "Published event ${event.id.take(8)} to ${scrubUrlForLogs(relayUrl)}" }
     }
 
@@ -537,7 +546,7 @@ class UmbraNostrClient @Inject constructor(
             return
         }
 
-        webSocket.send(NostrRequestBuilder.auth(event))
+        sendFrame(relayUrl, webSocket, NostrRequestBuilder.auth(event))
         logger.d { "Published AUTH event ${event.id.take(8)} to ${scrubUrlForLogs(relayUrl)}" }
     }
 
@@ -559,7 +568,7 @@ class UmbraNostrClient @Inject constructor(
             return
         }
 
-        webSocket.send(NostrRequestBuilder.close(subscriptionId))
+        sendFrame(relayUrl, webSocket, NostrRequestBuilder.close(subscriptionId))
         logger.d { "Unsubscribed from ${scrubUrlForLogs(relayUrl)}: $subscriptionId" }
     }
 

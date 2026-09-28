@@ -1,5 +1,6 @@
 package com.umbra.app.ui
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +46,23 @@ import com.umbra.app.ui.broadcast.BroadcastViewModel
 import com.umbra.app.ui.components.BroadcastBanner
 import com.umbra.app.ui.composer.ComposerScreen
 import com.umbra.app.ui.composer.ComposerViewModel
+import com.umbra.app.ui.zap.ZapHost
+import com.umbra.app.ui.readlater.LocalReadLater
+import com.umbra.app.ui.bookmarks.BookmarkActions
+import com.umbra.app.ui.bookmarks.BookmarksScreen
+import com.umbra.app.ui.bookmarks.BookmarksViewModel
+import com.umbra.app.ui.bookmarks.LocalBookmarks
+import com.umbra.app.ui.readlater.ReadLaterActions
+import com.umbra.app.ui.readlater.ReadLaterScreen
+import com.umbra.app.ui.readlater.ReadLaterViewModel
+import androidx.compose.runtime.CompositionLocalProvider
+import com.umbra.app.ui.hashtag.HashtagScreen
+import com.umbra.app.ui.hashtag.HashtagViewModel
+import com.umbra.app.ui.hashtag.LocalHashtagNavigator
+import com.umbra.app.ui.networkusage.NetworkUsageScreen
+import com.umbra.app.ui.networkusage.NetworkUsageViewModel
+import com.umbra.app.ui.notifications.NotificationsScreen
+import com.umbra.app.ui.notifications.NotificationsViewModel
 import com.umbra.app.ui.auth.LoginScreen
 import com.umbra.app.ui.feed.FeedScreen
 import com.umbra.app.ui.feed.ThreadScreen
@@ -88,6 +105,13 @@ sealed class Screen(val route: String) {
         fun forEvent(eventId: String) = "thread/${Uri.encode(eventId)}"
     }
     object Settings      : Screen("settings")
+    object Notifications : Screen("notifications")
+    object NetworkUsage  : Screen("network_usage")
+    object ReadLater     : Screen("read_later")
+    object Bookmarks     : Screen("bookmarks")
+    object Hashtag       : Screen("tag/{tag}") {
+        fun forTag(tag: String) = "tag/${Uri.encode(tag.removePrefix("#").lowercase())}"
+    }
     // Wraps RelayConfig/RelayDetails/ActiveSubscriptions (see the nested navigation() graph
     // below) so the three share one RelayConfigViewModel instance instead of each getting its
     // own screen-scoped one. Never navigated to directly — entered via RelayConfig, its start
@@ -187,14 +211,14 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.backExitTransition
 @Composable
 fun UmbraNavHost(deepLinkUri: String? = null) {
     val viewModel: AppLaunchViewModel = hiltViewModel()
-    val startDestination by viewModel.startDestination.collectAsState()
+    val startDestination by viewModel.startDestination.collectAsStateWithLifecycle()
     // Scoped to this composable (not a nav destination) so it's created once and survives
     // navigation between whichever screen triggered a publish and wherever the user goes next —
     // see BroadcastViewModel's doc comment.
     val broadcastViewModel: BroadcastViewModel = hiltViewModel()
-    val activeBroadcasts by broadcastViewModel.activeBroadcasts.collectAsState()
+    val activeBroadcasts by broadcastViewModel.activeBroadcasts.collectAsStateWithLifecycle()
     val torGateViewModel: TorGateViewModel = hiltViewModel()
-    val torState by torGateViewModel.state.collectAsState()
+    val torState by torGateViewModel.state.collectAsStateWithLifecycle()
     // Same "created once, survives navigation" scoping as broadcastViewModel/torGateViewModel
     // above — hosts the Amber launchers for search/index relay-list decryption so that keeps
     // working regardless of which screen/tab is currently showing, not just while Relay Settings
@@ -321,6 +345,27 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
         }
     }
 
+    // One app-wide instance: the note menu's "Read later" state and the Read later screen share it.
+    val readLaterViewModel: ReadLaterViewModel = hiltViewModel()
+    val savedReadLaterIds by readLaterViewModel.savedIds.collectAsStateWithLifecycle()
+    val readLaterActions = remember(savedReadLaterIds) {
+        ReadLaterActions(isSaved = { it in savedReadLaterIds }, toggle = readLaterViewModel::toggle)
+    }
+    val bookmarksViewModel: BookmarksViewModel = hiltViewModel()
+    val bookmarkedIds by bookmarksViewModel.bookmarkedIds.collectAsStateWithLifecycle()
+    val bookmarkActions = remember(bookmarkedIds) {
+        if (bookmarksViewModel.canBookmark) {
+            BookmarkActions(isBookmarked = { it in bookmarkedIds }, toggle = bookmarksViewModel::toggle)
+        } else {
+            null
+        }
+    }
+    ZapHost {
+    CompositionLocalProvider(
+        LocalBookmarks provides bookmarkActions,
+        LocalHashtagNavigator provides { tag -> navController.navigate(Screen.Hashtag.forTag(tag)) },
+        LocalReadLater provides readLaterActions
+    ) {
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
         navController = navController,
@@ -354,6 +399,46 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
         composable(Screen.Thread.route) {
             val threadViewModel: ThreadViewModel = hiltViewModel()
             ThreadScreen(onBack = { navController.popBackStack() }, navController = navController, viewModel = threadViewModel)
+        }
+        composable(Screen.Notifications.route) {
+            val notificationsViewModel: NotificationsViewModel = hiltViewModel()
+            NotificationsScreen(
+                viewModel = notificationsViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onOpenThread = { navController.navigate(Screen.Thread.forEvent(it)) },
+                onOpenProfile = { navController.navigate(Screen.Profile.forPubkey(it)) }
+            )
+        }
+        composable(Screen.Hashtag.route) {
+            val hashtagViewModel: HashtagViewModel = hiltViewModel()
+            HashtagScreen(
+                viewModel = hashtagViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onOpenThread = { navController.navigate(Screen.Thread.forEvent(it)) },
+                onOpenProfile = { navController.navigate(Screen.Profile.forPubkey(it)) },
+                onReply = { navController.navigate(Screen.Composer.reply(it.id)) },
+                onQuote = { navController.navigate(Screen.Composer.quote(it.id)) }
+            )
+        }
+        composable(Screen.Bookmarks.route) {
+            BookmarksScreen(
+                viewModel = bookmarksViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onOpenThread = { navController.navigate(Screen.Thread.forEvent(it)) },
+                onOpenProfile = { navController.navigate(Screen.Profile.forPubkey(it)) }
+            )
+        }
+        composable(Screen.ReadLater.route) {
+            ReadLaterScreen(
+                viewModel = readLaterViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onOpenThread = { navController.navigate(Screen.Thread.forEvent(it)) },
+                onOpenProfile = { navController.navigate(Screen.Profile.forPubkey(it)) }
+            )
+        }
+        composable(Screen.NetworkUsage.route) {
+            val networkUsageViewModel: NetworkUsageViewModel = hiltViewModel()
+            NetworkUsageScreen(viewModel = networkUsageViewModel, onNavigateBack = { navController.popBackStack() })
         }
         composable(Screen.Settings.route) {
             val loginViewModel: LoginViewModel = hiltViewModel()
@@ -479,5 +564,7 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
             .navigationBarsPadding()
             .padding(bottom = 16.dp)
     )
+    }
+    }
     }
 }

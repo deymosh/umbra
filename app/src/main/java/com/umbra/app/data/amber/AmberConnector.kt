@@ -9,8 +9,9 @@ import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.logging.UmbraLog
 
 /**
- * Connector for AMBER Nostr signer app
- * Handles communication with AMBER for key management and event signing
+ * NIP-55 connector for any installed Android signer app (Amber is the suggested one, not the
+ * only one). Every request names the signer's package explicitly — the one chosen at login — so a
+ * signing intent is never resolved to some other app handling `nostrsigner:`.
  *
  * AMBER: https://github.com/greenart7c3/Amber
  *
@@ -23,12 +24,11 @@ object AmberConnector {
     private const val TAG = "UmbraAmber"
     private val logger = UmbraLog.tag(TAG)
 
-    // AMBER package name (official greenart7c3/Amber fork)
-    private const val AMBER_PACKAGE = "com.greenart7c3.nostrsigner"
+    // Amber's package: the signer suggested for install, and the fallback when nothing better is known.
+    const val AMBER_PACKAGE = "com.greenart7c3.nostrsigner"
 
-    // AMBER action constants
-    private const val ACTION_GET_PUBLIC_KEY = "com.greenart7c3.nostrsigner.GET_PUBLIC_KEY"
-    private const val ACTION_SIGN_EVENT = "com.greenart7c3.nostrsigner.SIGN_EVENT"
+    // NIP-55: get_public_key returns the signer's package name in this extra.
+    private const val EXTRA_PACKAGE = "package"
 
     // NIP-55 command codes Amber's intent contract expects
     private const val TYPE_GET_PUBLIC_KEY = "get_public_key"
@@ -55,19 +55,25 @@ object AmberConnector {
     // encrypted NIP-51 "private list" use case this is always the current user's own pubkey.
     private const val EXTRA_PUBKEY = "pubkey"
 
-    /**
-     * Check if AMBER app is installed
-     */
-    fun isAmberInstalled(context: Context): Boolean {
+    /** Packages of every installed app that handles NIP-55 `nostrsigner:` intents. */
+    fun installedSignerPackages(context: Context): List<String> {
+        val probe = Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri())
         return try {
-            val packageInfo = context.packageManager.getPackageInfo(AMBER_PACKAGE, 0)
-            logger.d { "AMBER app found: ${packageInfo.packageName} v${packageInfo.versionName}" }
-            true
+            context.packageManager.queryIntentActivities(probe, 0)
+                .mapNotNull { it.activityInfo?.packageName }
+                .distinct()
         } catch (e: Exception) {
-            logger.d { "AMBER not installed: ${scrubThrowableMessageForLogs(e)}" }
-            false
+            logger.d { "Signer lookup failed: ${scrubThrowableMessageForLogs(e)}" }
+            emptyList()
         }
     }
+
+    /** Whether any NIP-55 signer is installed. */
+    fun isSignerInstalled(context: Context): Boolean = installedSignerPackages(context).isNotEmpty()
+
+    /** The signer package a NIP-55 get_public_key result names, if it names one. */
+    fun extractSignerPackageFromResult(data: Intent?): String? =
+        data?.getStringExtra(EXTRA_PACKAGE)?.trim()?.takeIf { it.isNotEmpty() }
 
     /**
      * Attempts to sign via Amber's ContentProvider (content://<amber-package>.SIGN_EVENT) — a
@@ -82,11 +88,11 @@ object AmberConnector {
      *
      * Blocking (ContentResolver.query()) — must be called off the main thread.
      */
-    fun trySignEventContentResolver(context: Context, eventJson: String, currentUserHex: String?): String? {
+    fun trySignEventContentResolver(context: Context, signerPackage: String, eventJson: String, currentUserHex: String?): String? {
         if (currentUserHex.isNullOrBlank()) return null
         return try {
             val npub = Bech32Encoder.encodeNpub(currentUserHex)
-            val uri = "content://$AMBER_PACKAGE.$CONTENT_PROVIDER_SIGN_EVENT".toUri()
+            val uri = "content://$signerPackage.$CONTENT_PROVIDER_SIGN_EVENT".toUri()
             // Projection is Amber's SignerProvider contract: [event JSON, event pubkey (unused
             // by Amber's handler), npub of the signing account].
             context.contentResolver.query(uri, arrayOf(eventJson, "", npub), null, null, null)?.use { cursor ->
@@ -114,15 +120,16 @@ object AmberConnector {
      *
      * Blocking (ContentResolver.query()) — must be called off the main thread.
      */
-    fun tryNip44EncryptContentResolver(context: Context, plaintext: String, pubkeyHex: String, currentUserHex: String?): String? =
-        tryNip44ContentResolver(context, CONTENT_PROVIDER_NIP44_ENCRYPT, plaintext, pubkeyHex, currentUserHex)
+    fun tryNip44EncryptContentResolver(context: Context, signerPackage: String, plaintext: String, pubkeyHex: String, currentUserHex: String?): String? =
+        tryNip44ContentResolver(context, signerPackage, CONTENT_PROVIDER_NIP44_ENCRYPT, plaintext, pubkeyHex, currentUserHex)
 
     /** Same as [tryNip44EncryptContentResolver], for nip44_decrypt. */
-    fun tryNip44DecryptContentResolver(context: Context, ciphertext: String, pubkeyHex: String, currentUserHex: String?): String? =
-        tryNip44ContentResolver(context, CONTENT_PROVIDER_NIP44_DECRYPT, ciphertext, pubkeyHex, currentUserHex)
+    fun tryNip44DecryptContentResolver(context: Context, signerPackage: String, ciphertext: String, pubkeyHex: String, currentUserHex: String?): String? =
+        tryNip44ContentResolver(context, signerPackage, CONTENT_PROVIDER_NIP44_DECRYPT, ciphertext, pubkeyHex, currentUserHex)
 
     private fun tryNip44ContentResolver(
         context: Context,
+        signerPackage: String,
         contentProviderAuthority: String,
         payload: String,
         pubkeyHex: String,
@@ -131,7 +138,7 @@ object AmberConnector {
         if (currentUserHex.isNullOrBlank()) return null
         return try {
             val npub = Bech32Encoder.encodeNpub(currentUserHex)
-            val uri = "content://$AMBER_PACKAGE.$contentProviderAuthority".toUri()
+            val uri = "content://$signerPackage.$contentProviderAuthority".toUri()
             // Projection per NIP-55's Content Resolver contract: [payload, counterparty pubkey, npub of the signing account].
             context.contentResolver.query(uri, arrayOf(payload, pubkeyHex, npub), null, null, null)?.use { cursor ->
                 if (cursor.getColumnIndex(EXTRA_REJECTED) >= 0) return null
@@ -153,11 +160,12 @@ object AmberConnector {
     }
 
     /**
-     * Creates a NIP-55 login intent that asks signer for public key.
+     * Creates a NIP-55 login intent that asks a signer for the public key. With [signerPackage]
+     * null (several signers installed) Android lets the user pick one; the result names it.
      */
-    fun createLoginIntent(): Intent {
+    fun createLoginIntent(signerPackage: String?): Intent {
         return Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri()).apply {
-            `package` = AMBER_PACKAGE
+            signerPackage?.let { `package` = it }
             putExtra(EXTRA_TYPE, TYPE_GET_PUBLIC_KEY)
             putExtra(EXTRA_RETURN_LABEL, "Umbra")
         }
@@ -167,9 +175,9 @@ object AmberConnector {
      * Creates a NIP-55 sign event intent.
      * current_user must be npub format so AMBER can match the account.
      */
-    fun createSignEventIntent(eventJson: String, currentUserHex: String? = null): Intent {
+    fun createSignEventIntent(signerPackage: String, eventJson: String, currentUserHex: String? = null): Intent {
         return Intent(Intent.ACTION_VIEW, "nostrsigner:$eventJson".toUri()).apply {
-            `package` = AMBER_PACKAGE
+            `package` = signerPackage
             putExtra(EXTRA_TYPE, TYPE_SIGN_EVENT)
             putExtra(EXTRA_EVENT, eventJson)
             putExtra(EXTRA_RETURN_LABEL, "Umbra")
@@ -186,16 +194,16 @@ object AmberConnector {
      * the self-encrypted NIP-51 "private list" use case, this is the current user's own pubkey.
      * current_user must be npub format so AMBER can match the account.
      */
-    fun createNip44EncryptIntent(plaintext: String, pubkeyHex: String, currentUserHex: String? = null): Intent =
-        createNip44Intent(TYPE_NIP44_ENCRYPT, plaintext, pubkeyHex, currentUserHex)
+    fun createNip44EncryptIntent(signerPackage: String, plaintext: String, pubkeyHex: String, currentUserHex: String? = null): Intent =
+        createNip44Intent(signerPackage, TYPE_NIP44_ENCRYPT, plaintext, pubkeyHex, currentUserHex)
 
     /** Same as [createNip44EncryptIntent], for nip44_decrypt. */
-    fun createNip44DecryptIntent(ciphertext: String, pubkeyHex: String, currentUserHex: String? = null): Intent =
-        createNip44Intent(TYPE_NIP44_DECRYPT, ciphertext, pubkeyHex, currentUserHex)
+    fun createNip44DecryptIntent(signerPackage: String, ciphertext: String, pubkeyHex: String, currentUserHex: String? = null): Intent =
+        createNip44Intent(signerPackage, TYPE_NIP44_DECRYPT, ciphertext, pubkeyHex, currentUserHex)
 
-    private fun createNip44Intent(type: String, payload: String, pubkeyHex: String, currentUserHex: String?): Intent {
+    private fun createNip44Intent(signerPackage: String, type: String, payload: String, pubkeyHex: String, currentUserHex: String?): Intent {
         return Intent(Intent.ACTION_VIEW, "nostrsigner:$payload".toUri()).apply {
-            `package` = AMBER_PACKAGE
+            `package` = signerPackage
             putExtra(EXTRA_TYPE, type)
             putExtra(EXTRA_PUBKEY, pubkeyHex)
             putExtra(EXTRA_RETURN_LABEL, "Umbra")

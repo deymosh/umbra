@@ -1,6 +1,5 @@
 package com.umbra.app.ui.feed
 
-import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -9,33 +8,16 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Create
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Hub
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,14 +28,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
@@ -63,8 +40,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.umbra.app.ui.auth.LoginViewModel
 import androidx.navigation.NavController
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.umbra.app.R
-import com.umbra.app.domain.nip19.Bech32Encoder
+import com.umbra.app.ui.auth.rememberPrivacyLogout
+import com.umbra.app.ui.notifications.UnreadNotificationsViewModel
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip25.ReactionEmoji
 import com.umbra.app.domain.nip30.CustomEmoji
@@ -72,33 +51,22 @@ import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.ui.Screen
 import com.umbra.app.ui.common.resolve
 import com.umbra.app.ui.components.EmptyState
+import androidx.compose.foundation.border
 import com.umbra.app.ui.components.ErrorBanner
-import com.umbra.app.ui.components.KeyValueCopyRow
-import com.umbra.app.ui.components.MenuItemRow
 import com.umbra.app.ui.components.NotesTimelineContainer
-import com.umbra.app.ui.components.NostrTextRenderer
-import com.umbra.app.ui.components.PrivacyLogoutProgressDialog
 import com.umbra.app.ui.components.buildThreadDepthByEventId
 import com.umbra.app.ui.components.notesFeedSection
 import com.umbra.app.ui.components.QuickActionBottomBar
 import com.umbra.app.ui.components.shareEventUrl
-import com.umbra.app.ui.components.media.UserAvatar
-import com.umbra.app.ui.components.UserIdentityBadge
-import com.umbra.app.ui.components.truncatePublicKey
 import com.umbra.app.ui.common.ImmutableMapSnapshot
 import com.umbra.app.ui.common.awaitViewportPrefetchQuietWindow
-import coil3.compose.AsyncImage
-import kotlin.math.max
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
-import kotlinx.serialization.encodeToString
 import androidx.compose.runtime.snapshotFlow
-import com.umbra.app.util.logging.UmbraLog
 
-private val feedScreenLogger = UmbraLog.tag("FeedScreen")
 
 private data class FeedSearchPayload(
     val query: String,
@@ -189,7 +157,8 @@ fun FeedScreen(
     // the user had appeared to vanish even though the backstack entry itself was preserved.
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var searchVisible by rememberSaveable { mutableStateOf(false) }
-    var isLoggingOut by remember { mutableStateOf(false) }
+    val logout = rememberPrivacyLogout(navController, loginViewModel, onFinished = { scope.launch { drawerState.close() } })
+    val panicWipeEnabled by loginViewModel.panicWipeEnabled.collectAsStateWithLifecycle()
     // Permanently stable (remember with no keys) — `feedState`/`currentNavController` are
     // delegated State reads, so referencing them *inside* these lambda bodies (rather than
     // capturing a snapshot via a remember key) always sees the latest value without needing a
@@ -288,148 +257,54 @@ fun FeedScreen(
             }
     }
     val currentPubkey = feedState.currentUserPubkey
+    val unreadNotificationsViewModel: UnreadNotificationsViewModel = hiltViewModel()
+    val hasUnreadNotifications by unreadNotificationsViewModel.hasUnread.collectAsStateWithLifecycle()
     val currentProfile = feedState.currentUserProfile ?: feedState.profiles.profileFor(currentPubkey)
 
     // Amber sign round trips go through the single app-wide launcher (AppSessionEffects) now —
     // no per-screen launcher needed here.
 
-    if (isLoggingOut) {
-        PrivacyLogoutProgressDialog()
-    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
-                Column(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    if (!currentPubkey.isNullOrBlank()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable {
-                                    navController.navigate(Screen.Profile.forPubkey(currentPubkey))
-                                    scope.launch { drawerState.close() }
-                                }
-                                .padding(vertical = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            UserAvatar(
-                                userProfile = currentProfile,
-                                pubkey = currentPubkey,
-                                size = 40.dp,
-                                shape = CircleShape,
-                                authorPubkey = currentPubkey,
-                                userRepository = viewModel.userRepositoryPublic
-                            )
-
-                            UserIdentityBadge(
-                                userProfile = currentProfile,
-                                pubkey = currentPubkey,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+            FeedDrawerContent(
+                currentProfile = currentProfile,
+                currentPubkey = currentPubkey,
+                userRepository = viewModel.userRepositoryPublic,
+                onProfile = {
+                    val pubkey = feedState.currentUserPubkey
+                    if (!pubkey.isNullOrBlank()) {
+                        navController.navigate(Screen.Profile.forPubkey(pubkey))
                     }
-
-                    HorizontalDivider()
-
-                    MenuItemRow(
-                        icon = Icons.Default.AccountCircle,
-                        title = stringResource(R.string.menu_profile),
-                        subtitle = stringResource(R.string.menu_profile_subtitle),
-                        onClick = {
-                            val pubkey = feedState.currentUserPubkey
-                            if (!pubkey.isNullOrBlank()) {
-                                navController.navigate(Screen.Profile.forPubkey(pubkey))
-                            }
-                            scope.launch { drawerState.close() }
-                        }
-                    )
-                    MenuItemRow(
-                        icon = Icons.Default.Hub,
-                        title = stringResource(R.string.menu_relays),
-                        subtitle = stringResource(R.string.menu_relays_subtitle),
-                        onClick = {
-                            navController.navigate(Screen.RelayConfig.route)
-                            scope.launch { drawerState.close() }
-                        }
-                    )
-                    MenuItemRow(
-                        icon = Icons.Default.Tune,
-                        title = stringResource(R.string.menu_feed_filters),
-                        subtitle = stringResource(R.string.menu_feed_filters_subtitle),
-                        onClick = {
-                            navController.navigate(Screen.FeedConfig.route)
-                            scope.launch { drawerState.close() }
-                        }
-                    )
-                    MenuItemRow(
-                        icon = Icons.Default.Settings,
-                        title = stringResource(R.string.menu_settings),
-                        subtitle = stringResource(R.string.menu_settings_subtitle),
-                        onClick = {
-                            navController.navigate(Screen.Settings.route) {
-                                launchSingleTop = true
-                            }
-                            scope.launch { drawerState.close() }
-                        }
-                    )
-                    MenuItemRow(
-                        icon = Icons.AutoMirrored.Filled.ExitToApp,
-                        title = stringResource(R.string.menu_logout),
-                        subtitle = stringResource(R.string.menu_logout_subtitle),
-                        danger = true,
-                        onClick = {
-                            if (isLoggingOut) return@MenuItemRow
-                            scope.launch {
-                                try {
-                                    isLoggingOut = true
-                                    loginViewModel.logout()
-                                } catch (e: Exception) {
-                                    // Logout failing (e.g. a database wipe leaving stale key
-                                    // material behind) must not be silently indistinguishable
-                                    // from success — still proceed to the login screen below
-                                    // since there's no in-app state left to usefully retry from,
-                                    // but at least record that it happened.
-                                    feedScreenLogger.e(e) { "Logout failed" }
-                                }
-                                isLoggingOut = false
-                                navController.navigate(Screen.Login.route) {
-                                    popUpTo(0) { inclusive = true }
-                                    launchSingleTop = true
-                                }
-                                drawerState.close()
-                            }
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.weight(1f))
-                    Surface(
-                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-                            Text(
-                                text = stringResource(R.string.app_name),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                            Text(
-                                text = stringResource(R.string.drawer_title_orbot_powered),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
-                            )
-                        }
+                    scope.launch { drawerState.close() }
+                },
+                onRelays = {
+                    navController.navigate(Screen.RelayConfig.route)
+                    scope.launch { drawerState.close() }
+                },
+                onBookmarks = if (currentPubkey.isNullOrBlank() || !viewModel.canSignEvents()) null else {
+                    {
+                        navController.navigate(Screen.Bookmarks.route)
+                        scope.launch { drawerState.close() }
                     }
-                }
-            }
+                },
+                onReadLater = {
+                    navController.navigate(Screen.ReadLater.route)
+                    scope.launch { drawerState.close() }
+                },
+                onFilters = {
+                    navController.navigate(Screen.FeedConfig.route)
+                    scope.launch { drawerState.close() }
+                },
+                onSettings = {
+                    navController.navigate(Screen.Settings.route) {
+                        launchSingleTop = true
+                    }
+                    scope.launch { drawerState.close() }
+                },
+                onLogout = logout
+            )
         }
     ) {
         Column(
@@ -447,6 +322,12 @@ fun FeedScreen(
                 isTorConnected = feedState.isTorConnected,
                 isTorStarting = feedState.torStatus == "STARTING_TOR",
                 onAvatarClick = { scope.launch { drawerState.open() } },
+                onStatusClick = { navController.navigate(Screen.RelayConfig.route) },
+                onNotifications = if (currentPubkey.isNullOrBlank() || !viewModel.canSignEvents()) null else {
+                    { navController.navigate(Screen.Notifications.route) }
+                },
+                hasUnreadNotifications = hasUnreadNotifications,
+                onWordmarkLongPress = if (panicWipeEnabled) logout else null,
                 onToggleSearch = {
                     val nowVisible = !searchVisible
                     searchVisible = nowVisible
@@ -523,6 +404,7 @@ fun FeedScreen(
                         onGoTop = { scope.launch { listState.scrollToTopImmediate() } },
                         onCompose = { currentNavController.navigate(Screen.Composer.new()) },
                         onRelays = { navController.navigate(Screen.RelayConfig.route) },
+                        onFilters = { navController.navigate(Screen.FeedConfig.route) },
                         onSettings = {
                             navController.navigate(Screen.Settings.route) {
                                 launchSingleTop = true
@@ -561,6 +443,7 @@ fun FeedScreen(
                             onGoTop = { scope.launch { listState.scrollToTopImmediate() } },
                             onCompose = { currentNavController.navigate(Screen.Composer.new()) },
                             onRelays = { navController.navigate(Screen.RelayConfig.route) },
+                            onFilters = { navController.navigate(Screen.FeedConfig.route) },
                             onSettings = {
                                 navController.navigate(Screen.Settings.route) {
                                     launchSingleTop = true
@@ -617,92 +500,6 @@ fun FeedScreen(
 }
 
 @Composable
-internal fun RelayStatusBadge(
-    relayCount: Int,
-    isConnected: Boolean
-) {
-    if (relayCount <= 0) return
-
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = if (isConnected) {
-            MaterialTheme.colorScheme.tertiaryContainer
-        } else {
-            MaterialTheme.colorScheme.errorContainer
-        }
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Language,
-                contentDescription = null,
-                modifier = Modifier.size(14.dp),
-                tint = if (isConnected) {
-                    MaterialTheme.colorScheme.onTertiaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onErrorContainer
-                }
-            )
-            Text(
-                text = if (isConnected) "$relayCount" else "--",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (isConnected) {
-                    MaterialTheme.colorScheme.onTertiaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onErrorContainer
-                }
-            )
-        }
-    }
-}
-
-@Composable
-internal fun TorStatusBadge(isTorConnected: Boolean, isTorStarting: Boolean = false) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = if (isTorConnected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.errorContainer
-        }
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
-            ) {
-                Text(
-                    text = stringResource(R.string.tor_onion_symbol),
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                    style = MaterialTheme.typography.labelSmall
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(
-                        when {
-                            isTorConnected -> MaterialTheme.colorScheme.tertiary
-                            // Actively retrying (STARTING_TOR) reads differently from "not
-                            // connected and not doing anything about it" — amber vs. red.
-                            isTorStarting -> Color(0xFFF9A825)
-                            else -> MaterialTheme.colorScheme.error
-                        }
-                    )
-            )
-        }
-    }
-}
-
-@Composable
 private fun ScrollToTopPill(
     modifier: Modifier = Modifier,
     visible: Boolean,
@@ -715,10 +512,13 @@ private fun ScrollToTopPill(
         modifier = modifier
     ) {
         Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.primaryContainer,
-            shadowElevation = 4.dp,
-            modifier = Modifier.clickable(onClick = onClick)
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            shadowElevation = 8.dp,
+            modifier = Modifier
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), CircleShape)
+                .clip(CircleShape)
+                .clickable(onClick = onClick)
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -729,12 +529,12 @@ private fun ScrollToTopPill(
                     imageVector = Icons.Default.KeyboardArrowUp,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    tint = MaterialTheme.colorScheme.primary
                 )
                 Text(
                     text = stringResource(R.string.back_to_top),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         }

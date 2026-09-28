@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed-icon (Android 13+) layer: the system tints this single-color silhouette, so it must be
+     shapes only — a ring for the disc's rim, the surviving arc, and the diamond point. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.82"
+        android:scaleY="0.82">
+        <path
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="2.4"
+            android:strokeAlpha="0.55"
+            android:pathData="M54,20A34,34 0 1,1 20,54A34,34 0 0,1 54,20Z" />
+        <path
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="4"
+            android:strokeLineCap="round"
+            android:pathData="M62.8,21.2A34,34 0 0,1 84.6,39.2" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M84.6,39.2m-5,0a5,5 0 1,1 10,0a5,5 0 1,1 -10,0" />
+    </group>
+</vector>

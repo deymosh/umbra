@@ -3,12 +3,14 @@
 package com.umbra.app.ui.profile
 
 import com.umbra.app.R
+import com.umbra.app.domain.nip51.ListEdit
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.umbra.app.domain.nip55.AmberSignerGateway
 import com.umbra.app.domain.crypto.normalizePubkey
 import com.umbra.app.domain.nip01.Event
+import com.umbra.app.domain.nip01.EventFilter
 import com.umbra.app.domain.model.NostrChannels
 import com.umbra.app.domain.model.PendingRepost
 import com.umbra.app.domain.nip01.NostrEventBuilder
@@ -27,9 +29,6 @@ import com.umbra.app.domain.repository.MuteListRepository
 import com.umbra.app.domain.repository.PinListRepository
 import com.umbra.app.domain.repository.FeedRepository
 import com.umbra.app.domain.repository.RelayRepository
-import com.umbra.app.domain.usecase.PublishSignedEventUseCase
-import com.umbra.app.domain.usecase.DeleteNoteUseCase
-import com.umbra.app.domain.usecase.RemoveDeletedNoteFromCacheUseCase
 import com.umbra.app.domain.usecase.BackfillProfileUseCase
 import com.umbra.app.domain.usecase.ResolveProfileRelayHintsUseCase
 import com.umbra.app.domain.usecase.StopProfileBackfillUseCase
@@ -37,7 +36,6 @@ import com.umbra.app.domain.usecase.BuildProfileHydrationRequestsUseCase
 import com.umbra.app.domain.usecase.BuildHydrationAuthorSetUseCase
 import com.umbra.app.domain.usecase.BuildEngagementFiltersUseCase
 import com.umbra.app.domain.usecase.TrackReferencedAuthorUseCase
-import com.umbra.app.domain.usecase.BuildEventShareUrlUseCase
 import com.umbra.app.domain.media.MediaDataSourceProvider
 import com.umbra.app.domain.media.VideoCacheDataSourceProvider
 import com.umbra.app.ui.common.InteractionActionsCoordinator
@@ -104,6 +102,8 @@ data class ProfileState(
     val followedProfiles: ImmutableMapSnapshot<String, UserProfile> = ImmutableMapSnapshot(),
     val mutedPubkeys: List<String> = emptyList(),
     val pinnedNotes: List<Event> = emptyList(),
+    /** NIP-68 picture posts by this author, newest first. */
+    val pictures: List<Event> = emptyList(),
     val relays: List<Relay> = emptyList(),
     val relayStats: ProfileRelayStats = ProfileRelayStats(),
     // Target user's published relay lists (NIP-65 kind 10002 + NIP-17 kind 10050)
@@ -136,11 +136,9 @@ class ProfileViewModel @Inject constructor(
     private val relayRepository: RelayRepository,
     private val userPreferences: UserPreferences,
     private val amberSignerGateway: AmberSignerGateway,
-    private val publishSignedEventUseCase: PublishSignedEventUseCase,
+    coordinatorFactory: InteractionActionsCoordinator.Factory,
     private val mediaDataSourceProvider: MediaDataSourceProvider,
     private val videoCacheDataSourceProvider: VideoCacheDataSourceProvider,
-    private val deleteNoteUseCase: DeleteNoteUseCase,
-    private val removeDeletedNoteFromCacheUseCase: RemoveDeletedNoteFromCacheUseCase,
     private val backfillProfileUseCase: BackfillProfileUseCase,
     private val stopProfileBackfillUseCase: StopProfileBackfillUseCase,
     private val resolveProfileRelayHintsUseCase: ResolveProfileRelayHintsUseCase,
@@ -150,7 +148,6 @@ class ProfileViewModel @Inject constructor(
     private val trackReferencedAuthorUseCase: TrackReferencedAuthorUseCase,
     private val imagePrefetcher: ImagePrefetcher? = null,
     private val urlPrefetcher: UrlPrefetcher? = null,
-    private val buildEventShareUrlUseCase: BuildEventShareUrlUseCase
 ) : ViewModel() {
 
     private data class ProfileNotesSnapshot(
@@ -170,6 +167,7 @@ class ProfileViewModel @Inject constructor(
     )
 
     companion object {
+        private const val PICTURES_LIMIT = 60
         private const val TAG = "UmbraProfileVM"
         private const val INITIAL_DISPLAY_LIMIT = 50
         private const val PAGE_SIZE = 50
@@ -219,6 +217,7 @@ class ProfileViewModel @Inject constructor(
     }
     val state: StateFlow<ProfileState> = _state.asStateFlow()
     private val profileBackfillNotesChannelId = NostrChannels.profileBackfillNotes(pubkey)
+    private val profilePicturesChannelId = NostrChannels.profilePictures(pubkey)
     private val profileBackfillMetadataChannelId = NostrChannels.profileBackfillMetadata(pubkey)
     private var lastProfileEngagementKey: String? = null
     private var lastProfileEngagementAtMs: Long = 0L
@@ -253,20 +252,10 @@ class ProfileViewModel @Inject constructor(
     // repository state only from its onSigned callback), while likeEvent/repostEvent still call
     // this ViewModel's own requestSignEvent/onSignedEventReceived below, since those two never
     // need a commit-after-sign repository mutation of their own.
-    private val interactionActionsCoordinator = InteractionActionsCoordinator(
-        userPreferences = userPreferences,
-        muteListRepository = muteListRepository,
-        pinListRepository = pinListRepository,
-        feedRepository = feedRepository,
-        amberSignerGateway = amberSignerGateway,
-        publishSignedEventUseCase = publishSignedEventUseCase,
-        deleteNoteUseCase = deleteNoteUseCase,
-        removeDeletedNoteFromCacheUseCase = removeDeletedNoteFromCacheUseCase,
-        buildEventShareUrlUseCase = buildEventShareUrlUseCase,
-        scope = viewModelScope
-    )
+    private val interactionActionsCoordinator = coordinatorFactory.create(viewModelScope)
 
     init {
+        observePictures()
         // Show cached profile immediately
         viewModelScope.launch {
             userRepository.getProfile(pubkey)?.let { cached ->
@@ -353,9 +342,7 @@ class ProfileViewModel @Inject constructor(
         profileObserversCoordinator.observeLocalNotesCount()
 
         profileObserversCoordinator.observeNip45NoteCounts()
-        profileObserversCoordinator.requestNip45NoteCountsOnRelayChanges()
         profileObserversCoordinator.observeNip45FollowersCount()
-        profileObserversCoordinator.requestNip45FollowersCountOnRelayChanges()
 
         val isOwnProfile = isCurrentUserProfile()
         observeProfileUpdates()
@@ -666,8 +653,11 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             interactionActionsCoordinator.requestSignAndPublish(
                 buildEventJson = {
-                    val currentMuted = muteListRepository.getCurrentMutedPubkeys()
-                    NostrEventBuilder.muteList(if (mute) currentMuted + target else currentMuted - target)
+                    interactionActionsCoordinator.buildListEdit(
+                        Event.KIND_MUTED_USERS,
+                        if (mute) ListEdit("p", add = setOf(target)) else ListEdit("p", remove = setOf(target)),
+                        fallbackValues = muteListRepository.getCurrentMutedPubkeys()
+                    )
                 },
                 currentUserHex = userPreferences.getPublicKey(),
                 onSigned = {
@@ -707,8 +697,11 @@ class ProfileViewModel @Inject constructor(
 
             interactionActionsCoordinator.requestSignAndPublish(
                 buildEventJson = {
-                    val currentPinned = pinListRepository.getCurrentPinnedEventIds()
-                    NostrEventBuilder.pinList(if (wasPinned) currentPinned - eventId else currentPinned + eventId)
+                    interactionActionsCoordinator.buildListEdit(
+                        Event.KIND_PINNED_EVENTS,
+                        if (wasPinned) ListEdit("e", remove = setOf(eventId)) else ListEdit("e", add = setOf(eventId)),
+                        fallbackValues = pinListRepository.getCurrentPinnedEventIds()
+                    )
                 },
                 currentUserHex = userPreferences.getPublicKey(),
                 onSigned = {
@@ -744,8 +737,11 @@ class ProfileViewModel @Inject constructor(
 
             interactionActionsCoordinator.requestSignAndPublish(
                 buildEventJson = {
-                    val currentFollowed = contactListRepository.getCurrentFollowedPubkeys()
-                    NostrEventBuilder.contactList(if (wasFollowing) currentFollowed - pubkey else currentFollowed + pubkey)
+                    interactionActionsCoordinator.buildListEdit(
+                        Event.KIND_CONTACT_LIST,
+                        if (wasFollowing) ListEdit("p", remove = setOf(pubkey)) else ListEdit("p", add = setOf(pubkey)),
+                        fallbackValues = contactListRepository.getCurrentFollowedPubkeys()
+                    )
                 },
                 currentUserHex = userPreferences.getPublicKey(),
                 onSigned = {
@@ -793,7 +789,20 @@ class ProfileViewModel @Inject constructor(
      */
     fun getUrlMetadata(url: String) = urlPrefetcher?.getMetadata(url)
 
+    private fun observePictures() {
+        eventRepository.subscribeChannel(
+            profilePicturesChannelId,
+            listOf(EventFilter(authors = setOf(pubkey), kinds = setOf(Event.KIND_PICTURE), limit = PICTURES_LIMIT))
+        )
+        viewModelScope.launch {
+            eventRepository.observeEventsByPubkeyAndKind(pubkey, Event.KIND_PICTURE, PICTURES_LIMIT).collect { pictures ->
+                _state.update { it.copy(pictures = pictures.filterNot { p -> p.isFromFuture() }) }
+            }
+        }
+    }
+
     override fun onCleared() {
+        eventRepository.clearChannel(profilePicturesChannelId)
         profileObserversCoordinator.cancelScheduledWork()
         viewportPrefetchJob?.cancel()
         // profileBackfillMetadataChannelId also covers kinds 3/10000/10002/10050 (see BackfillProfileUseCase)

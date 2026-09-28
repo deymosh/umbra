@@ -59,7 +59,7 @@ private const val DEFAULT_INLINE_VIDEO_ASPECT_RATIO = 16f / 9f
 // a real Tor connection or buffers anything for it at all - the LaunchedEffect below is cancelled
 // on dispose before prepare() ever runs.
 private const val INLINE_VIDEO_PREPARE_SETTLE_MS = 400L
-private val INLINE_VIDEO_CORNER = RoundedCornerShape(12.dp)
+private val INLINE_VIDEO_CORNER = RoundedCornerShape(16.dp)
 
 @Composable
 fun SafeInlineVideoAttachment(
@@ -113,7 +113,8 @@ fun InlineVideoAttachment(
             .padding(vertical = 4.dp)
             .clip(INLINE_VIDEO_CORNER),
         shape = INLINE_VIDEO_CORNER,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         val player = remember(url) {
             createExoPlayerForUrl(context, torDataSourceFactory, url, autoPrepare = false)

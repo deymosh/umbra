@@ -4,7 +4,7 @@ Source reviewed: https://github.com/nostr-protocol/nips (README list and kind re
 
 Legend:
 - Social relevance: `YES` means relevant for a social Nostr client like Umbra, `NO` means out of scope for now.
-- Umbra status: `YES` implemented, `PARTIAL` present but incomplete, `NO` missing.
+- Umbra status: `YES` implemented, `PARTIAL` present but incomplete, `PENDING` domain groundwork only (builder/parser, no UI or subscription), `NO` missing.
 
 | NIP | Title | Social relevance | Umbra status | Notes |
 | --- | --- | --- | --- | --- |
@@ -18,13 +18,13 @@ Legend:
 | 18 | Reposts | YES | YES | Repost builder and feed behavior implemented. |
 | 19 | bech32-encoded entities | YES | YES | Encoder/decoder model under `nip19`. |
 | 21 | `nostr:` URI scheme | YES | YES | Single resolver (`domain/nip21`) used by both text rendering and outgoing mention tagging; `nostr:` deep links now route via an `AndroidManifest.xml` intent-filter into `Screen.Profile`/`Screen.Thread` (address/`naddr` links no-op — no article-reading screen yet). |
-| 22 | Comment | YES | PARTIAL | Full domain model (`domain/nip22`): root/parent scopes with correct upper/lowercase `E`/`e`, `K`/`k`, `A`/`a`, `P`/`p` tags, plus a `comment()` builder; not yet called from any compose/thread UI. |
+| 22 | Comment | YES | YES | Full domain model (`domain/nip22`) plus `NostrEventBuilder.commentOn`, which copies the root `E`/`A`/`I`/`K`/`P` scope from a parent comment. Kind 1111 renders in feeds and threads; the thread subscription (`BuildThreadFiltersUseCase`) asks for `#e` and `#E` so comments on the focal note and its root both arrive; the composer publishes a comment instead of a kind-1 reply when the target isn't a kind-1 note. |
 | 23 | Long-form Content | YES | PARTIAL | Kind constant fixed this session (was incorrectly `23`, no NIP uses that kind — corrected to the spec's `30023`, which matched nothing in practice until now); full article UX still incomplete. |
 | 24 | Extra metadata fields and tags | YES | NO | No explicit support map for extended metadata tags. |
 | 25 | Reactions | YES | YES | Kind constants + new `nip25` reaction semantics helpers. |
 | 27 | Text Note References | YES | YES | Mention/reference parsing (rendering) plus outgoing tagging: `textNote`/`reply` now auto-scan composed content for `nostr:` entities and add the matching `p`/`q` tags. |
 | 29 | Relay-based Groups | YES | PARTIAL | On hold — kind constants present; group UX and controls incomplete. Deliberately deferred (large feature, not started this pass). |
-| 30 | Custom Emoji | YES | PARTIAL | New `nip30` domain parser/helpers added; UI integration pending. |
+| 30 | Custom Emoji | YES | YES | `nip30` parses `emoji` tags for `:shortcode:` rendering in notes and custom-emoji reactions (`EmojiReactionPickerSheet`). `ObserveOwnCustomEmojisUseCase` loads the user's kind-`10030` list and the kind-`30030` sets it references; the composer suggests matching emoji while a `:query` is typed and `emojiTagsFor` adds an `emoji` tag only for shortcodes the note actually uses. |
 | 32 | Labeling | YES | NO | No label event workflow implemented. |
 | 36 | Sensitive Content | YES | YES | `domain/nip36` reads/builds the `content-warning` tag; feed's NSFW filter hides posts carrying it; composer's media upload dialog has a "mark as sensitive" toggle that attaches it to the note on publish. |
 | 38 | User Statuses | YES | NO | No dedicated status publishing/subscription flow. |
@@ -32,15 +32,15 @@ Legend:
 | 40 | Expiration Timestamp | YES | NO | No explicit expiration enforcement logic. |
 | 42 | Authentication of clients to relays | YES | YES | AUTH challenge/response transport is spec-complete; a successful AUTH now also replays every active channel subscription to that relay (`EventRepository.reapplyChannelsToRelay`), so the original REQs that triggered `auth-required:` (or any other channel on that relay) aren't left dead. |
 | 44 | Encrypted Payloads (Versioned) | YES | PARTIAL | New domain envelope model added; cryptographic payload pipeline missing. |
-| 45 | Counting results | YES | PARTIAL | Transport/repository layer is spec-complete, including the `approximate` flag (`RelayCountResult.approximate`, parsed end-to-end); consumed for note-count and follower-count on the profile screen, broader UI rollout (e.g. per-relay reaction/reply counts) still pending. |
+| 45 | Counting results | YES | YES | Transport/repository layer is spec-complete, including the `approximate` flag. Usage mirrors Amethyst's: COUNT is only asked of relays that advertise NIP-45, answers from several relays are merged by maximum and never summed (relays mirror each other), and it is used where downloading the counted events isn't realistic — profile note/follower counts (`ObserveRemoteCountUseCase`) and per-relay "stored for you" counts on Relay details (`CountOnRelayUseCase`: your events, events mentioning you). Threads deliberately don't use COUNT: their subscription already downloads the replies/reactions/reposts/zaps being counted, so the numbers stay backed by visible events. HyperLogLog (`hll`) register merging is not implemented. |
 | 46 | Nostr Remote Signing | YES | NO | Umbra signs via **NIP-55** (Amber, local Android-intent signing) — architecturally unrelated to NIP-46 (relay-based remote signing, `bunker://`, kind 24133), which has zero code. Previously mislabeled in this doc as a partial NIP-46 implementation. |
 | 50 | Search Capability | YES | YES | Search filters sent with relay capability negotiation (skips relays that don't advertise `supportedNips.contains(50)`, same pattern as NIP-45 COUNT). Implemented directly in `UmbraNostrClient`/`EventRepositoryImpl`/`SubscriptionType`, not a `domain/nip50` package — it's a relay-side filter field, not an event/tag shape to parse. |
-| 51 | Lists | YES | PARTIAL | Public mute list (kind `10000`) and pin list (kind `10001`) fully implemented (repository + tests + UI). Bookmark (`10003`), communities (`10004`), blocked relays (`10006`), search relays (`10007`), and interests (`10015`) now have a domain model + `NostrEventBuilder` function + parser each (`domain/nip51`), matching MuteList/PinList's tag conventions — deliberately no repository/DI/Settings-UI yet since nothing consumes them (would be dead code until a feature needs them). Addressable "sets" variants (`30000`/`30003`/`30015`) still fully missing. |
+| 51 | Lists | YES | PARTIAL | Mute (`10000`), pin (`10001`) and bookmark (`10003`) lists have repository + UI (Bookmarks screen, bookmark action on notes); the user's own lists are fetched at login. All list and follow-list edits go through `applyListEdit`/`BuildOwnListEditUseCase` as deltas against the latest signed list, so private mutes, word/hashtag mutes, petnames and other clients' entries survive. Communities (`10004`), blocked relays (`10006`), search relays (`10007`) and interests (`10015`) are builder/parser only; addressable sets (`30000`/`30003`/`30015`) are missing. |
 | 52 | Calendar Events | NO | NO | Not social-feed priority for Umbra now. |
 | 53 | Live Streaming and Spaces | YES | NO | No live event chat/space pipeline. |
 | 54 | Wiki | NO | NO | Out of current product scope. |
 | 56 | Reporting | YES | NO | No abuse reporting event workflow. |
-| 57 | Lightning Zaps | YES | PARTIAL | Zap kinds observed; complete zap UX/payments pending. |
+| 57 | Lightning Zaps | YES | YES | `domain/nip57` + `SendZapUseCase`: LNURL-pay resolved from `lud16`/`lud06` over Tor, kind-9734 zap request signed by Amber, invoice fetched and handed to the user's own wallet via a `lightning:` intent. Zap chip on notes and profiles; kind-9735 receipts are parsed (`parseZapReceipt`) for counts and grouped in Notifications. |
 | 58 | Badges | NO | PARTIAL | Kind constants only, no complete badge UX. |
 | 59 | Gift Wrap | YES | PARTIAL | Kind constants present, full gift-wrap flow absent. |
 | 62 | Request to Vanish | YES | NO | No vanish request handling. |
@@ -48,7 +48,7 @@ Legend:
 | 65 | Relay List Metadata | YES | YES | Domain model now split to `nip65`. |
 | 66 | Relay Discovery and Liveness Monitoring | YES | NO | No relay monitoring event flow yet. |
 | 67 | EOSE Completeness Hint | YES | YES | `domain/nip67` parses EOSE's optional third element (`finish`/`more`/absent). Wired into the FEED_NOTES per-relay `since` watermark (`FeedRelaySincePolicy.shouldAdvanceWatermark`): a `more` hint withholds the watermark advance instead of silently assuming the relay sent everything. The overwhelming majority of relays don't send this hint at all (`UNSPECIFIED`), which keeps today's pre-NIP-67 behavior unchanged. |
-| 68 | Picture-first feeds | YES | PARTIAL | `domain/nip68` now parses a kind-20 event into title/images (reusing NIP-92 `imeta`)/description/content-warning; kind `20` is not yet in any feed subscription filter and has no dedicated gallery rendering (touching feed-kind sets would also touch counting/persistence logic that's currently sized for kind 1 specifically — scoped out of this pass as a UI-sized follow-up). |
+| 68 | Picture-first feeds | YES | YES | Kind 20 is feed-eligible and persisted like kind 1; `PicturePostBody` renders single images with `imeta` aspect ratio/blurhash/alt and multi-image galleries; profiles have a Pictures tab (`NostrChannels.profilePictures`). Composing kind-20 posts is not offered — media notes are published as kind 1 with `imeta`. |
 | 69 | Peer-to-peer Order events | NO | NO | Marketplace/trading scope excluded. |
 | 70 | Protected Events | YES | NO | No protected-event pipeline yet. |
 | 71 | Video Events | YES | PARTIAL | Video kind constants and media UI exist; full metadata flow partial. |
@@ -56,22 +56,23 @@ Legend:
 | 75 | Zap Goals | NO | NO | Not core social-feed requirement now. |
 | 77 | Negentropy Syncing | YES | YES | `domain/nip77` implements the Negentropy Protocol V1 wire format and reconciliation algorithm (verified byte-for-byte against the reference JS implementation), driven by `NegentropySyncOrchestrator`. Scoped to the signed-in user's own Room-persisted events against their own NIP-65 write relays — not a general-purpose backfill, since Umbra only persists the signed-in user's own events (everyone else's content is in-memory-only, see `EventLruCache`). Gated behind `relaySupportsNip(relay, 77)`, same pattern as NIP-45/NIP-50. |
 | 78 | Application-specific data | YES | NO | No app-data event flow yet. |
-| 7D | Forum Threads | YES | PARTIAL | `domain/nip7d` adds `extractForumThread()` (the `title` tag) and a `forumThread()` builder (kind 11); replies use NIP-22 comments scoped to the thread as root, per spec — no compose/thread UI wired up yet. |
+| 7D | Forum Threads | YES | PENDING | Not yet done: `domain/nip7d` has `extractForumThread()` (the `title` tag) and a `forumThread()` builder (kind 11), and replies would be NIP-22 comments rooted at the thread — but kind 11 is not subscribed to, rendered, or composable anywhere. |
 | 84 | Highlights | YES | NO | No highlights events support. |
 | 85 | Trusted Assertions | YES | NO | No trust assertion event support. |
 | 86 | Relay Management API | NO | NO | Relay server admin API out of client scope. |
 | 88 | Polls | YES | NO | No poll kind support. |
 | 89 | Recommended Application Handlers | YES | NO | No handler metadata events yet. |
-| 92 | Media Attachments Metadata | YES | PARTIAL | `imeta` tags parsed (`domain/nip92`) and used to enrich already-detected inline images (alt text, aspect ratio, decoded blurhash placeholder); now also generated (`ImetaTag.toTag()`) for composer attachments — url/mime/dim/blurhash/x/size/alt, encoded blurhash included; not yet used to detect extensionless media URLs the regex scan would otherwise miss. |
+| 92 | Media Attachments Metadata | YES | YES | `imeta` tags parsed (`domain/nip92`) and generated (`ImetaTag.toTag()`) for composer attachments; rendering uses them for alt text, aspect ratio and blurhash placeholders, and `reclassifyUrlSegmentsWithImeta` turns extensionless URLs into images/videos when their `imeta` declares an image/video MIME type. |
 | 94 | File Metadata | YES | NO | No dedicated file metadata event flow. |
 | 98 | HTTP Auth | NO | NO | Not needed in current social client flow. |
 | 99 | Classified Listings | NO | NO | Marketplace scope excluded. |
 | A0 | Voice Messages | YES | NO | No voice-message flow. |
-| A4 | Public Messages | YES | PARTIAL | `domain/nipa4` adds a `publicMessage()` builder (p-tagged, no `e` tags per spec) and a parser; no compose/notification UI surfaces kind `24` yet. |
+| A3 | Payment Targets | YES | PARTIAL | `domain/nipa3` parses kind-`10133` `payto` targets and builds the event; the zap sheet fetches the recipient's list (`NostrChannels.paymentTargets`) and offers each target as a `payto:` link behind the external-link warning. Editing and publishing your own payment targets is pending. |
+| A4 | Public Messages | YES | PENDING | Not yet done: `domain/nipa4` has a `publicMessage()` builder (p-tagged, no `e` tags per spec) and a parser, but kind 24 is not subscribed to, shown in Notifications, or composable. |
 | B0 | Web Bookmarks | YES | NO | No bookmark event flow. |
 | B7 | Blossom | YES | YES | BUD-01 (`GET`/`HEAD /<sha256>`), BUD-02 (upload), BUD-03 (`kind:10063` user server list — publish/hydrate/client-upload/client-retrieval-fallback), BUD-04 (mirror), BUD-06 (`HEAD /upload`), BUD-11 (scoped auth tokens), and BUD-12 (list/delete) all implemented (`domain/nipb7`, `MediaUploadRepositoryImpl`, `ui/blossom`). Default server: `nostr.download`. Wired into profile picture/banner upload, composer note attachments (gallery pick + keyboard-inserted GIF/image via `Modifier.contentReceiver`), and inline note-image rendering — every upload path shares one `MediaUploadDialog`/`UploadBlossomBlobUseCase`. |
 | C0 | Code Snippets | NO | NO | Not social-feed priority. |
-| C7 | Chats | YES | PARTIAL | `domain/nipc7` adds a `chatMessage()` builder (flat stream, `q`-tag quote-reply instead of threading `e` tags) and a parser; no chat UI yet. |
+| C7 | Chats | YES | PENDING | Not yet done: `domain/nipc7` has a `chatMessage()` builder (flat stream, `q`-tag quote-reply) and a parser; there is no chat UI or subscription. |
 | F4 | Podcasts | NO | NO | Out of current scope. |
 
 ## TODO backlog
@@ -88,31 +89,25 @@ explicit product decision to finish the NIP layer before starting UI work or pus
 - **NIP-29** (Relay-based Groups) — a large feature (group membership, admin events, moderation);
   deliberately left untouched.
 
-### UI-sized follow-ups (domain side is done or adequate; needs feed/compose/screen work)
+### Pending (domain groundwork only; not yet done)
 
-- **NIP-68** (kind 20 picture-first posts) — `domain/nip68` parses title/images/description/
-  content-warning, but kind 20 isn't in any feed subscription filter and has no gallery UI.
-  Widening feed kinds touches counting maps and persistence-eligibility checks that are
-  currently sized for kind 1 specifically (`EventRepositoryImpl` lines around `counts[1]`,
-  `isUsefulClientNote`) — needs its own pass, not a "small effort" add-on.
-- **NIP-A4** (kind 24 public messages) and **NIP-C7** (kind 9 chats) — builders/parsers exist
-  (`domain/nipa4`, `domain/nipc7`); no compose UI, no notification-screen rendering, no relay
-  subscription requests either kind.
-- **NIP-22** (comments) / **NIP-7D** (forum threads) — full tag-shape support and builders exist;
-  nothing in the compose or thread UI calls them yet.
-- **NIP-51** remaining lists (bookmarks `10003`, communities `10004`, blocked relays `10006`,
-  search relays `10007`, interests `10015`) — builder/parser only; no repository, no Settings UI,
-  since nothing consumes them yet. Full `30000`/`30003`/`30015` addressable "sets" variants are
-  still entirely unimplemented.
-- **NIP-36** (content warnings) — reading/hiding is wired into the feed filter; composing a note
-  with a content warning has no UI toggle yet.
+- **NIP-7D** (kind 11 forum threads), **NIP-A4** (kind 24 public messages) and **NIP-C7** (kind 9
+  chats) — builders/parsers exist (`domain/nip7d`, `domain/nipa4`, `domain/nipc7`); no relay
+  subscription requests these kinds and there is no feed, thread, notification, compose or chat UI.
+
+### UI-sized follow-ups
+
+- **NIP-A3** — editing and publishing your own payment-target list (reading and paying others'
+  targets is done).
+- **NIP-51** — communities (`10004`), blocked relays (`10006`), search relays (`10007`) and
+  interests (`10015`) are builder/parser only; addressable sets (`30000`/`30003`/`30015`) missing.
+- **NIP-68** — composing kind-20 picture posts (reading is done).
 
 ### Large, not attempted this pass
 
 - **NIP-46** real remote signing (`bunker://`, kind 24133) — Umbra's Amber integration uses
   NIP-55 local intents, architecturally unrelated; a real NIP-46 remote-signer relationship would
   be a separate signing backend, not a small addition.
-- **NIP-57** Lightning Zaps — kinds observed only, no payment/zap-request UX.
 - **NIP-58** Badges — kind constants only.
 - **NIP-59** Gift Wrap — kind constants only; NIP-17 DMs (which depend on it) are still ~0% built
   beyond kind constants.
@@ -121,9 +116,6 @@ explicit product decision to finish the NIP layer before starting UI work or pus
 
 ### Smaller remaining gaps
 
-- NIP-45 COUNT: broader UI rollout (per-relay reaction/reply counts) beyond profile note/follower
-  counts.
+- NIP-45: HyperLogLog (`hll`) register merging for multi-relay counts.
 - NIP-44: cryptographic payload pipeline beyond the envelope model.
-- NIP-92: `imeta` not yet used to detect extensionless media URLs the regex scan would otherwise
-  miss.
 - NIP-66 relay liveness/discovery — no event flow yet.

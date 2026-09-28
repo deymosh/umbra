@@ -1,6 +1,6 @@
 ---
 name: run-umbra
-description: Build, install, launch, and drive the Umbra Android app on an emulator — take screenshots, tap/type/swipe, capture logcat, run unit tests. Use when asked to run Umbra, start the app, screenshot its UI, verify a change works in the real app, or interact with the running app.
+description: Build, install and drive Umbra on an emulator (screenshots, input, logcat). Only when the user explicitly asks to run on a device.
 ---
 
 Umbra is a single-module Android app (Kotlin/Compose, package `com.umbra.app`),
@@ -17,7 +17,7 @@ initiative just because a change touches UI code.
 
 ## Prerequisites
 
-- JDK 17, Android SDK with `platform-tools` and an emulator image (this repo
+- JDK 21, Android SDK with `platform-tools` and an emulator image (this repo
   already assumes these — see root `CLAUDE.md`).
 - **`driver.sh` itself is written for Git Bash on Windows** (`emulator.exe`,
   `%LOCALAPPDATA%\Android\Sdk`) — that's where the maintainer's actual AVD lives,
@@ -237,3 +237,17 @@ processes, and neither shuts itself down promptly on its own:
 - **Screenshot shows only the "umbra" wordmark + "Orbot is starting..."**:
   Orbot isn't installed/running on this device. `adb shell pm list packages
   | grep orbot` to check; install Orbot's APK if missing.
+
+## Signing in / approving with Amber
+
+Amber (`com.greenart7c3.nostrsigner`) must be installed with an account. Check with `adb shell pm list packages | grep nostrsigner`.
+
+```bash
+.claude/skills/run-umbra/amber_login.sh login     # from Umbra's login screen
+.claude/skills/run-umbra/amber_login.sh approve   # from Amber's approval sheet mid-session
+```
+
+- The script taps "Login with AMBER", waits for Amber's sheet, then taps "Connect". Buttons are found by text in a live `uiautomator dump`, never by coordinates estimated from a screenshot (a guess was once ~800px off).
+- With "Approve basic actions" (the default), later sign requests go through silently. With "Manually approve each permission", run `approve` per action.
+- The session persists across restarts. Screenshot first: if the top bar shows a pubkey, you're already signed in.
+- An Amber PIN/biometric lock isn't handled. The script reports "still in Amber after tapping Connect" and stops.

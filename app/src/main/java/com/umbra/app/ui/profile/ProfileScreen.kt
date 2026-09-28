@@ -1,7 +1,24 @@
 package com.umbra.app.ui.profile
 
+import kotlin.math.roundToInt
+import com.umbra.app.ui.components.ShowMoreLessToggle
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.foundation.gestures.Orientation
 import android.content.ClipData
-import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -15,14 +32,27 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.automirrored.outlined.VolumeOff
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import com.umbra.app.ui.components.formatCount
+import com.umbra.app.ui.theme.MonoStyle
+import com.umbra.app.ui.theme.UmbraTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
@@ -50,6 +80,8 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.umbra.app.R
+import com.umbra.app.ui.zap.LocalZapLauncher
+import com.umbra.app.ui.zap.ZapTarget
 import com.umbra.app.domain.nip19.Bech32Encoder
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip25.ReactionEmoji
@@ -62,9 +94,7 @@ import com.umbra.app.ui.common.resolve
 import com.umbra.app.ui.components.EmptyState
 import com.umbra.app.ui.components.ErrorBanner
 import com.umbra.app.ui.components.ExternalUrlWarningDialog
-import com.umbra.app.ui.components.KeyValueCopyRow
 import com.umbra.app.ui.components.LoadingSpinner
-import com.umbra.app.ui.components.NotesTimelineContainer
 import com.umbra.app.domain.nip05.Nip05VerificationState
 import com.umbra.app.ui.components.HASHTAG_REGEX
 import com.umbra.app.ui.components.URL_REGEX
@@ -76,7 +106,6 @@ import com.umbra.app.ui.components.launchExternalUrl
 import com.umbra.app.ui.components.shareEventUrl
 import com.umbra.app.ui.components.media.UserAvatar
 import com.umbra.app.ui.components.media.rememberRetryingAsyncImagePainter
-import com.umbra.app.ui.components.UserIdentityBadge
 import com.umbra.app.ui.components.truncatePublicKey
 import com.umbra.app.ui.common.awaitViewportPrefetchQuietWindow
 import kotlinx.coroutines.launch
@@ -84,8 +113,9 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-private enum class ProfileTab {
+internal enum class ProfileTab {
     NOTES,
+    PICTURES,
     REPLIES,
     FOLLOWS,
     RELAYS,
@@ -134,7 +164,29 @@ fun ProfileScreen(
         }
     }
 
-    val listState = rememberLazyListState()
+    // NIP-68 picture posts get their own tab, only once this author has any.
+    val hasPictures = state.pictures.isNotEmpty()
+    val tabs = remember(isOwnProfile, hasPictures) {
+        buildList {
+            add(ProfileTab.NOTES)
+            if (hasPictures) add(ProfileTab.PICTURES)
+            add(ProfileTab.REPLIES)
+            add(ProfileTab.FOLLOWS)
+            add(ProfileTab.RELAYS)
+            if (isOwnProfile) {
+                add(ProfileTab.MUTES)
+                add(ProfileTab.PINNED)
+            }
+        }
+    }
+    val pagerState = rememberPagerState(initialPage = tabs.indexOf(selectedTab).coerceAtLeast(0)) { tabs.size }
+    LaunchedEffect(pagerState, tabs) {
+        snapshotFlow { pagerState.currentPage }.collect { page -> selectedTab = tabs[page] }
+    }
+    // One list per tab so each keeps its own scroll position while swiping between them.
+    // Keyed per tab: tabs can appear (Pictures), so positional remember would shift scroll states.
+    val listStates = tabs.associateWith { tab -> key(tab) { rememberLazyListState() } }
+    val listState = listStates.getValue(selectedTab)
     LaunchedEffect(listState, selectedTab) {
         snapshotFlow {
             val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
@@ -207,15 +259,14 @@ fun ProfileScreen(
         )
     }
 
-    val visibleNotes = when (selectedTab) {
+    fun notesFor(tab: ProfileTab) = when (tab) {
         ProfileTab.NOTES -> topLevelNotes
         ProfileTab.REPLIES -> replyNotes
         ProfileTab.PINNED -> state.pinnedNotes
+        ProfileTab.PICTURES -> state.pictures
         else -> emptyList()
     }
-    val threadDepthByEventId = remember(visibleNotes, eventsById) {
-        buildThreadDepthByEventId(visibleNotes, eventsById)
-    }
+    val visibleNotes = notesFor(selectedTab)
     val pinnedEventIds = remember(state.pinnedNotes) { state.pinnedNotes.mapTo(HashSet()) { it.id } }
     // pinnedEventIds is a plain remember(key) val, not a State-delegate read — rememberUpdatedState
     // gives the permanently-stable lambda below a way to always see the latest set without being
@@ -223,19 +274,15 @@ fun ProfileScreen(
     val currentPinnedEventIds by rememberUpdatedState(pinnedEventIds)
     val isPinnedForEventStable = remember { { eventId: String -> currentPinnedEventIds.contains(eventId) } }
     val latestVisibleNotes by rememberUpdatedState(visibleNotes)
-    val notesSectionStartIndex = remember(state.errorMessage, selectedTab) {
-        // Optional error banner + ProfileHero + ProfileTabsRow before notes section.
-        (if (state.errorMessage != null) 1 else 0) + 2
-    }
-    val notesHeaderText = when (selectedTab) {
-        ProfileTab.NOTES -> stringResource(R.string.profile_tab_notes_count, topLevelNotes.size)
-        ProfileTab.REPLIES -> stringResource(R.string.profile_tab_replies_count, replyNotes.size)
-        else -> null
-    }
-    val emptyNotesTitle = when (selectedTab) {
-        ProfileTab.REPLIES -> stringResource(R.string.profile_no_replies_yet)
-        ProfileTab.PINNED -> stringResource(R.string.profile_no_pins)
-        else -> stringResource(R.string.no_notes_yet)
+    // Each tab's list holds only that tab's rows now (the header lives outside the pager).
+    val notesSectionStartIndex = 0
+    val noNotesTitle = stringResource(R.string.no_notes_yet)
+    val noRepliesTitle = stringResource(R.string.profile_no_replies_yet)
+    val noPinsTitle = stringResource(R.string.profile_no_pins)
+    fun emptyTitleFor(tab: ProfileTab) = when (tab) {
+        ProfileTab.REPLIES -> noRepliesTitle
+        ProfileTab.PINNED -> noPinsTitle
+        else -> noNotesTitle
     }
 
     LaunchedEffect(listState, selectedTab, notesSectionStartIndex) {
@@ -260,106 +307,93 @@ fun ProfileScreen(
             }
     }
 
+    val density = LocalDensity.current
+    // Collapsing header: the hero (banner, identity, bio) scrolls away first, then the active
+    // tab's list scrolls; the tab bar stays pinned. heroHeightPx is how far it can collapse.
+    var heroHeightPx by remember { mutableIntStateOf(0) }
+    var tabBarHeightPx by remember { mutableIntStateOf(0) }
+    var headerOffsetPx by remember { mutableFloatStateOf(0f) }
+    val headerConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y >= 0f) return Offset.Zero
+                val newOffset = (headerOffsetPx + available.y).coerceIn(-heroHeightPx.toFloat(), 0f)
+                val consumed = newOffset - headerOffsetPx
+                headerOffsetPx = newOffset
+                return Offset(0f, consumed)
+            }
+
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (available.y <= 0f) return Offset.Zero
+                val newOffset = (headerOffsetPx + available.y).coerceIn(-heroHeightPx.toFloat(), 0f)
+                val used = newOffset - headerOffsetPx
+                headerOffsetPx = newOffset
+                return Offset(0f, used)
+            }
+        }
+    }
+    // Drags that start on the header itself (it's most of the first screen) scroll too, with
+    // fling: collapse the header first, then hand the rest to the active tab's list.
+    val currentListState by rememberUpdatedState(listState)
+    val headerScrollState = rememberScrollableState { delta ->
+        if (delta < 0f) {
+            val newOffset = (headerOffsetPx + delta).coerceIn(-heroHeightPx.toFloat(), 0f)
+            val collapsed = newOffset - headerOffsetPx
+            headerOffsetPx = newOffset
+            collapsed - currentListState.dispatchRawDelta(-(delta - collapsed))
+        } else {
+            val listConsumed = -currentListState.dispatchRawDelta(-delta)
+            val remaining = delta - listConsumed
+            val newOffset = (headerOffsetPx + remaining).coerceIn(-heroHeightPx.toFloat(), 0f)
+            val expanded = newOffset - headerOffsetPx
+            headerOffsetPx = newOffset
+            listConsumed + expanded
+        }
+    }
+    val collapseFraction = if (heroHeightPx > 0) (-headerOffsetPx / heroHeightPx).coerceIn(0f, 1f) else 0f
+    val listTopPadding = with(density) { (heroHeightPx + tabBarHeightPx).toDp() }
+
+    // When switching tabs with the header collapsed, bring the new tab's list level with it
+    // instead of showing an empty band where the header used to be.
+    LaunchedEffect(pagerState.settledPage) {
+        val collapsedBy = (-headerOffsetPx).toInt()
+        val state = listStates.getValue(tabs[pagerState.settledPage])
+        if (collapsedBy > 0 && state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset < collapsedBy) {
+            state.scrollToItem(0, collapsedBy)
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .nestedScroll(headerConnection)
     ) {
-        NotesTimelineContainer(
-            listState = listState,
+        HorizontalPager(
+            state = pagerState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 80.dp),
-            listHorizontalPadding = 0.dp,
-            listVerticalPadding = 0.dp,
-            verticalArrangement = Arrangement.Top,
-            bottomOverlay = {
-                // NotesTimelineContainer owns BottomCenter alignment for this slot (so it can
-                // measure the bar's real height and reserve matching list padding) — don't
-                // re-align here.
-                QuickActionBottomBar(
-                    modifier = Modifier
-                        .padding(bottom = 6.dp)
-                        .zIndex(2f),
-                    onGoTop = { scope.launch { listState.scrollToItem(0) } },
-                    onCompose = { navController.navigate(Screen.Composer.new()) },
-                    onRelays = { navController.navigate(Screen.RelayConfig.route) },
-                    onSettings = {
-                        navController.navigate(Screen.Settings.route) {
-                            launchSingleTop = true
-                        }
-                    }
-                )
+            key = { tabs[it].name },
+            beyondViewportPageCount = 1
+        ) { page ->
+            val pageTab = tabs[page]
+            val pageNotes = notesFor(pageTab)
+            val pageThreadDepth = remember(pageNotes, eventsById) {
+                buildThreadDepthByEventId(pageNotes, eventsById)
             }
-        ) {
-            state.errorMessage?.let { message ->
-                item {
-                    ErrorBanner(
-                        message = message.resolve(context),
-                        onDismiss = { viewModel.clearError() }
-                    )
-                }
-            }
-
-            item {
-                ProfileHero(
-                    profile = profile,
-                    pubkey = viewModel.pubkey,
-                    canSign = canSign,
-                    isOwnProfile = isOwnProfile,
-                    isFollowing = state.isFollowing,
-                    isFollowActionInFlight = state.isFollowActionInFlight,
-                    followersCount = state.followersCount,
-                    onToggleFollow = { viewModel.toggleFollow() },
-                    onEditProfile = { navController.navigate(Screen.EditProfile.route) },
-                    onMuteUser = { viewModel.muteUser(viewModel.pubkey) },
-                    npub = npub,
-                    onCopyHex = {
-                        scope.launch {
-                            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(null, viewModel.pubkey)))
-                        }
-                        Toast.makeText(context, context.getString(R.string.copy_hex_toast), Toast.LENGTH_SHORT).show()
-                    },
-                    onCopyNpub = {
-                        scope.launch {
-                            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(null, npub)))
-                        }
-                        Toast.makeText(context, context.getString(R.string.copy_npub_toast), Toast.LENGTH_SHORT).show()
-                    },
-                    onWebsiteClick = { url -> pendingExternalUrl = normalizeExternalUrl(url) },
-                    onBioUrlClick = { url -> pendingExternalUrl = normalizeExternalUrl(url) },
-                    userRepository = viewModel.userRepositoryPublic
-                )
-            }
-
-            item {
-                val relaysCount = if (isOwnProfile) {
-                    state.relayStats.total
-                } else {
-                    (state.targetOutboxRelays + state.targetInboxRelays + state.targetDmRelays)
-                        .toSet().size
-                }
-                ProfileTabsRow(
-                    selectedTab = selectedTab,
-                    notesCount = state.totalNotesCount,
-                    repliesCount = replyNotes.size,
-                    followsCount = state.followedPubkeys.size,
-                    relaysCount = relaysCount,
-                    mutesCount = state.mutedPubkeys.size,
-                    showMutes = isOwnProfile,
-                    pinsCount = state.pinnedNotes.size,
-                    showPins = isOwnProfile,
-                    onSelect = { selectedTab = it }
-                )
-            }
-
-            when (selectedTab) {
+            LazyColumn(
+                state = listStates.getValue(pageTab),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(top = listTopPadding, bottom = 112.dp)
+            ) {
+            when (pageTab) {
                 ProfileTab.NOTES,
+                ProfileTab.PICTURES,
                 ProfileTab.REPLIES,
                 ProfileTab.PINNED -> {
                     notesFeedSection(
-                        notes = visibleNotes,
+                        notes = pageNotes,
                         eventsById = eventsById,
-                        threadDepthByEventId = threadDepthByEventId,
+                        threadDepthByEventId = pageThreadDepth,
                         profileForPubkey = resolveProfileForPubkey,
                         userRepository = viewModel.userRepositoryPublic,
                         replyCounts = state.replyCounts,
@@ -369,11 +403,12 @@ fun ProfileScreen(
                         repostedAtForEvent = state.repostedAtByEvent,
                         repostEventForEvent = state.repostEventByEvent,
                         pendingReposts = state.pendingReposts,
-                        isLoading = selectedTab != ProfileTab.PINNED && state.isLoading,
-                        isLoadingMore = selectedTab != ProfileTab.PINNED && state.isLoadingMore,
-                        noOlderNotesFound = selectedTab != ProfileTab.PINNED && state.olderNotesExhausted,
-                        notesHeaderText = notesHeaderText,
-                        emptyTitle = emptyNotesTitle,
+                        isLoading = pageTab in PAGED_TABS && state.isLoading,
+                        isLoadingMore = pageTab in PAGED_TABS && state.isLoadingMore,
+                        noOlderNotesFound = pageTab in PAGED_TABS && state.olderNotesExhausted,
+                        // The tab row already shows the count; a second header line repeated it.
+                        notesHeaderText = null,
+                        emptyTitle = emptyTitleFor(pageTab),
                         showBottomSpacer = true,
                         torDataSourceFactory = viewModel.mediaCacheDataSourceFactory,
                         enableEventClick = true,
@@ -422,7 +457,6 @@ fun ProfileScreen(
                                 onClick = { navController.navigate(Screen.Profile.forPubkey(followedPubkey)) }
                             )
                         }
-                        item { Spacer(modifier = Modifier.height(92.dp)) }
                     }
                 }
 
@@ -478,8 +512,7 @@ fun ProfileScreen(
                                     RelaySummaryRow(relay = relay)
                                 }
                             }
-                            item { Spacer(modifier = Modifier.height(92.dp)) }
-                        }
+                            }
                     } else {
                         // Other user: show their published relay lists (NIP-65 + NIP-17)
                         val allTargetRelays = (
@@ -526,8 +559,7 @@ fun ProfileScreen(
                                     RelayUrlRow(url = url)
                                 }
                             }
-                            item { Spacer(modifier = Modifier.height(92.dp)) }
-                        }
+                            }
                     }
                 }
 
@@ -548,58 +580,140 @@ fun ProfileScreen(
                             key = { it },
                             contentType = { "muted_pubkey_row" }
                         ) { mutedPubkey ->
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceContainer,
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 5.dp)
+                                    .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Row(
+                                UserAvatar(userProfile = null, pubkey = mutedPubkey, size = 36.dp)
+                                Text(
+                                    text = Bech32Encoder.encodeNpub(mutedPubkey).truncatePublicKey(12, 8),
+                                    style = MonoStyle,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Column(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .clickable { navController.navigate(Screen.Profile.forPubkey(mutedPubkey)) },
-                                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                                    ) {
-                                        Text(
-                                            text = mutedPubkey.truncatePublicKey(8, 8),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = Bech32Encoder.encodeNpub(mutedPubkey).truncatePublicKey(10, 8),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                    TextButton(onClick = { viewModel.unmuteUser(mutedPubkey) }) {
-                                        Text(stringResource(R.string.unmute_user))
-                                    }
+                                        .weight(1f)
+                                        .clickable { navController.navigate(Screen.Profile.forPubkey(mutedPubkey)) }
+                                )
+                                TextButton(onClick = { viewModel.unmuteUser(mutedPubkey) }) {
+                                    Text(stringResource(R.string.unmute_user))
                                 }
                             }
                         }
-                        item { Spacer(modifier = Modifier.height(92.dp)) }
                     }
                 }
             }
+            }
         }
-    }
 
+        // Header: hero + pinned tab bar, translated up as the page scrolls.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { IntOffset(0, headerOffsetPx.roundToInt()) }
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onSizeChanged { heroHeightPx = it.height }
+                    .scrollable(headerScrollState, Orientation.Vertical)
+            ) {
+                ProfileHero(
+                    profile = profile,
+                    pubkey = viewModel.pubkey,
+                    canSign = canSign,
+                    isOwnProfile = isOwnProfile,
+                    isFollowing = state.isFollowing,
+                    isFollowActionInFlight = state.isFollowActionInFlight,
+                    followersCount = state.followersCount,
+                    followingCount = state.followedPubkeys.size,
+                    onFollowingClick = {
+                        scope.launch { pagerState.animateScrollToPage(tabs.indexOf(ProfileTab.FOLLOWS)) }
+                    },
+                    onToggleFollow = { viewModel.toggleFollow() },
+                    onEditProfile = { navController.navigate(Screen.EditProfile.route) },
+                    onMuteUser = { viewModel.muteUser(viewModel.pubkey) },
+                    npub = npub,
+                    onCopyHex = {
+                        scope.launch {
+                            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(null, viewModel.pubkey)))
+                        }
+                        Toast.makeText(context, context.getString(R.string.copy_hex_toast), Toast.LENGTH_SHORT).show()
+                    },
+                    onCopyNpub = {
+                        scope.launch {
+                            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(null, npub)))
+                        }
+                        Toast.makeText(context, context.getString(R.string.copy_npub_toast), Toast.LENGTH_SHORT).show()
+                    },
+                    onWebsiteClick = { url -> pendingExternalUrl = normalizeExternalUrl(url) },
+                    onBioUrlClick = { url -> pendingExternalUrl = normalizeExternalUrl(url) },
+                    userRepository = viewModel.userRepositoryPublic
+                )
+                state.errorMessage?.let { message ->
+                    ErrorBanner(
+                        message = message.resolve(context),
+                        onDismiss = { viewModel.clearError() }
+                    )
+                }
+            }
+            val relaysCount = if (isOwnProfile) {
+                state.relayStats.total
+            } else {
+                (state.targetOutboxRelays + state.targetInboxRelays + state.targetDmRelays).toSet().size
+            }
+            ProfileTabBar(
+                tabs = tabs,
+                selectedIndex = pagerState.currentPage,
+                countFor = { tab ->
+                    when (tab) {
+                        ProfileTab.NOTES -> state.totalNotesCount
+                        ProfileTab.REPLIES -> replyNotes.size
+                        ProfileTab.FOLLOWS -> state.followedPubkeys.size
+                        ProfileTab.RELAYS -> relaysCount
+                        ProfileTab.MUTES -> state.mutedPubkeys.size
+                        ProfileTab.PINNED -> state.pinnedNotes.size
+                        ProfileTab.PICTURES -> state.pictures.size
+                    }
+                },
+                onSelect = { index -> scope.launch { pagerState.animateScrollToPage(index) } },
+                modifier = Modifier.onSizeChanged { tabBarHeightPx = it.height }
+            )
+        }
+
+        ProfileTopOverlay(
+            title = profile?.getUserDisplayName() ?: viewModel.pubkey.truncatePublicKey(),
+            collapseFraction = collapseFraction,
+            onBack = { navController.popBackStack() }
+        )
+
+        QuickActionBottomBar(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .zIndex(2f),
+            onGoTop = {
+                scope.launch {
+                    listState.scrollToItem(0)
+                    headerOffsetPx = 0f
+                }
+            },
+            onCompose = { navController.navigate(Screen.Composer.new()) },
+            onRelays = { navController.navigate(Screen.RelayConfig.route) },
+            onSettings = {
+                navController.navigate(Screen.Settings.route) {
+                    launchSingleTop = true
+                }
+            }
+        )
+    }
 }
 
 @Composable
-private fun ProfileHero(
+internal fun ProfileHero(
     profile: UserProfile?,
     pubkey: String,
     canSign: Boolean,
@@ -607,6 +721,8 @@ private fun ProfileHero(
     isFollowing: Boolean,
     isFollowActionInFlight: Boolean,
     followersCount: Int?,
+    followingCount: Int,
+    onFollowingClick: () -> Unit,
     onToggleFollow: () -> Unit,
     onEditProfile: () -> Unit,
     onMuteUser: () -> Unit,
@@ -620,103 +736,134 @@ private fun ProfileHero(
     // banner/avatar Blossom-fallback candidacy now that they share the unified engine.
     userRepository: UserRepository
 ) {
+    val background = MaterialTheme.colorScheme.background
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 10.dp)
+            .padding(bottom = 8.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(175.dp)
-        ) {
-            if (!profile?.banner.isNullOrBlank()) {
-                val bannerUrl = profile.banner
-                // Retries on Tor-circuit-build failure via the same unified engine every other
-                // image entry point uses — a plain AsyncImage(model = url) here previously
-                // got stuck on a blank banner until an unrelated recomposition created a fresh
-                // request.
-                val windowInfo = LocalWindowInfo.current
-                val bannerHeightPx = with(LocalDensity.current) { 150.dp.roundToPx() }
-                val gatedState = rememberRetryingAsyncImagePainter(
-                    url = bannerUrl,
-                    targetWidthPx = windowInfo.containerSize.width.coerceAtLeast(1),
-                    targetHeightPx = bannerHeightPx.coerceAtLeast(1),
-                    authorPubkey = pubkey,
-                    userRepository = userRepository
-                )
-                Image(
-                    painter = gatedState.painter,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
+        Box(modifier = Modifier.fillMaxWidth().height(ProfileBannerHeight + ProfileAvatarSize / 2)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(ProfileBannerHeight)
+            ) {
+                if (!profile?.banner.isNullOrBlank()) {
+                    val bannerUrl = profile.banner
+                    // Retries on Tor-circuit-build failure via the same unified engine every other
+                    // image entry point uses — a plain AsyncImage(model = url) here previously
+                    // got stuck on a blank banner until an unrelated recomposition created a fresh
+                    // request.
+                    val windowInfo = LocalWindowInfo.current
+                    val bannerHeightPx = with(LocalDensity.current) { ProfileBannerHeight.roundToPx() }
+                    val gatedState = rememberRetryingAsyncImagePainter(
+                        url = bannerUrl,
+                        targetWidthPx = windowInfo.containerSize.width.coerceAtLeast(1),
+                        targetHeightPx = bannerHeightPx.coerceAtLeast(1),
+                        authorPubkey = pubkey,
+                        userRepository = userRepository
+                    )
+                    Image(
+                        painter = gatedState.painter,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    // No banner: a faint corona glow instead of a flat colour block.
+                    val corona = UmbraTheme.colors.corona
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .drawBehind {
+                                drawRect(
+                                    Brush.radialGradient(
+                                        0f to corona.copy(alpha = 0.22f),
+                                        1f to Color.Transparent,
+                                        center = Offset(size.width * 0.8f, size.height * 0.1f),
+                                        radius = size.width * 0.8f
+                                    )
+                                )
+                            }
+                    )
+                }
+                // Fade the banner into the page so the header reads as one surface.
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp)
-                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                0.55f to background.copy(alpha = 0.15f),
+                                1f to background
+                            )
+                        )
                 )
             }
 
             UserAvatar(
                 userProfile = profile,
                 pubkey = pubkey,
-                size = 88.dp,
+                size = ProfileAvatarSize,
                 shape = CircleShape,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 16.dp),
+                    .padding(start = 16.dp)
+                    .border(4.dp, background, CircleShape),
                 authorPubkey = pubkey,
                 userRepository = userRepository
             )
-        }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                UserIdentityBadge(
-                    userProfile = profile,
-                    pubkey = pubkey
-                )
-
-                // Best-effort NIP-45 COUNT across relays that advertise support; null (hidden)
-                // until at least one has actually answered, so we never flash a false "0".
-                followersCount?.let { count ->
-                    Text(
-                        text = stringResource(R.string.profile_followers_count, count),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                val lightning = profile?.lud16 ?: profile?.lud06
-
-                if (!lightning.isNullOrBlank()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        if (!lightning.isNullOrBlank()) {
-                            IdentityTagRow(icon = Icons.Default.FlashOn, value = lightning)
+                if (!isOwnProfile) {
+                    val zapLauncher = LocalZapLauncher.current
+                    if (zapLauncher != null && (!profile?.lud16.isNullOrBlank() || !profile?.lud06.isNullOrBlank())) {
+                        IconButton(
+                            onClick = { zapLauncher(ZapTarget(recipientPubkey = pubkey, profile = profile)) },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .border(1.dp, UmbraTheme.colors.zap.copy(alpha = 0.6f), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Bolt,
+                                contentDescription = stringResource(R.string.zap_cd),
+                                tint = UmbraTheme.colors.zap,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
-                }
-            }
-
-            if (!isOwnProfile) {
-                Column(horizontalAlignment = Alignment.End) {
+                    if (canSign) {
+                        IconButton(
+                            onClick = onMuteUser,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.VolumeOff,
+                                contentDescription = stringResource(R.string.mute_user),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    val followColors = if (isFollowing) {
+                        ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
+                    } else {
+                        ButtonDefaults.buttonColors(containerColor = UmbraTheme.colors.corona)
+                    }
                     Button(
                         onClick = onToggleFollow,
-                        enabled = canSign && !isFollowActionInFlight
+                        enabled = canSign && !isFollowActionInFlight,
+                        colors = followColors,
+                        border = if (isFollowing) BorderStroke(1.dp, MaterialTheme.colorScheme.outline) else null,
+                        modifier = Modifier.height(40.dp)
                     ) {
                         if (isFollowActionInFlight) {
                             LoadingSpinner(size = 16.dp)
@@ -726,49 +873,63 @@ private fun ProfileHero(
                                     stringResource(R.string.profile_unfollow)
                                 } else {
                                     stringResource(R.string.profile_follow)
-                                }
+                                },
+                                style = MaterialTheme.typography.titleSmall
                             )
                         }
                     }
-
-                    if (canSign) {
-                        OutlinedButton(onClick = onMuteUser) {
-                            Text(stringResource(R.string.mute_user))
-                        }
+                } else if (canSign) {
+                    OutlinedButton(
+                        onClick = onEditProfile,
+                        modifier = Modifier.height(40.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
+                    ) {
+                        Text(stringResource(R.string.edit_profile_button), style = MaterialTheme.typography.titleSmall)
                     }
-
-                    if (!canSign) {
-                        Text(
-                            text = stringResource(R.string.profile_follow_anonymous_hint),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.widthIn(max = 160.dp)
-                        )
-                    }
-                }
-            } else if (canSign) {
-                OutlinedButton(onClick = onEditProfile) {
-                    Text(stringResource(R.string.edit_profile_button))
                 }
             }
         }
 
-        ProfileInfoCard(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .padding(horizontal = 16.dp)
+                .padding(top = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            KeyValueCopyRow(
-                label = stringResource(R.string.hex_label),
-                value = pubkey.truncatePublicKey(8, 8),
-                onCopy = onCopyHex
-            )
-
-            KeyValueCopyRow(
-                label = stringResource(R.string.npub_label),
-                value = npub.truncatePublicKey(10, 8),
-                onCopy = onCopyNpub
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = profile?.getUserDisplayName() ?: pubkey.truncatePublicKey(),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (profile?.nip05VerificationState == Nip05VerificationState.Verified && !profile.nip05.isNullOrBlank()) {
+                        Icon(
+                            imageVector = Icons.Default.Verified,
+                            contentDescription = stringResource(R.string.nip05_verified_cd),
+                            tint = UmbraTheme.colors.secure,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                val nip05 = profile?.nip05?.trim().orEmpty()
+                if (nip05.isNotBlank() && profile?.nip05VerificationState == Nip05VerificationState.Verified) {
+                    Text(
+                        text = nip05.removePrefix("_@"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
 
             if (!profile?.about.isNullOrBlank()) {
                 HashtagAwareBio(
@@ -778,64 +939,232 @@ private fun ProfileHero(
                 )
             }
 
-            if (!profile?.website.isNullOrBlank()) {
-                TextButton(
-                    onClick = { onWebsiteClick(profile.website) },
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.profile_website_label, profile.website),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+            // Who they follow / who follows them — one line, tapping "following" opens that tab.
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                ProfileStat(
+                    count = followingCount,
+                    label = stringResource(R.string.profile_stat_following),
+                    onClick = onFollowingClick
+                )
+                // Best-effort NIP-45 COUNT across relays that advertise support; hidden until at
+                // least one has actually answered, so we never flash a false "0".
+                followersCount?.let { count ->
+                    ProfileStat(count = count, label = stringResource(R.string.profile_stat_followers))
                 }
+            }
+
+            val lightning = profile?.lud16 ?: profile?.lud06
+            val website = profile?.website?.takeIf { it.isNotBlank() }
+            if (website != null || !lightning.isNullOrBlank()) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (website != null) {
+                        IdentityTagRow(
+                            icon = Icons.Outlined.Link,
+                            value = website.removePrefix("https://").removePrefix("http://").trimEnd('/'),
+                            tint = MaterialTheme.colorScheme.primary,
+                            onClick = { onWebsiteClick(website) }
+                        )
+                    }
+                    if (!lightning.isNullOrBlank()) {
+                        IdentityTagRow(icon = Icons.Default.Bolt, value = lightning, tint = UmbraTheme.colors.zap)
+                    }
+                }
+            }
+
+            if (!isOwnProfile && !canSign) {
+                Text(
+                    text = stringResource(R.string.profile_follow_anonymous_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                KeyChip(
+                    label = stringResource(R.string.npub_label),
+                    value = npub.truncatePublicKey(9, 5),
+                    onCopy = onCopyNpub,
+                    modifier = Modifier.weight(1f)
+                )
+                KeyChip(
+                    label = stringResource(R.string.hex_label),
+                    value = pubkey.truncatePublicKey(6, 4),
+                    onCopy = onCopyHex
+                )
             }
         }
     }
 }
 
+private val ProfileBannerHeight = 150.dp
+
 @Composable
-private fun ProfileTabsRow(
-    selectedTab: ProfileTab,
-    notesCount: Int,
-    repliesCount: Int,
-    followsCount: Int,
-    relaysCount: Int,
-    mutesCount: Int,
-    showMutes: Boolean,
-    pinsCount: Int,
-    showPins: Boolean,
-    onSelect: (ProfileTab) -> Unit
+private fun ProfileStat(count: Int, label: String, onClick: (() -> Unit)? = null) {
+    Row(
+        modifier = if (onClick != null) Modifier.clip(MaterialTheme.shapes.extraSmall).clickable(onClick = onClick) else Modifier,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = formatCount(count),
+            style = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = "tnum"),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(text = label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+private val ProfileAvatarSize = 88.dp
+
+/** A copyable identifier: tiny label, the value in mono, and a copy affordance. */
+@Composable
+private fun KeyChip(
+    label: String,
+    value: String,
+    onCopy: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    Row(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .clickable(onClick = onCopy)
+            .padding(start = 10.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MonoStyle,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
+        )
+        Icon(
+            imageVector = Icons.Outlined.ContentCopy,
+            contentDescription = stringResource(R.string.copy_to_clipboard_cd, label),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(14.dp)
+        )
+    }
+}
+
+/**
+ * Swipeable-pager tab bar: a scrollable row with a sliding corona indicator under the current
+ * tab; tapping animates the pager, swiping the pager moves the indicator.
+ */
+@Composable
+internal fun ProfileTabBar(
+    tabs: List<ProfileTab>,
+    selectedIndex: Int,
+    countFor: (ProfileTab) -> Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    PrimaryScrollableTabRow(
+        selectedTabIndex = selectedIndex,
+        modifier = modifier.fillMaxWidth(),
+        edgePadding = 8.dp,
+        containerColor = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        indicator = {
+            TabRowDefaults.PrimaryIndicator(
+                modifier = Modifier.tabIndicatorOffset(selectedIndex, matchContentSize = true),
+                width = Dp.Unspecified,
+                color = UmbraTheme.colors.corona
+            )
+        },
+        divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
+    ) {
+        tabs.forEachIndexed { index, tab ->
+            val selected = index == selectedIndex
+            val count = countFor(tab)
+            Tab(
+                selected = selected,
+                onClick = { onSelect(index) },
+                selectedContentColor = MaterialTheme.colorScheme.onSurface,
+                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(stringResource(tab.labelRes()), style = MaterialTheme.typography.titleSmall)
+                        if (count > 0) {
+                            Text(
+                                text = formatCount(count),
+                                style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            )
+        }
+    }
+}
+
+private fun ProfileTab.labelRes(): Int = when (this) {
+    ProfileTab.NOTES -> R.string.profile_tab_notes
+    ProfileTab.REPLIES -> R.string.profile_tab_replies
+    ProfileTab.FOLLOWS -> R.string.profile_tab_follows
+    ProfileTab.RELAYS -> R.string.profile_tab_relays
+    ProfileTab.MUTES -> R.string.profile_tab_mutes
+    ProfileTab.PINNED -> R.string.profile_tab_pins
+    ProfileTab.PICTURES -> R.string.profile_tab_pictures
+}
+
+/** Tabs backed by the paged note history (the others are complete in memory). */
+private val PAGED_TABS = setOf(ProfileTab.NOTES, ProfileTab.REPLIES)
+
+/**
+ * Back button floating over the banner (scrim circle so it reads on any image), which becomes a
+ * compact title bar with the person's name once the header has scrolled away.
+ */
+@Composable
+internal fun ProfileTopOverlay(
+    title: String,
+    collapseFraction: Float,
+    onBack: () -> Unit
+) {
+    val barAlpha = ((collapseFraction - 0.75f) / 0.25f).coerceIn(0f, 1f)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 4.dp),
+            .background(MaterialTheme.colorScheme.background.copy(alpha = barAlpha))
+            .statusBarsPadding()
+            .height(56.dp)
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        val tabs = buildList {
-            add(Triple(ProfileTab.NOTES, stringResource(R.string.profile_tab_notes_count, notesCount), notesCount))
-            add(Triple(ProfileTab.REPLIES, stringResource(R.string.profile_tab_replies_count, repliesCount), repliesCount))
-            add(Triple(ProfileTab.FOLLOWS, stringResource(R.string.profile_tab_follows_count, followsCount), followsCount))
-            add(Triple(ProfileTab.RELAYS, stringResource(R.string.profile_tab_relays_count, relaysCount), relaysCount))
-            if (showMutes) {
-                add(Triple(ProfileTab.MUTES, stringResource(R.string.profile_tab_mutes_count, mutesCount), mutesCount))
-            }
-            if (showPins) {
-                add(Triple(ProfileTab.PINNED, stringResource(R.string.profile_tab_pins_count, pinsCount), pinsCount))
-            }
-        }
-
-        tabs.forEach { (tab, label, _) ->
-            FilterChip(
-                selected = selectedTab == tab,
-                onClick = { onSelect(tab) },
-                label = { Text(label) }
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .size(40.dp)
+                .background(Color.Black.copy(alpha = 0.45f * (1f - barAlpha)), CircleShape)
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = stringResource(R.string.back),
+                tint = Color.White.copy(alpha = 1f - barAlpha).compositeOver(MaterialTheme.colorScheme.onSurface.copy(alpha = barAlpha))
             )
         }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = barAlpha),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -845,11 +1174,11 @@ private fun RelayStatsCard(
     onOpenRelayConfig: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainer,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
@@ -887,41 +1216,37 @@ private fun RelayStatsCard(
 
 @Composable
 private fun RelaySummaryRow(relay: Relay) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 5.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+        Text(
+            text = relay.relayInfo?.name?.takeIf { it.isNotBlank() } ?: relay.url,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = relay.url,
+            style = MonoStyle,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Row(
+            modifier = Modifier.padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text(
-                text = relay.relayInfo?.name?.takeIf { it.isNotBlank() } ?: relay.url,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Text(
-                text = relay.url,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (relay.isWriteEnabled) StatPill(stringResource(R.string.relay_subscriptions_outbox))
-                if (relay.isReadEnabled) StatPill(stringResource(R.string.relay_subscriptions_inbox))
-                if (relay.isDmEnabled) StatPill(stringResource(R.string.relay_dm))
-                if (relay.isOnion) StatPill(stringResource(R.string.relay_onion))
-            }
+            if (relay.isWriteEnabled) StatPill(stringResource(R.string.relay_subscriptions_outbox))
+            if (relay.isReadEnabled) StatPill(stringResource(R.string.relay_subscriptions_inbox))
+            if (relay.isDmEnabled) StatPill(stringResource(R.string.relay_dm))
+            if (relay.isOnion) StatPill(stringResource(R.string.relay_onion), highlight = true)
         }
     }
+    HorizontalDivider(modifier = Modifier.padding(start = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 @Composable
@@ -931,132 +1256,107 @@ private fun FollowListRow(
     onClick: () -> Unit,
     userRepository: UserRepository? = null
 ) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 5.dp)
             .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+        UserAvatar(
+            userProfile = profile,
+            pubkey = pubkey,
+            size = 44.dp,
+            shape = CircleShape,
+            authorPubkey = pubkey,
+            userRepository = userRepository
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            UserAvatar(
-                userProfile = profile,
-                pubkey = pubkey,
-                size = 42.dp,
-                shape = CircleShape,
-                authorPubkey = pubkey,
-                userRepository = userRepository
+            Text(
+                text = profile?.getUserDisplayName() ?: pubkey.truncatePublicKey(8, 8),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Text(
-                    text = profile?.getUserDisplayName() ?: pubkey.truncatePublicKey(8, 8),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = Bech32Encoder.encodeNpub(pubkey).truncatePublicKey(10, 8),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            val about = profile?.about?.trim()?.lineSequence()?.firstOrNull { it.isNotBlank() }
+            Text(
+                text = about ?: Bech32Encoder.encodeNpub(pubkey).truncatePublicKey(10, 8),
+                style = if (about != null) MaterialTheme.typography.bodySmall else MonoStyle,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
-
 
 @Composable
 private fun RelaySectionHeader(title: String) {
     Text(
         text = title,
-        style = MaterialTheme.typography.labelMedium,
+        style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 4.dp)
     )
 }
 
 @Composable
 private fun RelayUrlRow(url: String) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
+    Text(
+        text = url,
+        style = MonoStyle,
+        color = MaterialTheme.colorScheme.onSurface,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-    ) {
-        Text(
-            text = url,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
-        )
-    }
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    )
+    HorizontalDivider(modifier = Modifier.padding(start = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 @Composable
-private fun StatPill(text: String) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-        )
-    }
+private fun StatPill(text: String, highlight: Boolean = false) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = if (highlight) UmbraTheme.colors.secure else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(horizontal = 9.dp, vertical = 3.dp)
+    )
 }
 
 @Composable
-private fun IdentityTagRow(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String) {
+private fun IdentityTagRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    value: String,
+    tint: Color,
+    onClick: (() -> Unit)? = null
+) {
     Row(
+        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(14.dp)
+            tint = tint,
+            modifier = Modifier.size(16.dp)
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (onClick != null) tint else MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-private fun ProfileInfoCard(
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = modifier
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            content = content
         )
     }
 }
@@ -1100,13 +1400,21 @@ private fun HashtagAwareBio(
         if (cursor < text.length) append(text.substring(cursor))
     }
 
-    Text(
-        text = annotated,
-        style = MaterialTheme.typography.bodySmall.copy(
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f)
-        ),
-        modifier = modifier
-    )
+    // Long bios collapse to a few lines so the notes stay reachable; one tap expands.
+    var expanded by remember(text) { mutableStateOf(false) }
+    var overflows by remember(text) { mutableStateOf(false) }
+    Column(modifier = modifier) {
+        Text(
+            text = annotated,
+            style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+            maxLines = if (expanded) Int.MAX_VALUE else 5,
+            overflow = TextOverflow.Ellipsis,
+            onTextLayout = { if (!expanded) overflows = it.hasVisualOverflow }
+        )
+        if (overflows || expanded) {
+            ShowMoreLessToggle(isExpanded = expanded, onToggle = { expanded = !expanded })
+        }
+    }
 }
 
 

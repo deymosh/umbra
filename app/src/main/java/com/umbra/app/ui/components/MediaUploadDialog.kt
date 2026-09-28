@@ -1,7 +1,6 @@
 package com.umbra.app.ui.components
 
 import android.net.Uri
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,14 +19,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +38,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.umbra.app.R
+import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import com.umbra.app.ui.theme.MonoStyle
+import com.umbra.app.ui.theme.UmbraTheme
 
 /**
  * Shared upload-configuration surface, shown before any Blossom upload actually starts —
@@ -74,8 +77,8 @@ fun MediaUploadDialog(
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        shape = MaterialTheme.shapes.large
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -89,16 +92,14 @@ fun MediaUploadDialog(
                 }
             }
 
-            HorizontalDivider()
-
             AsyncImage(
                 model = previewUri,
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                 contentScale = ContentScale.Crop
             )
 
@@ -117,7 +118,7 @@ fun MediaUploadDialog(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Text(text = selectedServer, style = MaterialTheme.typography.bodyMedium)
+                        Text(text = selectedServer, style = MonoStyle, color = MaterialTheme.colorScheme.onSurface)
                     }
                     if (availableServers.size > 1) {
                         Icon(imageVector = Icons.Filled.KeyboardArrowDown, contentDescription = null)
@@ -136,11 +137,24 @@ fun MediaUploadDialog(
                 }
             }
 
-            Text(
-                text = stringResource(R.string.media_upload_dialog_metadata_notice),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            // The privacy guarantee of this flow (EXIF/GPS stripped before anything leaves the
+            // device), so it gets the secure mark rather than reading as fine print.
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Shield,
+                    contentDescription = null,
+                    tint = UmbraTheme.colors.secure,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = stringResource(R.string.media_upload_dialog_metadata_notice),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             if (altText != null && onAltTextChange != null) {
                 OutlinedTextField(
@@ -169,13 +183,14 @@ fun MediaUploadDialog(
                 }
             }
 
-            TextButton(
+            Button(
                 onClick = onConfirm,
                 enabled = !isUploading,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = UmbraTheme.colors.corona)
             ) {
                 if (isUploading) {
-                    LoadingSpinner(size = 18.dp, strokeWidth = 2.dp)
+                    LoadingSpinner(size = 18.dp, strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
                 } else {
                     Text(stringResource(R.string.media_upload_dialog_upload_action))
                 }

@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   "Totality" launcher icon — the moment the sun is fully covered, not an eclipse mid-progress.
-  One shadow disc, one thin arc of surviving light, one bright point (the "diamond ring" effect
-  right at totality). Same 108dp/0.82-scale adaptive-icon safe-zone convention as
-  ic_umbra_foreground.xml (kept in the repo, unreferenced, as the earlier "Corona" direction).
+  One shadow disc inside its corona, one thin arc of surviving light, one bright point (the
+  "diamond ring" effect right at totality). Same geometry as the in-app EclipseMark composable.
+  The 0.82 group scale keeps everything inside the adaptive-icon safe zone.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
@@ -17,35 +18,55 @@
         android:scaleX="0.82"
         android:scaleY="0.82">
 
-        <!-- Faint ambient halo, larger than the disc -->
-        <path
-            android:fillColor="#EDE9FB"
-            android:fillAlpha="0.08"
-            android:pathData="M54,12A42,42 0 1,1 12,54A42,42 0 0,1 54,12Z" />
+        <!-- Corona: soft lavender falloff just outside the disc -->
+        <path android:pathData="M54,8A46,46 0 1,1 8,54A46,46 0 0,1 54,8Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="radial"
+                    android:centerX="54"
+                    android:centerY="54"
+                    android:gradientRadius="46">
+                    <item android:offset="0.70" android:color="#8CCBBEFF" />
+                    <item android:offset="0.80" android:color="#33CBBEFF" />
+                    <item android:offset="1" android:color="#00CBBEFF" />
+                </gradient>
+            </aapt:attr>
+        </path>
 
         <!-- The shadow disc -->
         <path
-            android:fillColor="#1C1730"
-            android:pathData="M54,18A36,36 0 1,1 18,54A36,36 0 0,1 54,18Z" />
+            android:fillColor="#0B0A12"
+            android:pathData="M54,20A34,34 0 1,1 20,54A34,34 0 0,1 54,20Z" />
 
-        <!-- Crisp rim definition against the background -->
+        <!-- Crisp rim definition -->
         <path
-            android:strokeColor="#EDE9FB"
-            android:strokeWidth="1"
-            android:strokeAlpha="0.18"
-            android:pathData="M54,18A36,36 0 1,1 18,54A36,36 0 0,1 54,18Z" />
+            android:strokeColor="#CBBEFF"
+            android:strokeWidth="1.2"
+            android:strokeAlpha="0.45"
+            android:pathData="M54,20A34,34 0 1,1 20,54A34,34 0 0,1 54,20Z" />
 
         <!-- The thin surviving arc of light -->
         <path
-            android:strokeColor="#FFCF7A"
-            android:strokeWidth="2.6"
+            android:strokeColor="#F2C987"
+            android:strokeWidth="2.8"
             android:strokeLineCap="round"
-            android:strokeAlpha="0.92"
-            android:pathData="M63.3,19.2A36,36 0 0,1 86.6,38.8" />
+            android:pathData="M62.8,21.2A34,34 0 0,1 84.6,39.2" />
 
-        <!-- The diamond-ring point -->
+        <!-- Diamond-ring glow and point -->
+        <path android:pathData="M84.6,39.2m-11,0a11,11 0 1,1 22,0a11,11 0 1,1 -22,0">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="radial"
+                    android:centerX="84.6"
+                    android:centerY="39.2"
+                    android:gradientRadius="11">
+                    <item android:offset="0" android:color="#CCF2C987" />
+                    <item android:offset="1" android:color="#00F2C987" />
+                </gradient>
+            </aapt:attr>
+        </path>
         <path
-            android:fillColor="#FFCF7A"
-            android:pathData="M86.6,38.8m-4.5,0a4.5,4.5 0 1,1 9,0a4.5,4.5 0 1,1 -9,0" />
+            android:fillColor="#FFF6DDAE"
+            android:pathData="M84.6,39.2m-4.2,0a4.2,4.2 0 1,1 8.4,0a4.2,4.2 0 1,1 -8.4,0" />
     </group>
 </vector>

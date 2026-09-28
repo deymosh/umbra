@@ -1,5 +1,6 @@
 package com.umbra.app.ui.composer
 
+import com.umbra.app.domain.usecase.ObserveOwnCustomEmojisUseCase
 import androidx.lifecycle.SavedStateHandle
 import com.umbra.app.domain.logging.NoOpUmbraLogger
 import com.umbra.app.domain.media.VideoCacheDataSourceProvider
@@ -63,7 +64,8 @@ class ComposerViewModelTest {
 
     private fun createViewModel(
         quoteEventId: String? = null,
-        eventRepository: FakeEventRepository = FakeEventRepository()
+        eventRepository: FakeEventRepository = FakeEventRepository(),
+        drafts: InMemoryDraftRepository = InMemoryDraftRepository()
     ): ComposerViewModel {
         val userRepository = FakeUserRepository()
         val userPreferences = FakeUserPreferences(initialPubkey = "3".repeat(64))
@@ -90,8 +92,45 @@ class ComposerViewModelTest {
                 missingHydrationKindsUseCase
             ),
             uploadBlossomBlobUseCase = UploadBlossomBlobUseCase(FakeMediaUploadRepository(), amberSignerGateway, userPreferences),
-            videoCacheDataSourceProvider = FakeVideoCacheDataSourceProvider()
+            videoCacheDataSourceProvider = FakeVideoCacheDataSourceProvider(),
+            draftRepository = drafts,
+            observeOwnCustomEmojis = ObserveOwnCustomEmojisUseCase(eventRepository)
         )
+    }
+
+    @Test
+    fun `given a saved new-note draft when composer opens then the draft is restored`() = runTest(dispatcher.scheduler) {
+        val drafts = InMemoryDraftRepository().apply { save("new", "half-written thought") }
+        val viewModel = createViewModel(drafts = drafts)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("half-written thought", viewModel.textState.text.toString())
+    }
+
+    @Test
+    fun `given typing when the debounce passes then the draft is saved, and quotes keep no draft`() = runTest(dispatcher.scheduler) {
+        val drafts = InMemoryDraftRepository()
+        val viewModel = createViewModel(drafts = drafts)
+        viewModel.textState.edit { append("gm") }
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals("gm", drafts.load("new"))
+
+        val quoteDrafts = InMemoryDraftRepository()
+        createViewModel(quoteEventId = sampleEvent().id, drafts = quoteDrafts)
+        dispatcher.scheduler.advanceUntilIdle()
+        assertTrue(quoteDrafts.isEmpty())
+    }
+
+    private class InMemoryDraftRepository : com.umbra.app.domain.repository.DraftRepository {
+        private val drafts = mutableMapOf<String, String>()
+        override fun load(key: String): String? = drafts[key]
+        override fun save(key: String, text: String) {
+            if (text.isBlank()) drafts.remove(key) else drafts[key] = text
+        }
+        override fun clear(key: String) {
+            drafts.remove(key)
+        }
+        fun isEmpty(): Boolean = drafts.isEmpty()
     }
 
     @Test

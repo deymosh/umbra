@@ -248,9 +248,11 @@ class EventRepositoryIngestionIntegrationTest {
         override fun relayDao(): RelayDao = throw NotImplementedError()
         override fun feedFilterDao(): FeedFilterDao = throw NotImplementedError()
         override fun reactionEmojiDao(): ReactionEmojiDao = throw NotImplementedError()
+        @Deprecated("Room's own createOpenHelper is deprecated; this test double never uses it.")
         override fun createOpenHelper(config: DatabaseConfiguration): SupportSQLiteOpenHelper =
             throw NotImplementedError()
         override fun createInvalidationTracker(): InvalidationTracker = throw NotImplementedError()
+        @Deprecated("Room's own clearAllTables is deprecated; this test double never uses it.")
         override fun clearAllTables() = throw NotImplementedError()
     }
 

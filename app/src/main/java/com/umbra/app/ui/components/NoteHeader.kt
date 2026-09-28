@@ -3,19 +3,28 @@ package com.umbra.app.ui.components
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.umbra.app.R
+import com.umbra.app.domain.nip05.Nip05VerificationState
 import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.ui.components.media.UserAvatar
+import com.umbra.app.ui.theme.UmbraTheme
 
 @Composable
 fun NoteHeader(
@@ -38,60 +47,108 @@ fun NoteHeader(
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(modifier = Modifier.clickable(onClick = onProfileClick)) {
+            UserAvatar(
+                userProfile = userProfile,
+                pubkey = pubkey,
+                size = 36.dp,
+                shape = CircleShape,
+                animate = animateAvatar,
+                authorPubkey = authorPubkey,
+                userRepository = userRepository
+            )
+        }
+        NoteAuthorLine(
+            userProfile = userProfile,
+            pubkey = pubkey,
+            createdAt = createdAt,
+            modifier = Modifier.weight(1f),
+            trailingContent = trailingContent
+        )
+    }
+}
+
+/**
+ * One line of note attribution: display name, NIP-05 state, handle and relative time. The
+ * timestamp sits inline after the handle (rather than stacked in a right-hand column) so the eye
+ * reads "who, when" in a single pass and the note's text starts one line higher.
+ */
+@Composable
+fun NoteAuthorLine(
+    userProfile: UserProfile?,
+    pubkey: String,
+    createdAt: Long,
+    modifier: Modifier = Modifier,
+    kindLabel: String? = null,
+    trailingContent: @Composable (() -> Unit)? = null
+) {
+    val displayName = userProfile?.getUserDisplayName() ?: pubkey.truncatePublicKey()
+    val nip05 = userProfile?.nip05?.trim().orEmpty()
+    val verification = userProfile?.nip05VerificationState ?: Nip05VerificationState.NotAvailable
+    // The handle is the NIP-05 when it's been verified, otherwise a short key — never an
+    // unverified NIP-05, which would present an unproven identity claim as fact.
+    val handle = when {
+        nip05.isNotBlank() && verification == Nip05VerificationState.Verified ->
+            nip05.removePrefix("_@")
+        userProfile != null -> pubkey.truncatePublicKey(4, 4)
+        else -> null
+    }
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
             modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(modifier = Modifier.clickable(onClick = onProfileClick)) {
-                UserAvatar(
-                    userProfile = userProfile,
-                    pubkey = pubkey,
-                    size = 42.dp,
-                    shape = CircleShape,
-                    animate = animateAvatar,
-                    authorPubkey = authorPubkey,
-                    userRepository = userRepository
-                )
-            }
-
-            UserIdentityBadge(
-                userProfile = userProfile,
-                pubkey = pubkey,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(0.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                // Plain text, no background chip: a colored pill on every single note's
-                // timestamp — the one piece of chrome guaranteed to repeat on every card in the
-                // feed — read as noise rather than signal once there were more than a couple of
-                // notes on screen at once.
-                Text(
-                    text = TimeFormatter.formatRelativeTime(createdAt),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Text(
-                    text = TimeFormatter.formatShortDate(createdAt),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.85f
+            Text(
+                text = displayName,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            if (verification == Nip05VerificationState.Verified && nip05.isNotBlank()) {
+                Icon(
+                    imageVector = Icons.Default.Verified,
+                    contentDescription = stringResource(R.string.nip05_verified_cd),
+                    tint = UmbraTheme.colors.secure,
+                    modifier = Modifier.size(14.dp)
                 )
             }
-
-            trailingContent?.invoke()
+            if (handle != null) {
+                Text(
+                    text = handle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+            }
+            Text(
+                text = "· ${TimeFormatter.formatCompactRelativeTime(createdAt)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = muted,
+                maxLines = 1
+            )
+            if (kindLabel != null) {
+                Text(
+                    text = "· $kindLabel",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1
+                )
+            }
+        }
+        if (trailingContent != null) {
+            Box(modifier = Modifier.padding(start = 2.dp)) { trailingContent() }
         }
     }
 }

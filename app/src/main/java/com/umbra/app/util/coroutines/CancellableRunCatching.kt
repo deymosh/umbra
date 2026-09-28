@@ -9,9 +9,8 @@ import kotlinx.coroutines.CancellationException
  * swallows it — turning structured cancellation into an ordinary, loggable-and-continue failure
  * instead of letting the coroutine actually unwind. Every call site in this codebase that wraps a
  * suspend call in `runCatching` inside a scope-launched coroutine should use this instead of the
- * stdlib version (see the `kotlin-coroutines-structured-concurrency` skill's "Swallowing
- * CancellationException" section — this is that fix, packaged once instead of repeated at every
- * call site).
+ * stdlib version: a swallowed CancellationException turns cancellation into silent success, and
+ * this is that fix packaged once instead of repeated at every call site.
  *
  * Marked `inline` (matching the stdlib `runCatching` it replaces) so [block] may call suspend
  * functions transparently when invoked from a suspend context, without this function itself

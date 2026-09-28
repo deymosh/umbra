@@ -9,7 +9,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
 
-// Regression coverage for the LOG-2 permit lifecycle surviving its extraction out of
+// Regression coverage for the ImageLoadGate permit lifecycle (acquire before try, release in
+// finally) surviving its extraction out of
 // NostrImageComponents.kt's LaunchedEffect and into the standalone runGatedImageLoad function,
 // including a mid-disposal stress test. These tests drive the real
 // production runGatedImageLoad directly rather than reimplementing its acquire/try/finally shape,

@@ -9,18 +9,22 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.ui.draw.clip
+import com.umbra.app.ui.theme.UmbraTheme
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Comment
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Repeat as RepeatFilled
 import androidx.compose.material.icons.outlined.Repeat as RepeatOutlined
 import androidx.compose.material.icons.rounded.FormatQuote
-import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -46,72 +50,75 @@ fun ReactionBar(
     // Null hides the chip entirely — quoting is currently scoped to kind-1 text notes only, see
     // EventCard's onQuote wiring.
     onQuote: (() -> Unit)? = null,
+    // Null hides the chip: shown only when the author has a Lightning address to zap.
+    onZap: (() -> Unit)? = null,
     isReposted: Boolean = false,
     eventKindLabel: String? = null
 ) {
+    val idle = MaterialTheme.colorScheme.onSurfaceVariant
+    // Write actions read slightly quieter when there's no signer (anonymous mode) — they still
+    // respond to a tap (which explains why nothing can be published), so they aren't disabled.
+    val writeIdle = idle.copy(alpha = if (canSign) 1f else 0.6f)
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         ActionChip(
-            icon = Icons.AutoMirrored.Outlined.Comment,
+            icon = Icons.Outlined.ChatBubbleOutline,
             contentDescription = stringResource(R.string.event_reply),
             count = replyCount,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = idle,
             onClick = onReply
-        )
-        ActionChip(
-            icon = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-            contentDescription = stringResource(R.string.event_like_cd),
-            count = reactionCount,
-            tint = if (isLiked) {
-                MaterialTheme.colorScheme.error
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (canSign) 1f else 0.72f)
-            },
-            onClick = onLike
         )
         ActionChip(
             icon = if (isReposted) Icons.Filled.RepeatFilled else Icons.Outlined.RepeatOutlined,
             contentDescription = stringResource(R.string.event_repost_cd),
             count = repostCount,
-            tint = if (isReposted) {
-                MaterialTheme.colorScheme.secondary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (canSign) 1f else 0.72f)
-            },
+            tint = if (isReposted) UmbraTheme.colors.repost else writeIdle,
             onClick = onRepost
         )
+        ActionChip(
+            icon = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+            contentDescription = stringResource(R.string.event_like_cd),
+            count = reactionCount,
+            tint = if (isLiked) UmbraTheme.colors.like else writeIdle,
+            onClick = onLike
+        )
+        onZap?.let { zapAction ->
+            ActionChip(
+                icon = Icons.Outlined.Bolt,
+                contentDescription = stringResource(R.string.zap_cd),
+                tint = UmbraTheme.colors.zap.copy(alpha = if (canSign) 1f else 0.6f),
+                showCount = false,
+                onClick = zapAction
+            )
+        }
         onQuote?.let { quoteAction ->
             ActionChip(
                 icon = Icons.Rounded.FormatQuote,
                 contentDescription = stringResource(R.string.event_quote_cd),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (canSign) 1f else 0.72f),
+                tint = writeIdle,
                 showCount = false,
                 onClick = quoteAction
             )
         }
+        Spacer(modifier = Modifier.weight(1f))
+        eventKindLabel?.let { label ->
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(end = 4.dp)
+            )
+        }
         ActionChip(
-            icon = Icons.Outlined.Share,
+            icon = Icons.Outlined.IosShare,
             contentDescription = stringResource(R.string.event_share_cd),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = idle,
             showCount = false,
             onClick = onShare
         )
-        eventKindLabel?.let { label ->
-            Surface(
-                shape = RoundedCornerShape(4.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
-        }
     }
 }
 
@@ -126,10 +133,12 @@ private fun ActionChip(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier
+            .clip(CircleShape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 5.dp)
+            .defaultMinSize(minHeight = 36.dp, minWidth = 40.dp)
+            .padding(horizontal = 8.dp)
     ) {
         Icon(
             imageVector = icon,
@@ -137,7 +146,7 @@ private fun ActionChip(
             tint = tint,
             modifier = Modifier.size(18.dp)
         )
-        if (showCount) {
+        if (showCount && count > 0) {
             AnimatedContent(
                 targetState = count,
                 transitionSpec = { ContentTransform(EnterTransition.None, ExitTransition.None) },
@@ -145,7 +154,7 @@ private fun ActionChip(
             ) { current ->
                 Text(
                     text = formatCount(current),
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
                     color = tint
                 )
             }
@@ -153,8 +162,14 @@ private fun ActionChip(
     }
 }
 
-private fun formatCount(count: Int): String = when {
-    count >= 1_000_000 -> "${count / 1_000_000}M"
-    count >= 1_000 -> "${count / 1_000}k"
+internal fun formatCount(count: Int): String = when {
+    count >= 1_000_000 -> formatScaled(count, 1_000_000, "M")
+    count >= 1_000 -> formatScaled(count, 1_000, "k")
     else -> count.toString()
+}
+
+private fun formatScaled(count: Int, unit: Int, suffix: String): String {
+    val whole = count / unit
+    val tenth = (count % unit) / (unit / 10)
+    return if (whole < 10 && tenth > 0) "$whole.$tenth$suffix" else "$whole$suffix"
 }

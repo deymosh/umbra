@@ -37,7 +37,7 @@ fun PendingRepostCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 8.dp),
+                .padding(start = 70.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             RepostBanner(
@@ -53,7 +53,7 @@ fun PendingRepostCard(
                 LoadingSpinner(size = 14.dp, strokeWidth = 2.dp)
                 Text(
                     text = stringResource(R.string.event_repost_pending),
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -61,7 +61,7 @@ fun PendingRepostCard(
 
         HorizontalDivider(
             thickness = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+            color = MaterialTheme.colorScheme.outlineVariant
         )
     }
 }

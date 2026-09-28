@@ -59,6 +59,7 @@ internal class RelayWebSocketListener(
     }
 
     override fun onMessage(webSocket: WebSocket, text: String) {
+        client.trafficMeter.recordRelayReceived(relayUrl, text.toByteArray(Charsets.UTF_8).size)
         incoming.trySend(text)
     }
 

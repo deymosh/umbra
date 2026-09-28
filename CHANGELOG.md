@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Redesigned UI across every screen, sheet and dialog, with Roborazzi snapshot coverage checked in CI
+- NIP-22 comments: kind-1111 rendered in feeds and threads, and composed when replying to anything that isn't a kind-1 note
+- NIP-57 zaps (Amber-signed zap requests, LNURL-pay over Tor, payment in the user's own wallet) and NIP-A3 payment targets offered in the zap sheet
+- Notifications screen (replies, mentions, reactions, reposts, zaps grouped per note) with an unread marker
+- NIP-68 picture posts in the feed and a Pictures tab on profiles
+- NIP-51 bookmarks screen and bookmark action; own pin and bookmark lists fetched at login
+- Hashtag feeds, a private on-device read-later queue, and composer drafts
+- Per-relay network usage screen, and per-relay "stored for you" counts (NIP-45) on Relay details
+- Tracking parameters stripped from opened links; optional panic wipe
+- NIP-30 custom emoji in the composer: your kind-10030 list and referenced 30030 sets are suggested while typing `:`, and used emoji are tagged on publish
+
+### Changed
+
+- NIP-45 COUNT is only asked of relays that advertise it, and multi-relay answers are merged by maximum, never summed
+- Threads subscribe to their own replies, comments, reactions, reposts and zaps, and count from those events rather than relay COUNT
+- NIP-92 `imeta` now also detects extensionless image/video URLs
+
+### Fixed
+
+- Editing a follow, mute, pin or bookmark list no longer drops other clients' entries (private mutes, word/hashtag mutes, petnames)
+- Kotlin compiler warnings are now errors, and the existing warnings were fixed
+
 ## [0.1.0] - 2026-09-05
 
 ### Added

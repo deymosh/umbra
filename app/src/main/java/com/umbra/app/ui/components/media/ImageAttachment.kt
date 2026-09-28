@@ -1,5 +1,8 @@
 package com.umbra.app.ui.components.media
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.border
+import com.umbra.app.ui.theme.UmbraTheme
 import android.graphics.drawable.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,7 +17,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Schedule
@@ -23,7 +25,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -33,7 +34,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
@@ -63,7 +63,6 @@ private const val BLURHASH_DECODE_WIDTH = 32
 
 // Matches UserIdentityBadge.kt's NIP-05-pending badge exactly, so "queued" reads as the same
 // visual language everywhere in the app rather than inventing a second one.
-private val PENDING_AMBER = Color(0xFFF9A825)
 
 /**
  * Small top-end corner status badge drawn over a blurhash placeholder — the placeholder already
@@ -92,7 +91,7 @@ private fun BoxScope.BlurHashStatusBadge(icon: androidx.compose.ui.graphics.vect
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isError) MaterialTheme.colorScheme.error else PENDING_AMBER,
+                tint = if (isError) MaterialTheme.colorScheme.error else UmbraTheme.colors.caution,
                 modifier = Modifier.size(12.dp)
             )
         }
@@ -185,7 +184,9 @@ fun ImageAttachment(
                 }
             }
             .clip(IMAGE_GALLERY_CORNER)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            // Hairline edge so a dark photo doesn't bleed into the black background.
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, IMAGE_GALLERY_CORNER)
     ) {
         Box(
             modifier = Modifier
@@ -217,7 +218,7 @@ fun ImageAttachment(
                 userRepository = userRepository
             )
             val painter = gatedState.painter
-            val painterState by painter.state.collectAsState()
+            val painterState by painter.state.collectAsStateWithLifecycle()
             val currentBlurHashBitmap = blurHashBitmap
 
             Image(
@@ -243,13 +244,13 @@ fun ImageAttachment(
                     } else {
                         Box(
                             modifier = placeholderModifier
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)),
+                                .background(MaterialTheme.colorScheme.surfaceContainerLow),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Schedule,
                                 contentDescription = null,
-                                tint = PENDING_AMBER,
+                                tint = UmbraTheme.colors.caution,
                                 modifier = Modifier.size(28.dp)
                             )
                         }
@@ -270,7 +271,7 @@ fun ImageAttachment(
                         // spinner makes the in-flight state unambiguous.
                         Box(
                             modifier = placeholderModifier
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)),
+                                .background(MaterialTheme.colorScheme.surfaceContainerLow),
                             contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator(

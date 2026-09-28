@@ -17,7 +17,7 @@ Please read [AUDIT.md](AUDIT.md) — it contains mandatory security, privacy, an
 
 ### Prerequisites
 
-- JDK 17 (for development)
+- JDK 21 (for development)
 - Android SDK 37 (API level)
 - Gradle 9.x (included via wrapper)
 - Git

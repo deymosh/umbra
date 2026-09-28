@@ -261,6 +261,16 @@ interface EventRepository {
     fun observeEventsByPubkeyAndKind(pubkey: String, kind: Int, limit: Int = 100): Flow<List<Event>>
 
     /**
+     * Events by others that `p`-tag [pubkey] (mentions, replies, reactions, reposts, zap
+     * receipts), newest first — what the inbox subscription has delivered so far.
+     */
+    fun observeInbox(pubkey: String, limit: Int = 400): Flow<List<Event>> = kotlinx.coroutines.flow.flowOf(emptyList())
+
+    /** Cached events of [kinds] carrying tag [tagName] = [value] (case-insensitive), newest first. */
+    fun observeEventsWithTag(tagName: String, value: String, kinds: Set<Int>, limit: Int = 300): Flow<List<Event>> =
+        kotlinx.coroutines.flow.flowOf(emptyList())
+
+    /**
      * Observe total amount of events by author and kind from local cache storage.
      */
     fun observeCountEventsByPubkeyAndKind(pubkey: String, kind: Int): Flow<Int>

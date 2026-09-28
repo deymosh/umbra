@@ -1,5 +1,12 @@
 package com.umbra.app.ui.feedconfig
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.umbra.app.ui.components.ConfirmDialog
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import com.umbra.app.ui.theme.UmbraTheme
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -15,14 +22,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -34,7 +39,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,7 +68,7 @@ fun FeedConfigScreen(
     navController: NavController,
     viewModel: FeedConfigViewModel
 ) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val availableFilters by remember(state.filters, state.activeFilters) {
         derivedStateOf {
@@ -181,14 +185,15 @@ private fun androidx.compose.foundation.lazy.LazyListScope.stickySectionHeader(t
 }
 
 @Composable
-private fun ActiveFilterCard(
+internal fun ActiveFilterCard(
     filter: FeedFilter,
     onEdit: () -> Unit,
     onDeactivate: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, UmbraTheme.colors.corona.copy(alpha = 0.45f))
     ) {
         Column(
             modifier = Modifier
@@ -206,10 +211,10 @@ private fun ActiveFilterCard(
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
                 )
-                Text(
+                ChipBadge(
                     text = stringResource(R.string.active_feed),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    backgroundColor = UmbraTheme.colors.corona.copy(alpha = 0.16f),
+                    textColor = UmbraTheme.colors.corona
                 )
             }
 
@@ -242,7 +247,7 @@ private fun ActiveFilterCard(
 }
 
 @Composable
-private fun FeedFilterCard(
+internal fun FeedFilterCard(
     filter: FeedFilter,
     isSelected: Boolean,
     onSelect: () -> Unit,
@@ -251,11 +256,24 @@ private fun FeedFilterCard(
     onDelete: () -> Unit
 ) {
     var expanded by remember(filter.id, isSelected) { mutableStateOf(isSelected) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    if (confirmDelete) {
+        ConfirmDialog(
+            title = stringResource(R.string.feed_filter_delete_confirm_title),
+            message = stringResource(R.string.feed_filter_delete_confirm_message),
+            confirmLabel = stringResource(R.string.delete),
+            isDestructive = true,
+            onConfirm = {
+                confirmDelete = false
+                onDelete()
+            },
+            onDismiss = { confirmDelete = false }
+        )
+    }
 
     Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = if (expanded) 3.dp else 1.dp,
+        shape = MaterialTheme.shapes.large,
+        color = if (expanded) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainer,
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
@@ -287,18 +305,14 @@ private fun FeedFilterCard(
 
             AnimatedVisibility(visible = expanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    HorizontalDivider()
-
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Button(
                             onClick = onActivate,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondary
-                            )
+                            modifier = Modifier.weight(1f)
                         ) {
                             Text(stringResource(R.string.activate))
                         }
@@ -307,24 +321,19 @@ private fun FeedFilterCard(
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = stringResource(R.string.edit),
-                                modifier = Modifier.padding(end = 6.dp)
+                                imageVector = Icons.Outlined.Edit,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 6.dp).size(18.dp)
                             )
                             Text(stringResource(R.string.edit))
                         }
-                    }
-
-                    TextButton(
-                        onClick = onDelete,
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = stringResource(R.string.delete),
-                            modifier = Modifier.padding(end = 6.dp)
-                        )
-                        Text(stringResource(R.string.delete))
+                        IconButton(onClick = { confirmDelete = true }) {
+                            Icon(
+                                imageVector = Icons.Outlined.Delete,
+                                contentDescription = stringResource(R.string.delete),
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
                 }
             }
@@ -342,14 +351,14 @@ private fun FilterSummaryChips(filter: FeedFilter) {
         if (filter.hideNsfw) {
             ChipBadge(
                 text = stringResource(R.string.hide_nsfw),
-                backgroundColor = MaterialTheme.colorScheme.error.copy(alpha = 0.18f),
+                backgroundColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                 textColor = MaterialTheme.colorScheme.onSurface
             )
         }
         if (filter.scopeToFollows) {
             ChipBadge(
                 text = stringResource(R.string.filter_follows_only_chip),
-                backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                backgroundColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                 textColor = MaterialTheme.colorScheme.onSurface
             )
         }

@@ -50,4 +50,14 @@ interface UserPreferences {
      * Get public key as a StateFlow that re-emits on every login/logout change.
      */
     fun getPublicKeyFlow(): StateFlow<String?>
+
+    /** Epoch seconds of the newest notification the user has seen; drives the unread dot. */
+    fun getNotificationsSeenAtFlow(): StateFlow<Long> = kotlinx.coroutines.flow.MutableStateFlow(0L)
+
+    fun markNotificationsSeen(epochSeconds: Long) {}
+
+    /** Opt-in: long-pressing the Umbra wordmark wipes everything immediately. Off by default. */
+    fun getPanicWipeEnabledFlow(): StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    fun setPanicWipeEnabled(enabled: Boolean) {}
 }

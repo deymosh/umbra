@@ -60,7 +60,7 @@ internal fun selectHybridFeedNotes(
 }
 
 private fun isFeedEligibleKind(kind: Int): Boolean =
-    kind == Event.KIND_TEXT_NOTE || kind == Event.KIND_REPOST || kind == Event.KIND_GENERIC_REPOST
+    kind == Event.KIND_TEXT_NOTE || kind == Event.KIND_PICTURE || kind == Event.KIND_REPOST || kind == Event.KIND_GENERIC_REPOST
 
 /**
  * Collapses multiple reposts (kind 6/16) of the same target event down to the single newest one

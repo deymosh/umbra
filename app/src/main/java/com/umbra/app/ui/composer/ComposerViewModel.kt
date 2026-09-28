@@ -1,5 +1,9 @@
 package com.umbra.app.ui.composer
 
+import com.umbra.app.domain.nip30.CustomEmoji
+import com.umbra.app.domain.nip30.detectEmojiQuery
+import com.umbra.app.domain.nip30.emojiTagsFor
+import com.umbra.app.domain.usecase.ObserveOwnCustomEmojisUseCase
 import android.net.Uri
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.snapshotFlow
@@ -17,6 +21,7 @@ import com.umbra.app.domain.nip92.MediaDimensions
 import com.umbra.app.domain.nipb7.DefaultBlossomServer
 import com.umbra.app.domain.preferences.UserPreferences
 import com.umbra.app.domain.profile.UserProfile
+import com.umbra.app.domain.repository.DraftRepository
 import com.umbra.app.domain.repository.EventRepository
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.usecase.BlossomUploadResult
@@ -49,6 +54,8 @@ private const val TAG = "UmbraComposerVM"
 private const val CONTENT_RESOLVE_DEBOUNCE_MS = 400L
 private const val MENTION_QUERY_DEBOUNCE_MS = 250L
 private const val MENTION_SUGGESTION_LIMIT = 8
+private const val EMOJI_SUGGESTION_LIMIT = 6
+private const val DRAFT_SAVE_DEBOUNCE_MS = 500L
 private const val DRAFT_EVENT_ID = "composer-draft"
 
 /** Start index (in the raw text) of an in-progress "@query" the caret is currently inside. */
@@ -99,6 +106,10 @@ data class ComposerState(
     val resolvedQuotedEvents: Map<String, Event> = emptyMap(),
     val quotedAuthorProfiles: Map<String, UserProfile> = emptyMap(),
     val mentionSuggestions: List<UserProfile> = emptyList(),
+    // NIP-30: the user's own custom emoji (10030 list + referenced 30030 sets), and those
+    // matching the `:query` at the caret.
+    val customEmojis: List<CustomEmoji> = emptyList(),
+    val emojiSuggestions: List<CustomEmoji> = emptyList(),
     val canSign: Boolean = false,
     val isPublishing: Boolean = false,
     val removedTrackingToken: Boolean = false,
@@ -118,7 +129,7 @@ data class ComposerState(
         pubkey = currentUserPubkey.orEmpty(),
         createdAt = System.currentTimeMillis() / 1000L,
         kind = Event.KIND_TEXT_NOTE,
-        tags = emptyList(),
+        tags = emojiTagsFor(content, customEmojis),
         content = content.trim(),
         sig = ""
     )
@@ -135,7 +146,9 @@ class ComposerViewModel @Inject constructor(
     private val publishSignedEventUseCase: PublishSignedEventUseCase,
     private val trackReferencedAuthorUseCase: TrackReferencedAuthorUseCase,
     private val uploadBlossomBlobUseCase: UploadBlossomBlobUseCase,
-    private val videoCacheDataSourceProvider: VideoCacheDataSourceProvider
+    private val videoCacheDataSourceProvider: VideoCacheDataSourceProvider,
+    private val draftRepository: DraftRepository,
+    private val observeOwnCustomEmojis: ObserveOwnCustomEmojisUseCase
 ) : ViewModel() {
 
     val mediaCacheDataSourceFactory get() = videoCacheDataSourceProvider.getCacheDataSourceFactory()
@@ -145,6 +158,13 @@ class ComposerViewModel @Inject constructor(
     private val quoteEventId: String? = savedStateHandle.get<String>("quote")
 
     val textState = TextFieldState()
+
+    // Quotes are prefilled from their target, so only new notes and replies keep a draft.
+    private val draftKey: String? = when {
+        quoteEventId != null -> null
+        replyToEventId != null -> "reply:$replyToEventId"
+        else -> "new"
+    }
 
     private val logger = UmbraLog.tag(TAG)
 
@@ -169,6 +189,21 @@ class ComposerViewModel @Inject constructor(
                 userRepository.observeProfile(pubkey).collectLatest { profile ->
                     _state.update { it.copy(currentUserProfile = profile) }
                 }
+            }
+        }
+
+        draftKey?.let(draftRepository::load)?.let { draft ->
+            textState.edit {
+                replace(0, length, draft)
+                selection = TextRange(draft.length)
+            }
+        }
+        if (draftKey != null) {
+            viewModelScope.launch {
+                snapshotFlow { textState.text.toString() }
+                    .debounce(DRAFT_SAVE_DEBOUNCE_MS)
+                    .distinctUntilChanged()
+                    .collectLatest { draftRepository.save(draftKey, it) }
             }
         }
 
@@ -200,6 +235,12 @@ class ComposerViewModel @Inject constructor(
             }
         }
 
+        if (pubkey != null) {
+            viewModelScope.launch {
+                observeOwnCustomEmojis(pubkey).collect { emojis -> _state.update { it.copy(customEmojis = emojis) } }
+            }
+        }
+
         viewModelScope.launch {
             snapshotFlow { textState.text }
                 .collectLatest { text ->
@@ -224,6 +265,15 @@ class ComposerViewModel @Inject constructor(
 
         viewModelScope.launch {
             snapshotFlow { textState.text to textState.selection }.debounce(MENTION_QUERY_DEBOUNCE_MS).collectLatest { (text, selection) ->
+                val emojiQuery = detectEmojiQuery(text.toString(), selection.end)?.query
+                _state.update { current ->
+                    val matches = emojiQuery?.let { q ->
+                        current.customEmojis.filter { it.shortcode.contains(q, ignoreCase = true) }
+                            .sortedByDescending { it.shortcode.startsWith(q, ignoreCase = true) }
+                            .take(EMOJI_SUGGESTION_LIMIT)
+                    }.orEmpty()
+                    if (current.emojiSuggestions == matches) current else current.copy(emojiSuggestions = matches)
+                }
                 val query = detectMentionQuery(text.toString(), selection.end)?.query
                 if (query.isNullOrEmpty()) {
                     _state.update { it.copy(mentionSuggestions = emptyList()) }
@@ -261,6 +311,13 @@ class ComposerViewModel @Inject constructor(
                 quotedAuthorProfiles = it.quotedAuthorProfiles + (profile.pubkey.lowercase() to profile)
             )
         }
+    }
+
+    fun selectEmoji(emoji: CustomEmoji) {
+        val caret = textState.selection.end
+        val match = detectEmojiQuery(textState.text.toString(), caret) ?: return
+        textState.edit { replace(match.startIndex, caret, ":${emoji.shortcode}: ") }
+        _state.update { it.copy(emojiSuggestions = emptyList()) }
     }
 
     private suspend fun resolvePreviewReferences(content: String) {
@@ -363,7 +420,12 @@ class ComposerViewModel @Inject constructor(
                 }
                 is BlossomUploadResult.Failed -> {
                     logger.d { "Attachment upload error: ${scrubThrowableMessageForLogs(result.error)}" }
-                    _state.update { it.copy(pendingUpload = null) }
+                    _state.update {
+                        it.copy(
+                            pendingUpload = null,
+                            attachmentError = UiMessage.Res(R.string.error_picture_upload_failed)
+                        )
+                    }
                 }
             }
             _state.update { it.copy(isUploadingAttachment = false) }
@@ -391,13 +453,20 @@ class ComposerViewModel @Inject constructor(
         // An attachment's URL might have been hand-edited or deleted out of the text after
         // upload — only tag imeta/content-warning for what's actually still in the note.
         val liveAttachments = current.attachments.filter { body.contains(it.url) }
-        val sensitiveReason = if (current.sensitiveContent && liveAttachments.isNotEmpty()) "" else null
+        // NIP-36 applies to the whole note, text-only notes included.
+        val sensitiveReason = if (current.sensitiveContent) "" else null
 
         _state.update { it.copy(isPublishing = true) }
         viewModelScope.launch {
-            val eventJson = current.replyToEvent?.let {
-                NostrEventBuilder.reply(body, it, imetaTags = liveAttachments, sensitiveReason = sensitiveReason)
-            } ?: NostrEventBuilder.textNote(body, imetaTags = liveAttachments, sensitiveReason = sensitiveReason)
+            val target = current.replyToEvent
+            val eventJson = when {
+                target == null -> NostrEventBuilder.textNote(body, imetaTags = liveAttachments, sensitiveReason = sensitiveReason, emojis = current.customEmojis)
+                // NIP-10 replies are for kind-1 notes only; anything else (pictures, forum
+                // threads, comments) gets a NIP-22 comment.
+                target.kind == Event.KIND_TEXT_NOTE ->
+                    NostrEventBuilder.reply(body, target, imetaTags = liveAttachments, sensitiveReason = sensitiveReason, emojis = current.customEmojis)
+                else -> NostrEventBuilder.commentOn(target, body, imetaTags = liveAttachments, sensitiveReason = sensitiveReason, emojis = current.customEmojis)
+            }
             val signed = try {
                 amberSignerGateway.signEvent(eventJson, current.currentUserPubkey)
             } catch (e: Exception) {
@@ -406,6 +475,7 @@ class ComposerViewModel @Inject constructor(
             }
             if (signed != null) {
                 publishSignedEventUseCase(signed)
+                draftKey?.let(draftRepository::clear)
                 _published.emit(Unit)
             }
             _state.update { it.copy(isPublishing = false) }

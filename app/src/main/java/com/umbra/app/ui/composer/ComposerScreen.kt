@@ -1,13 +1,19 @@
 package com.umbra.app.ui.composer
 
+import com.umbra.app.domain.nip30.CustomEmoji
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.content.MediaType
 import androidx.compose.foundation.content.ReceiveContentListener
@@ -19,71 +25,96 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.delete
 import androidx.compose.foundation.text.input.insert
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Image
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.media3.datasource.DataSource
 import com.umbra.app.R
+import com.umbra.app.domain.nip01.Event
+import com.umbra.app.domain.profile.UserProfile
+import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.ui.common.resolve
-import com.umbra.app.ui.components.MENTION_URI_REGEX
 import com.umbra.app.ui.components.LoadingSpinner
+import com.umbra.app.ui.components.MENTION_URI_REGEX
 import com.umbra.app.ui.components.MediaUploadDialog
+import com.umbra.app.ui.components.MentionVisualTransformation
+import com.umbra.app.ui.components.NoteAuthorLine
+import com.umbra.app.ui.components.TopBarPrimaryAction
+import com.umbra.app.ui.components.UmbraIcons
 import com.umbra.app.ui.components.UmbraTopAppBar
 import com.umbra.app.ui.components.UmbraTopAppBarDefaults
-import com.umbra.app.ui.components.MentionVisualTransformation
 import com.umbra.app.ui.components.media.UserAvatar
 import com.umbra.app.ui.components.mentionLabelFor
+import com.umbra.app.ui.components.truncatePublicKey
 import com.umbra.app.ui.feed.EventCard
+import com.umbra.app.ui.theme.MonoStyle
+import com.umbra.app.ui.theme.UmbraTheme
 import com.umbra.app.util.BlurHash
 import com.umbra.app.util.MediaMetadataStripper
 import kotlinx.coroutines.Dispatchers
@@ -102,18 +133,17 @@ private const val BLURHASH_DECODE_TARGET_PX = 128
 
 /**
  * Full-screen composer for both a brand-new note and a reply (mode selected by whether
- * [ComposerViewModel] was given a `replyTo` route argument) — one screen handling both cases
- * rather than two near-identical dialogs. The live preview
- * below the input is a real [EventCard] fed a synthetic in-progress event, so quotes, mentions,
- * and inline media render exactly as they would once actually posted.
+ * [ComposerViewModel] was given a `replyTo` route argument). The optional live preview is a real
+ * [EventCard] fed a synthetic in-progress event, so quotes, mentions, and inline media render
+ * exactly as they would once actually posted.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ComposerScreen(
     onNavigateBack: () -> Unit,
     viewModel: ComposerViewModel = hiltViewModel()
 ) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -165,27 +195,6 @@ fun ComposerScreen(
         if (uris.isNotEmpty()) mediaQueue = mediaQueue + uris
     }
 
-    val mentionColor = MaterialTheme.colorScheme.primary
-    val outputTransformation = remember(state.quotedAuthorProfiles) {
-        OutputTransformation {
-            val originalText = toString()
-            val matches = MENTION_URI_REGEX.findAll(originalText).toList()
-            if (matches.isEmpty()) return@OutputTransformation
-
-            var offsetDelta = 0
-            for (match in matches) {
-                val start = match.range.first + offsetDelta
-                val endExclusive = match.range.last + 1 + offsetDelta
-                val label = mentionLabelFor(match.value, viewModel::displayNameForPubkey)
-
-                delete(start, endExclusive)
-                insert(start, label)
-
-                offsetDelta += label.length - (match.range.last + 1 - match.range.first)
-            }
-        }
-    }
-
     // Gate content pulled off the clipboard/IME to images/GIFs only — anything else (plain text,
     // contacts, files) is left for the default text-insertion behavior to handle.
     val contentReceiverListener = remember {
@@ -204,206 +213,29 @@ fun ComposerScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            UmbraTopAppBar(
-                title = {
-                    Text(
-                        stringResource(
-                            if (state.isReplyMode) R.string.event_reply else R.string.compose_note_title
-                        )
-                    )
-                },
-                navigationIcon = {
-                    UmbraTopAppBarDefaults.BackNavigationIcon(
-                        onClick = onNavigateBack,
-                        icon = Icons.Default.Close,
-                        contentDescription = stringResource(R.string.cancel)
-                    )
-                },
-                actions = {
-                    TextButton(
-                        onClick = viewModel::publish,
-                        enabled = viewModel.textState.text.isNotBlank() && state.canSign && !state.isPublishing
-                    ) {
-                        if (state.isPublishing) {
-                            LoadingSpinner(size = 18.dp, strokeWidth = 2.dp)
-                        } else {
-                            Text(stringResource(R.string.publish))
-                        }
-                    }
-                }
+    ComposerLayout(
+        state = state,
+        textState = viewModel.textState,
+        userRepository = viewModel.userRepositoryPublic,
+        dataSourceFactory = viewModel.mediaCacheDataSourceFactory,
+        displayNameForPubkey = viewModel::displayNameForPubkey,
+        getQuotedEvent = viewModel::getQuotedEvent,
+        getQuotedEventAuthorProfile = viewModel::getQuotedEventAuthorProfile,
+        onClose = onNavigateBack,
+        onPublish = viewModel::publish,
+        onPickMedia = {
+            pickMediaLauncher.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .imePadding()
-        ) {
-            if (state.isReplyMode) {
-                val target = state.replyToEvent
-                if (target != null) {
-                    EventCard(
-                        event = target,
-                        enableEventClick = false,
-                        userProfile = state.replyToProfile,
-                        userRepository = viewModel.userRepositoryPublic,
-                        torDataSourceFactory = viewModel.mediaCacheDataSourceFactory,
-                        currentUserPubkey = state.currentUserPubkey,
-                        getQuotedEvent = viewModel::getQuotedEvent,
-                        getQuotedEventAuthorProfile = viewModel::getQuotedEventAuthorProfile,
-                        animateAvatars = false,
-                        compactMedia = true
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                    }
-                }
-                HorizontalDivider()
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                UserAvatar(
-                    userProfile = state.currentUserProfile,
-                    pubkey = state.currentUserPubkey.orEmpty(),
-                    size = 44.dp,
-                    authorPubkey = state.currentUserPubkey,
-                    userRepository = viewModel.userRepositoryPublic
-                )
-
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val interactionSource = remember { MutableInteractionSource() }
-
-                    BasicTextField(
-                        state = viewModel.textState,
-                        lineLimits = TextFieldLineLimits.MultiLine(minHeightInLines = 6),
-                        modifier = Modifier
-                            .contentReceiver(contentReceiverListener)
-                            .fillMaxWidth()
-                            .heightIn(min = 160.dp)
-                            .focusRequester(focusRequester),
-                        interactionSource = interactionSource,
-                        outputTransformation = outputTransformation,
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(
-                            color = Color.Transparent
-                        ),
-                        decorator = { innerTextField ->
-                            val transformedText = remember(viewModel.textState.text, state.quotedAuthorProfiles) {
-                                val visualTransformation = MentionVisualTransformation(mentionColor) { pubkey ->
-                                    viewModel.displayNameForPubkey(pubkey)
-                                }
-                                visualTransformation.filter(AnnotatedString(viewModel.textState.text.toString())).text
-                            }
-
-                            OutlinedTextFieldDefaults.DecorationBox(
-                                value = transformedText.text,
-                                innerTextField = {
-                                    Box {
-                                        Text(
-                                            text = transformedText,
-                                            style = MaterialTheme.typography.bodyLarge.copy(
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        )
-                                        innerTextField()
-                                    }
-                                },
-                                enabled = true,
-                                singleLine = false,
-                                visualTransformation = VisualTransformation.None,
-                                interactionSource = interactionSource,
-                                placeholder = {
-                                    Text(
-                                        stringResource(
-                                            if (state.isReplyMode) R.string.reply_note_hint else R.string.compose_note_hint
-                                        )
-                                    )
-                                },
-                                container = {
-                                    OutlinedTextFieldDefaults.Container(
-                                        enabled = true,
-                                        isError = false,
-                                        interactionSource = interactionSource,
-                                        colors = OutlinedTextFieldDefaults.colors(),
-                                        shape = OutlinedTextFieldDefaults.shape
-                                    )
-                                }
-                            )
-                        }
-                    )
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
-                            onClick = {
-                                pickMediaLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-                                )
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Image,
-                                contentDescription = stringResource(R.string.composer_attach_media_cd)
-                            )
-                        }
-                    }
-
-                    if (state.removedTrackingToken) {
-                        Text(
-                            text = stringResource(R.string.tracking_token_removed_notice),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    if (state.mentionSuggestions.isNotEmpty()) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            LazyColumn(modifier = Modifier.heightIn(max = 220.dp)) {
-                                items(state.mentionSuggestions, key = { it.pubkey }, contentType = { "mention_suggestion_row" }) { profile ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { viewModel.selectMention(profile) }
-                                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        UserAvatar(
-                                            userProfile = profile,
-                                            pubkey = profile.pubkey,
-                                            size = 32.dp,
-                                            authorPubkey = profile.pubkey,
-                                            userRepository = viewModel.userRepositoryPublic
-                                        )
-                                        Text(
-                                            text = profile.getUserDisplayName(),
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
+        onSelectMention = viewModel::selectMention,
+        onSelectEmoji = viewModel::selectEmoji,
+        onSensitiveChange = viewModel::onSensitiveContentChange,
+        snackbarHostState = snackbarHostState,
+        editorModifier = Modifier
+            .contentReceiver(contentReceiverListener)
+            .focusRequester(focusRequester),
+        uploadDialog = {
             // Shown for every attachment, gallery-picked or keyboard-inserted alike, right after
             // metadata stripping succeeds and before any bytes leave the device.
             state.pendingUpload?.let { pending ->
@@ -423,25 +255,552 @@ fun ComposerScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
             }
+        }
+    )
+}
 
-            if (viewModel.textState.text.isNotBlank()) {
-                HorizontalDivider()
-                Box(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))) {
+/**
+ * Stateless composer layout: reply context threaded into the writing surface, a bare editor,
+ * notices and mention suggestions, an optional live preview, and a toolbar docked above the
+ * keyboard. Side effects (pickers, clipboard, publish navigation) stay in [ComposerScreen].
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ComposerLayout(
+    state: ComposerState,
+    textState: TextFieldState,
+    userRepository: UserRepository,
+    dataSourceFactory: DataSource.Factory,
+    displayNameForPubkey: (String) -> String?,
+    getQuotedEvent: (String) -> Event?,
+    getQuotedEventAuthorProfile: (String) -> UserProfile?,
+    onClose: () -> Unit,
+    onPublish: () -> Unit,
+    onPickMedia: () -> Unit,
+    onSelectMention: (UserProfile) -> Unit,
+    onSensitiveChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    onSelectEmoji: (CustomEmoji) -> Unit = {},
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+    editorModifier: Modifier = Modifier,
+    initialShowPreview: Boolean = false,
+    uploadDialog: @Composable () -> Unit = {}
+) {
+    var showPreview by rememberSaveable { mutableStateOf(initialShowPreview) }
+    val hasText = textState.text.isNotBlank()
+
+    Scaffold(
+        modifier = modifier,
+        topBar = {
+            UmbraTopAppBar(
+                title = {
+                    Text(
+                        stringResource(
+                            if (state.isReplyMode) R.string.event_reply else R.string.compose_note_title
+                        )
+                    )
+                },
+                navigationIcon = {
+                    UmbraTopAppBarDefaults.BackNavigationIcon(
+                        onClick = onClose,
+                        icon = Icons.Default.Close,
+                        contentDescription = stringResource(R.string.cancel)
+                    )
+                },
+                actions = {
+                    TopBarPrimaryAction(
+                        label = stringResource(R.string.publish),
+                        onClick = onPublish,
+                        enabled = hasText && state.canSign && !state.isUploadingAttachment,
+                        loading = state.isPublishing
+                    )
+                }
+            )
+        },
+        bottomBar = {
+            ComposerToolbar(
+                characterCount = textState.text.length,
+                sensitive = state.sensitiveContent,
+                showPreview = showPreview,
+                uploading = state.isUploadingAttachment,
+                onPickMedia = onPickMedia,
+                onSensitiveChange = onSensitiveChange,
+                onTogglePreview = { showPreview = !showPreview },
+                modifier = Modifier.imePadding()
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .consumeWindowInsets(paddingValues)
+                .verticalScroll(rememberScrollState())
+        ) {
+            if (state.isReplyMode) {
+                val target = state.replyToEvent
+                if (target != null) {
+                    ReplyContext(
+                        event = target,
+                        profile = state.replyToProfile,
+                        userRepository = userRepository
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        LoadingSpinner(size = 20.dp)
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = if (state.isReplyMode) 0.dp else 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                UserAvatar(
+                    userProfile = state.currentUserProfile,
+                    pubkey = state.currentUserPubkey.orEmpty(),
+                    size = AVATAR_SIZE,
+                    animate = false,
+                    authorPubkey = state.currentUserPubkey,
+                    userRepository = userRepository
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    ComposerEditor(
+                        textState = textState,
+                        isReplyMode = state.isReplyMode,
+                        quotedAuthorProfiles = state.quotedAuthorProfiles,
+                        displayNameForPubkey = displayNameForPubkey,
+                        modifier = editorModifier
+                    )
+
+                    if (state.removedTrackingToken) {
+                        ComposerNotice(
+                            icon = Icons.Outlined.Shield,
+                            text = stringResource(R.string.tracking_token_removed_notice),
+                            color = UmbraTheme.colors.secure
+                        )
+                    }
+                    if (state.sensitiveContent) {
+                        ComposerNotice(
+                            icon = Icons.Outlined.VisibilityOff,
+                            text = stringResource(R.string.media_upload_dialog_sensitive_description),
+                            color = UmbraTheme.colors.caution
+                        )
+                    }
+
+                    if (state.mentionSuggestions.isNotEmpty()) {
+                        MentionSuggestions(
+                            suggestions = state.mentionSuggestions,
+                            userRepository = userRepository,
+                            onSelect = onSelectMention
+                        )
+                    }
+                    if (state.emojiSuggestions.isNotEmpty()) {
+                        EmojiSuggestions(suggestions = state.emojiSuggestions, onSelect = onSelectEmoji)
+                    }
+                }
+            }
+
+            uploadDialog()
+
+            if (showPreview && hasText) {
+                Text(
+                    text = stringResource(R.string.composer_preview_label).uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 8.dp)
+                )
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp)
+                        .clip(MaterialTheme.shapes.large)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.large)
+                        .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+                ) {
                     EventCard(
-                        event = state.draftEvent(viewModel.textState.text.toString()),
+                        event = state.draftEvent(textState.text.toString()),
                         enableEventClick = false,
                         initiallyExpanded = true,
                         userProfile = state.currentUserProfile,
-                        userRepository = viewModel.userRepositoryPublic,
-                        torDataSourceFactory = viewModel.mediaCacheDataSourceFactory,
+                        userRepository = userRepository,
+                        torDataSourceFactory = dataSourceFactory,
                         currentUserPubkey = state.currentUserPubkey,
-                        getQuotedEvent = viewModel::getQuotedEvent,
-                        getQuotedEventAuthorProfile = viewModel::getQuotedEventAuthorProfile,
+                        getQuotedEvent = getQuotedEvent,
+                        getQuotedEventAuthorProfile = getQuotedEventAuthorProfile,
                         animateAvatars = false
                     )
                 }
             }
+
+            Spacer(Modifier.height(24.dp))
         }
+    }
+}
+
+private val AVATAR_SIZE = 40.dp
+
+/**
+ * The note being replied to, as a compact quote: author line, a few lines of its text, and a
+ * thread rule running down from its avatar into the writer's own avatar below.
+ */
+@Composable
+private fun ReplyContext(
+    event: Event,
+    profile: UserProfile?,
+    userRepository: UserRepository
+) {
+    val threadColor = MaterialTheme.colorScheme.outline
+    val name = profile?.getUserDisplayName() ?: event.pubkey.truncatePublicKey()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.width(AVATAR_SIZE).fillMaxHeight(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            UserAvatar(
+                userProfile = profile,
+                pubkey = event.pubkey,
+                size = 32.dp,
+                animate = false,
+                authorPubkey = event.pubkey,
+                userRepository = userRepository
+            )
+            Box(
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .width(2.dp)
+                    .weight(1f)
+                    .clip(RoundedCornerShape(1.dp))
+                    .drawBehind { drawRect(threadColor) }
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f).padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            NoteAuthorLine(userProfile = profile, pubkey = event.pubkey, createdAt = event.createdAt)
+            Text(
+                text = event.content.trim(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = buildAnnotatedString {
+                    append(stringResource(R.string.composer_replying_to_prefix))
+                    append(" ")
+                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) { append("@$name") }
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Bare writing surface: no box around the text, the page is the field. The raw text keeps
+ * `nostr:` mention URIs; a transparent field is overlaid on the same text rendered with mentions
+ * shown as highlighted "@name" labels.
+ */
+@Composable
+private fun ComposerEditor(
+    textState: TextFieldState,
+    isReplyMode: Boolean,
+    quotedAuthorProfiles: Map<String, UserProfile>,
+    displayNameForPubkey: (String) -> String?,
+    modifier: Modifier = Modifier
+) {
+    val mentionColor = MaterialTheme.colorScheme.primary
+    val interactionSource = remember { MutableInteractionSource() }
+    val textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp, lineHeight = 25.sp)
+
+    val outputTransformation = remember(quotedAuthorProfiles) {
+        OutputTransformation {
+            val originalText = toString()
+            val matches = MENTION_URI_REGEX.findAll(originalText).toList()
+            if (matches.isEmpty()) return@OutputTransformation
+
+            var offsetDelta = 0
+            for (match in matches) {
+                val start = match.range.first + offsetDelta
+                val endExclusive = match.range.last + 1 + offsetDelta
+                val label = mentionLabelFor(match.value, displayNameForPubkey)
+
+                delete(start, endExclusive)
+                insert(start, label)
+
+                offsetDelta += label.length - (match.range.last + 1 - match.range.first)
+            }
+        }
+    }
+
+    BasicTextField(
+        state = textState,
+        lineLimits = TextFieldLineLimits.MultiLine(minHeightInLines = 3),
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 88.dp),
+        interactionSource = interactionSource,
+        outputTransformation = outputTransformation,
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        textStyle = textStyle.copy(color = Color.Transparent),
+        decorator = { innerTextField ->
+            val transformedText = remember(textState.text, quotedAuthorProfiles) {
+                val visualTransformation = MentionVisualTransformation(mentionColor) { pubkey ->
+                    displayNameForPubkey(pubkey)
+                }
+                visualTransformation.filter(AnnotatedString(textState.text.toString())).text
+            }
+            Box(modifier = Modifier.padding(top = 8.dp)) {
+                if (textState.text.isEmpty()) {
+                    Text(
+                        text = stringResource(
+                            if (isReplyMode) R.string.reply_note_hint else R.string.compose_note_hint
+                        ),
+                        style = textStyle,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+                Text(text = transformedText, style = textStyle.copy(color = MaterialTheme.colorScheme.onSurface))
+                innerTextField()
+            }
+        }
+    )
+}
+
+@Composable
+private fun ComposerNotice(icon: ImageVector, text: String, color: Color) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .background(color.copy(alpha = 0.10f))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
+        Text(text = text, style = MaterialTheme.typography.bodySmall, color = color)
+    }
+}
+
+/** NIP-30: the user's custom emoji matching the `:query` being typed. */
+@Composable
+private fun EmojiSuggestions(suggestions: List<CustomEmoji>, onSelect: (CustomEmoji) -> Unit) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+            suggestions.forEach { emoji ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(emoji) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    AsyncImage(
+                        model = emoji.url,
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Text(
+                        text = ":${emoji.shortcode}:",
+                        style = MonoStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MentionSuggestions(
+    suggestions: List<UserProfile>,
+    userRepository: UserRepository,
+    onSelect: (UserProfile) -> Unit
+) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        // A plain Column rather than a LazyColumn: this sits inside the screen's vertical scroll,
+        // and the list is capped at a handful of rows anyway.
+        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+            suggestions.forEach { profile ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(profile) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    UserAvatar(
+                        userProfile = profile,
+                        pubkey = profile.pubkey,
+                        size = 32.dp,
+                        animate = false,
+                        authorPubkey = profile.pubkey,
+                        userRepository = userRepository
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = profile.getUserDisplayName(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        val handle = profile.nip05?.takeIf { it.isNotBlank() }
+                            ?: profile.pubkey.truncatePublicKey(8, 4)
+                        Text(
+                            text = handle,
+                            style = MonoStyle,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Docked above the keyboard: attach media, content-warning toggle, preview toggle, and a quiet
+ * trailing readout (upload progress, or the character count plus the Tor route).
+ */
+@Composable
+private fun ComposerToolbar(
+    characterCount: Int,
+    sensitive: Boolean,
+    showPreview: Boolean,
+    uploading: Boolean,
+    onPickMedia: () -> Unit,
+    onSensitiveChange: (Boolean) -> Unit,
+    onTogglePreview: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.background
+    ) {
+        Column(Modifier.navigationBarsPadding()) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onPickMedia, enabled = !uploading) {
+                    Icon(
+                        Icons.Outlined.Image,
+                        contentDescription = stringResource(R.string.composer_attach_media_cd),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                ToolbarToggle(
+                    checked = sensitive,
+                    onCheckedChange = onSensitiveChange,
+                    icon = Icons.Outlined.VisibilityOff,
+                    contentDescription = stringResource(R.string.media_upload_dialog_sensitive_label),
+                    activeColor = UmbraTheme.colors.caution
+                )
+                ToolbarToggle(
+                    checked = showPreview,
+                    onCheckedChange = { onTogglePreview() },
+                    icon = Icons.Outlined.Visibility,
+                    contentDescription = stringResource(R.string.composer_preview_label),
+                    activeColor = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.weight(1f))
+                if (uploading) {
+                    LoadingSpinner(size = 16.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.composer_uploading),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    if (characterCount > 0) {
+                        Text(
+                            text = characterCount.toString(),
+                            style = MonoStyle,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "  ·  ",
+                            style = MonoStyle,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                    Icon(
+                        imageVector = UmbraIcons.Onion,
+                        contentDescription = null,
+                        tint = UmbraTheme.colors.secure,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.composer_route_tor),
+                        style = MonoStyle,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToolbarToggle(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    icon: ImageVector,
+    contentDescription: String,
+    activeColor: Color
+) {
+    IconToggleButton(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        colors = IconButtonDefaults.iconToggleButtonColors(
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            checkedContentColor = activeColor,
+            checkedContainerColor = activeColor.copy(alpha = 0.14f)
+        )
+    ) {
+        Icon(icon, contentDescription = contentDescription)
     }
 }
 

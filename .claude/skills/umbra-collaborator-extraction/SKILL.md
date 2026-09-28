@@ -1,6 +1,6 @@
 ---
 name: umbra-collaborator-extraction
-description: Use when a Umbra ViewModel or repository implementation has grown large enough that it mixes multiple unrelated method clusters, or when asked to decompose/refactor/split a large class in this codebase. Documents the established collaborator-extraction pattern (EventChannelRouting, EventIngestCache, RelayIssueBannerCoordinator, FeedStateMergeCoordinator, FeedEngagementSchedulingCoordinator, ProfileObserversCoordinator, InteractionActionsCoordinator, RelayCrudCoordinator, RelayListPublishingCoordinator) so a new decomposition matches the existing shape instead of inventing a new one.
+description: Splitting a large ViewModel/repository into collaborator classes the way existing coordinators are built.
 ---
 
 # Decomposing a large ViewModel/repository in Umbra
@@ -137,6 +137,6 @@ function over a collaborator class; `NostrTextRenderer`'s decomposition into
 
 ## Related
 
-- [`kotlin-coroutines-structured-concurrency`](../kotlin-coroutines-structured-concurrency/SKILL.md) — a collaborator that owns async work still follows the `@Singleton`-scope-ownership rules covered there if the owning class is itself a `@Singleton`; a ViewModel-owned collaborator uses `viewModelScope` passed in from the owner instead.
+- [`umbra-coroutines`](../umbra-coroutines/SKILL.md) — a collaborator that owns async work still follows the `@Singleton`-scope-ownership rules covered there if the owning class is itself a `@Singleton`; a ViewModel-owned collaborator uses `viewModelScope` passed in from the owner instead.
 - [`umbra-signer`](../umbra-signer/SKILL.md) — `InteractionActionsCoordinator`'s actual sign/publish contract, the most-reused collaborator in the codebase.
-- [`kotlin-flow-state-event-modeling`](../kotlin-flow-state-event-modeling/SKILL.md) — the `StateFlow`/`SharedFlow` contract-preservation concern this skill's step 2 depends on.
+- [`umbra-kotlin-patterns`](../umbra-kotlin-patterns/SKILL.md) — the `StateFlow`/`SharedFlow` contract-preservation concern this skill's step 2 depends on.

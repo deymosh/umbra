@@ -1,20 +1,26 @@
 package com.umbra.app.ui.auth
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.umbra.app.ui.components.EclipseMark
+import com.umbra.app.ui.components.UmbraIcons
+import com.umbra.app.ui.theme.UmbraTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.umbra.app.R
 import com.umbra.app.ui.Screen
@@ -35,7 +41,7 @@ fun LoginScreen(
     viewModel: LoginViewModel
 ) {
     val context = LocalContext.current
-    val authState by viewModel.authState.collectAsState()
+    val authState by viewModel.authState.collectAsStateWithLifecycle()
     val amberInstalled = viewModel.isAmberInstalled()
     var pendingExternalUrl by remember { mutableStateOf<String?>(null) }
 
@@ -62,135 +68,146 @@ fun LoginScreen(
         }
     }
 
+    LoginContent(
+        authState = authState,
+        amberInstalled = amberInstalled,
+        onAmberLogin = viewModel::requestAmberLogin,
+        onInstallAmber = { pendingExternalUrl = AMBER_PLAY_STORE_URL },
+        onAnonymous = viewModel::loginAnonymously
+    )
+}
+
+@Composable
+fun LoginContent(
+    authState: AuthState,
+    amberInstalled: Boolean,
+    onAmberLogin: () -> Unit,
+    onInstallAmber: () -> Unit,
+    onAnonymous: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 24.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(22.dp, Alignment.CenterVertically)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 28.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Header
-        Image(
-            painter = painterResource(R.drawable.ic_umbra_foreground_totality),
-            contentDescription = stringResource(R.string.app_name),
-            modifier = Modifier.size(148.dp)
-        )
-
+        Spacer(Modifier.weight(1f))
+        EclipseMark(size = 150.dp)
         Text(
-            text = stringResource(R.string.app_name),
-            style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.primary
+            text = stringResource(R.string.app_name).lowercase(),
+            style = MaterialTheme.typography.displayLarge,
+            color = MaterialTheme.colorScheme.onBackground
         )
-
+        Spacer(Modifier.height(8.dp))
         Text(
             text = stringResource(R.string.nostr_powered_tor),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(max = 300.dp)
         )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Login options
+        Spacer(Modifier.height(36.dp))
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.96f),
-                    shape = RoundedCornerShape(28.dp)
-                )
-                .padding(horizontal = 18.dp, vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            if (amberInstalled) {
-                Button(
-                    onClick = {
-                        viewModel.requestAmberLogin()
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !authState.isLoading
-                ) {
-                    if (authState.isLoading) {
-                        LoadingSpinner(
-                            modifier = Modifier.size(20.dp),
-                            size = 20.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    Text(stringResource(R.string.login_with_amber), style = MaterialTheme.typography.titleMedium)
-                }
-            } else {
-                OutlinedButton(
-                    onClick = { pendingExternalUrl = AMBER_PLAY_STORE_URL },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Text(stringResource(R.string.install_amber_signer))
-                }
-
-                Text(
-                    text = stringResource(R.string.amber_recommended),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-            // Continue anonymously option
-            OutlinedButton(
-                onClick = { viewModel.loginAnonymously() },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !authState.isLoading,
-                shape = RoundedCornerShape(18.dp)
-            ) {
-                Text(stringResource(R.string.continue_anonymously), style = MaterialTheme.typography.titleMedium)
-            }
-
-            Text(
-                text = stringResource(R.string.anonymous_limited_features),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
+            LoginPromise(UmbraIcons.Onion, stringResource(R.string.login_promise_tor))
+            LoginPromise(Icons.Outlined.Key, stringResource(R.string.login_promise_amber))
+            LoginPromise(Icons.Outlined.Tune, stringResource(R.string.login_promise_moderation))
         }
+        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(32.dp))
 
-        // Error display
-        if (authState.errorMessage != null) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(8.dp)),
-                color = MaterialTheme.colorScheme.errorContainer
-            ) {
-                val errorText = when (val message = authState.errorMessage) {
+        Column(
+            modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            authState.errorMessage?.let { message ->
+                val errorText = when (message) {
                     is UiMessage.Res -> context.getString(message.id, *message.args.toTypedArray())
                     is UiMessage.ResWithArgs -> context.getString(message.id, *message.args)
                     is UiMessage.Literal -> message.text
-                    null -> stringResource(R.string.unknown_error)
                 }
                 Text(
                     text = errorText,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.padding(12.dp),
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f), MaterialTheme.shapes.medium)
+                        .padding(12.dp)
                 )
             }
+            Button(
+                onClick = if (amberInstalled) onAmberLogin else onInstallAmber,
+                enabled = !authState.isLoading,
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = UmbraTheme.colors.corona)
+            ) {
+                if (authState.isLoading) {
+                    LoadingSpinner(
+                        modifier = Modifier.size(20.dp),
+                        size = 20.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                }
+                Text(
+                    text = stringResource(if (amberInstalled) R.string.login_with_amber else R.string.install_amber_signer),
+                    style = MaterialTheme.typography.titleSmall
+                )
+            }
+            Text(
+                text = stringResource(R.string.amber_recommended),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(6.dp))
+            TextButton(
+                onClick = onAnonymous,
+                enabled = !authState.isLoading,
+                modifier = Modifier.fillMaxWidth().height(48.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.continue_anonymously),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Text(
+                text = stringResource(R.string.anonymous_limited_features),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
         }
+    }
+}
 
-        // Info text
-        Text(
-            text = stringResource(R.string.privacy_info),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.72f),
-            textAlign = TextAlign.Center
-        )
+@Composable
+private fun LoginPromise(icon: ImageVector, text: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+        }
+        Text(text = text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 

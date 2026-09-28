@@ -1,6 +1,6 @@
 package com.umbra.app.ui.settings
 
-import androidx.compose.foundation.BorderStroke
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,15 +16,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.height
+import com.umbra.app.ui.components.EclipseMark
+import com.umbra.app.ui.theme.UmbraTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,7 +44,7 @@ fun AppearanceScreen(
     onNavigateBack: () -> Unit,
     viewModel: AppearanceViewModel
 ) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -87,54 +88,66 @@ fun AppearanceScreen(
 }
 
 @Composable
-private fun AppearanceOptionRow(
+internal fun AppearanceOptionRow(
     option: AppearanceOptionItem,
     onClick: () -> Unit
 ) {
-    val colorScheme = option.theme.toColorScheme()
-    Card(
+    val scheme = option.theme.toColorScheme()
+    val shape = MaterialTheme.shapes.large
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)
-        ),
-        shape = RoundedCornerShape(20.dp),
-        border = if (option.selected) {
-            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-        } else {
-            null
-        }
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .border(
+                width = if (option.selected) 2.dp else 1.dp,
+                color = if (option.selected) UmbraTheme.colors.corona else MaterialTheme.colorScheme.outlineVariant,
+                shape = shape
+            )
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                ThemeSwatch(colorScheme.primary)
-                ThemeSwatch(colorScheme.secondary)
-                ThemeSwatch(colorScheme.tertiary)
-                Text(
-                    text = stringResource(option.nameRes),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(start = 4.dp)
-                )
-            }
-            if (option.selected) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = stringResource(R.string.appearance_selected_cd),
-                    tint = MaterialTheme.colorScheme.primary
-                )
+        PalettePreview(scheme)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = stringResource(option.nameRes),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                ThemeSwatch(scheme.primary)
+                ThemeSwatch(scheme.secondary)
+                ThemeSwatch(scheme.tertiary)
             }
         }
+        if (option.selected) {
+            Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = stringResource(R.string.appearance_selected_cd),
+                tint = UmbraTheme.colors.corona
+            )
+        }
+    }
+}
+
+/** A tiny phone screen painted in [scheme]: its void, an eclipse in its corona, a skeleton note. */
+@Composable
+private fun PalettePreview(scheme: androidx.compose.material3.ColorScheme) {
+    Column(
+        modifier = Modifier
+            .size(width = 76.dp, height = 96.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .background(scheme.background)
+            .border(1.dp, scheme.outlineVariant, MaterialTheme.shapes.medium)
+            .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        EclipseMark(size = 26.dp, corona = scheme.primary)
+        Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(scheme.onSurface.copy(alpha = 0.8f)))
+        Box(Modifier.fillMaxWidth(0.7f).height(6.dp).clip(CircleShape).background(scheme.onSurfaceVariant.copy(alpha = 0.6f)))
+        Box(Modifier.fillMaxWidth().height(18.dp).clip(RoundedCornerShape(5.dp)).background(scheme.surfaceContainerHigh))
     }
 }
 
@@ -142,7 +155,7 @@ private fun AppearanceOptionRow(
 private fun ThemeSwatch(color: Color) {
     Box(
         modifier = Modifier
-            .size(24.dp)
+            .size(16.dp)
             .clip(CircleShape)
             .background(color)
     )

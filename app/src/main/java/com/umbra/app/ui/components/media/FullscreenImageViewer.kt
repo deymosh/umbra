@@ -1,5 +1,6 @@
 package com.umbra.app.ui.components.media
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.ClipData
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -22,6 +23,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import com.umbra.app.ui.theme.MonoStyle
+import androidx.compose.material3.Text
+import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FileDownload
@@ -33,7 +37,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -159,6 +162,19 @@ fun FullscreenImageDialog(
                 )
             }
 
+            // Always-visible way out: back works too, but a fullscreen surface with no visible
+            // exit reads as a trap.
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .systemBarsPadding()
+                    .padding(12.dp)
+                    .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+            ) {
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.search_close), tint = Color.White)
+            }
+
             if (imageUrls.size > 1) {
                 Row(
                     modifier = Modifier
@@ -166,22 +182,30 @@ fun FullscreenImageDialog(
                         .systemBarsPadding()
                         .padding(bottom = 20.dp)
                         .background(
-                            color = Color.Black.copy(alpha = 0.35f),
+                            color = Color.Black.copy(alpha = 0.45f),
                             shape = RoundedCornerShape(50)
                         )
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    repeat(imageUrls.size) { index ->
-                        val isCurrent = index == pagerState.currentPage
-                        Box(
-                            modifier = Modifier
-                                .size(if (isCurrent) 8.dp else 6.dp)
-                                .background(
-                                    color = if (isCurrent) Color.White else Color.White.copy(alpha = 0.4f),
-                                    shape = CircleShape
-                                )
+                    if (imageUrls.size <= 6) {
+                        repeat(imageUrls.size) { index ->
+                            val isCurrent = index == pagerState.currentPage
+                            Box(
+                                modifier = Modifier
+                                    .size(if (isCurrent) 8.dp else 6.dp)
+                                    .background(
+                                        color = if (isCurrent) Color.White else Color.White.copy(alpha = 0.4f),
+                                        shape = CircleShape
+                                    )
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "${pagerState.currentPage + 1} / ${imageUrls.size}",
+                            style = MonoStyle,
+                            color = Color.White
                         )
                     }
                 }
@@ -222,7 +246,7 @@ fun FullscreenImageDialog(
                     ),
                     FullscreenMediaAction(
                         icon = Icons.Default.Link,
-                        contentDescription = "Copy image URL",
+                        contentDescription = stringResource(R.string.image_copy_url_action),
                         onClick = {
                             scope.launch {
                                 clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(null, currentImageUrl)))
@@ -316,7 +340,7 @@ private fun ZoomableFullscreenImagePage(
         userRepository = null
     )
     val painter = gatedState.painter
-    val painterState by painter.state.collectAsState()
+    val painterState by painter.state.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier

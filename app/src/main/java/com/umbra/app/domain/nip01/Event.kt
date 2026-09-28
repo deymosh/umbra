@@ -202,6 +202,17 @@ data class Event(
     /**
      * Get parent event ID (last "e" tag)
      */
+    /**
+     * The thread root this event belongs to: the uppercase `E` scope for a NIP-22 comment, the
+     * NIP-10 root otherwise.
+     */
+    fun threadRootId(): String? =
+        if (kind == KIND_COMMENT) {
+            tags.firstOrNull { it.getOrNull(0) == "E" }?.getOrNull(1)?.takeIf { it.isNotBlank() }
+        } else {
+            getRootEventId()
+        }
+
     fun getParentEventId(): String? {
         val eTags = tags.filter { it.isNotEmpty() && it[0] == "e" }
         val explicitReply = eTags.lastOrNull { resolveETagMarker(it) == "reply" }?.getOrNull(1)
