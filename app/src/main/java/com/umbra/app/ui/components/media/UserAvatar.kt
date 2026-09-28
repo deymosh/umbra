@@ -20,13 +20,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -41,6 +39,9 @@ import com.umbra.app.R
 import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.ui.components.LocalImageLoadGate
+import com.umbra.app.ui.components.PubkeyEclipseAvatar
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 
@@ -85,6 +86,7 @@ fun UserAvatar(
         ) {
             if (isAnimatedAvatarUrl(pictureUrl)) {
                 AnimatedUserAvatar(
+                    pubkey = pubkey,
                     context = context,
                     pictureUrl = pictureUrl,
                     avatarPx = avatarPx,
@@ -111,7 +113,7 @@ fun UserAvatar(
                 val painter = gatedState.painter
                 val painterState by painter.state.collectAsState()
                 if (gatedState.isPending || painterState !is AsyncImagePainter.State.Success) {
-                    AvatarDefaultPlaceholder(size = size, shape = shape)
+                    AvatarDefaultPlaceholder(pubkey = pubkey, size = size, shape = shape)
                 }
                 Image(
                     painter = painter,
@@ -123,6 +125,7 @@ fun UserAvatar(
         }
     } else {
         AvatarDefaultPlaceholder(
+            pubkey = pubkey,
             size = size,
             shape = shape,
             modifier = modifier
@@ -158,6 +161,7 @@ internal fun buildAvatarImageRequest(
 
 @Composable
 private fun AnimatedUserAvatar(
+    pubkey: String,
     context: android.content.Context,
     pictureUrl: String,
     avatarPx: Int,
@@ -218,7 +222,7 @@ private fun AnimatedUserAvatar(
             // same elapsed-delay threshold as the Loading branch below so a queue that clears
             // quickly doesn't flash the heavier default placeholder.
             if (showLoadingPlaceholder) {
-                AvatarDefaultPlaceholder(size = size, shape = shape)
+                AvatarDefaultPlaceholder(pubkey = pubkey, size = size, shape = shape)
             } else {
                 AvatarPlaceholderBackground(size = size, shape = shape)
             }
@@ -234,7 +238,7 @@ private fun AnimatedUserAvatar(
                 SubcomposeAsyncImageContent()
             }
             is AsyncImagePainter.State.Error -> {
-                AvatarDefaultPlaceholder(size = size, shape = shape)
+                AvatarDefaultPlaceholder(pubkey = pubkey, size = size, shape = shape)
                 // Same escalating-retry schedule as the static (non-GIF) avatar path above —
                 // SubcomposeAsyncImage's content lambda has no direct access to that shared
                 // helper (it needs painter.state from inside this scope), so the retry loop is
@@ -247,7 +251,7 @@ private fun AnimatedUserAvatar(
             }
             is AsyncImagePainter.State.Loading -> {
                 if (showLoadingPlaceholder) {
-                    AvatarDefaultPlaceholder(size = size, shape = shape)
+                    AvatarDefaultPlaceholder(pubkey = pubkey, size = size, shape = shape)
                 } else {
                     AvatarPlaceholderBackground(size = size, shape = shape)
                 }
@@ -262,35 +266,23 @@ private fun AvatarPlaceholderBackground(size: Dp, shape: Shape) {
     Surface(
         modifier = Modifier.size(size),
         shape = shape,
-        color = MaterialTheme.colorScheme.secondaryContainer
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {}
 }
 
 @Composable
 private fun AvatarDefaultPlaceholder(
+    pubkey: String,
     size: Dp,
     shape: Shape,
     modifier: Modifier = Modifier
 ) {
-    Surface(
-        modifier = modifier.size(size),
-        shape = shape,
-        color = MaterialTheme.colorScheme.secondaryContainer
-    ) {
-        Image(
-            painter = painterResource(R.drawable.ic_umbra_foreground_totality),
-            contentDescription = stringResource(R.string.profile_image_cd),
-            // ic_umbra_foreground_totality.xml's shadow disc is a radius-36 circle centered in
-            // its 108dp viewport (half-width 54), itself wrapped in a group scaled to 0.82 (the
-            // adaptive-icon launcher safe zone) — so the disc's effective on-canvas radius is only
-            // 36*0.82=29.52, i.e. ~55% of the way to the edge. Reaching the edge exactly needs
-            // 54/29.52≈1.83, but that leaves the disc's rim tangent to the circle clip with zero
-            // margin — reads as slightly oversized/cramped. ~1.7 leaves a hair of breathing room
-            // while still covering the Surface's background color completely.
-            modifier = Modifier
-                .fillMaxSize()
-                .scale(1.7f),
-            contentScale = ContentScale.Crop
-        )
-    }
+    val description = stringResource(R.string.profile_image_cd)
+    PubkeyEclipseAvatar(
+        pubkey = pubkey,
+        modifier = modifier
+            .size(size)
+            .clip(shape)
+            .semantics { contentDescription = description }
+    )
 }

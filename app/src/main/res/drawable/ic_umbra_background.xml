@@ -1,4 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="#0D0B1A" />
-</shape>
+<!-- Deep-space backdrop: a faint violet lift at the center falling off to void black, so the
+     eclipse sits in light rather than on a flat swatch. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="54"
+                android:centerY="50"
+                android:gradientRadius="76">
+                <item android:offset="0" android:color="#FF1A1532" />
+                <item android:offset="0.55" android:color="#FF0C0A18" />
+                <item android:offset="1" android:color="#FF06060A" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>
