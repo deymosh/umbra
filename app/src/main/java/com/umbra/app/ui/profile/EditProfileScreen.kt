@@ -1,5 +1,6 @@
 package com.umbra.app.ui.profile
 
+import com.umbra.app.ui.components.TopBarPrimaryAction
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -160,19 +161,11 @@ fun EditProfileScreen(
                     UmbraTopAppBarDefaults.BackNavigationIcon(onClick = onNavigateBack)
                 },
                 actions = {
-                    TextButton(
+                    TopBarPrimaryAction(
+                        label = stringResource(R.string.save),
                         onClick = viewModel::saveProfile,
-                        enabled = !state.isSaving
-                    ) {
-                        if (state.isSaving) {
-                            LoadingSpinner(size = 18.dp, strokeWidth = 2.dp)
-                        } else {
-                            Icon(
-                                imageVector = Icons.Filled.Check,
-                                contentDescription = stringResource(R.string.edit_profile_save)
-                            )
-                        }
-                    }
+                        loading = state.isSaving
+                    )
                 }
             )
         },
@@ -213,7 +206,7 @@ fun EditProfileScreen(
                     } else {
                         Surface(
                             modifier = Modifier.fillMaxSize(),
-                            color = MaterialTheme.colorScheme.surfaceVariant
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh
                         ) {}
                     }
                     EditIconOverlay(
@@ -253,7 +246,7 @@ fun EditProfileScreen(
                             Surface(
                                 modifier = Modifier.fillMaxSize(),
                                 shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceVariant
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh
                             ) {}
                         }
                         EditIconOverlay(
@@ -437,17 +430,17 @@ private fun EditIconOverlay(
         onClick = onClick,
         enabled = enabled,
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
-        shadowElevation = 3.dp,
-        modifier = modifier.size(28.dp)
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.background),
+        modifier = modifier.size(32.dp)
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (isUploading) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(14.dp),
                     strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             } else {
                 Icon(

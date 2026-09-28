@@ -1,5 +1,8 @@
 package com.umbra.app.ui.devoptions
 
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -75,14 +78,14 @@ private fun DeveloperToggleRow(
     toggle: DeveloperToggleItem,
     onToggle: (Boolean) -> Unit
 ) {
-    Column {
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    MaterialTheme.colorScheme.surfaceContainer,
-                    RoundedCornerShape(20.dp)
-                )
+                .clip(MaterialTheme.shapes.large)
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                // The whole row flips the switch — a bigger target than the switch alone.
+                .toggleable(value = toggle.enabled, onValueChange = onToggle, role = Role.Switch)
                 .padding(horizontal = 18.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -90,7 +93,7 @@ private fun DeveloperToggleRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(toggle.titleRes),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
@@ -99,11 +102,7 @@ private fun DeveloperToggleRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Switch(checked = toggle.enabled, onCheckedChange = onToggle)
+            Switch(checked = toggle.enabled, onCheckedChange = null)
         }
-        HorizontalDivider(
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-            modifier = Modifier.padding(vertical = 8.dp)
-        )
     }
 }

@@ -1,5 +1,6 @@
 package com.umbra.app.ui.composer
 
+import com.umbra.app.ui.components.TopBarPrimaryAction
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -227,19 +228,12 @@ fun ComposerScreen(
                     )
                 },
                 actions = {
-                    Button(
+                    TopBarPrimaryAction(
+                        label = stringResource(R.string.publish),
                         onClick = viewModel::publish,
-                        enabled = viewModel.textState.text.isNotBlank() && state.canSign && !state.isPublishing,
-                        colors = ButtonDefaults.buttonColors(containerColor = UmbraTheme.colors.corona),
-                        contentPadding = PaddingValues(horizontal = 20.dp),
-                        modifier = Modifier.padding(end = 8.dp).height(38.dp)
-                    ) {
-                        if (state.isPublishing) {
-                            LoadingSpinner(size = 18.dp, strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                        } else {
-                            Text(stringResource(R.string.publish), style = MaterialTheme.typography.titleSmall)
-                        }
-                    }
+                        enabled = viewModel.textState.text.isNotBlank() && state.canSign,
+                        loading = state.isPublishing
+                    )
                 }
             )
         },

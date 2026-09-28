@@ -515,7 +515,6 @@
     <string name="edit_profile_picture_upload_cd">Change profile picture</string>
     <string name="edit_profile_lud06">Lightning Address (LNURL)</string>
     <string name="edit_profile_other_fields">Other fields</string>
-    <string name="edit_profile_save">Save Profile</string>
     <string name="edit_profile_saved">Profile saved successfully</string>
     <string name="edit_profile_button">Edit Profile</string>
     <string name="error_amber_sign_cancelled">AMBER signing cancelled</string>

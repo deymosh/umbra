@@ -1,5 +1,6 @@
 package com.umbra.app.ui.feedconfig
 
+import com.umbra.app.ui.components.TopBarPrimaryAction
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -145,9 +146,11 @@ fun FeedFilterEditScreen(
                     )
                 },
                 actions = {
-                    TextButton(onClick = ::save, enabled = name.isNotBlank()) {
-                        Text(stringResource(R.string.save))
-                    }
+                    TopBarPrimaryAction(
+                        label = stringResource(R.string.save),
+                        onClick = ::save,
+                        enabled = name.isNotBlank()
+                    )
                 }
             )
         }

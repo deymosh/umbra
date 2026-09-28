@@ -1,5 +1,12 @@
 package com.umbra.app.ui.components
 
+import com.umbra.app.ui.theme.UmbraTheme
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material3.Text
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Button
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -65,6 +72,34 @@ object UmbraTopAppBarDefaults {
     ) {
         IconButton(onClick = onClick) {
             Icon(imageVector = icon, contentDescription = contentDescription)
+        }
+    }
+}
+
+/**
+ * A screen's single primary action in the top bar (Post, Save): a filled corona pill with a
+ * loading state, so the one thing the screen exists to do is never a faint text button.
+ */
+@Composable
+fun TopBarPrimaryAction(
+    label: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    loading: Boolean = false
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled && !loading,
+        colors = ButtonDefaults.buttonColors(containerColor = UmbraTheme.colors.corona),
+        contentPadding = PaddingValues(horizontal = 20.dp),
+        modifier = Modifier
+            .padding(end = 8.dp)
+            .height(38.dp)
+    ) {
+        if (loading) {
+            LoadingSpinner(size = 18.dp, strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+        } else {
+            Text(label, style = MaterialTheme.typography.titleSmall)
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.umbra.app.ui.blossom
 
+import com.umbra.app.ui.components.TopBarPrimaryAction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -74,13 +75,11 @@ fun BlossomServersScreen(
                     UmbraTopAppBarDefaults.BackNavigationIcon(onClick = onNavigateBack)
                 },
                 actions = {
-                    TextButton(onClick = viewModel::save, enabled = !state.isSaving) {
-                        if (state.isSaving) {
-                            LoadingSpinner(size = 18.dp, strokeWidth = 2.dp)
-                        } else {
-                            Icon(imageVector = Icons.Filled.Check, contentDescription = stringResource(R.string.save))
-                        }
-                    }
+                    TopBarPrimaryAction(
+                        label = stringResource(R.string.save),
+                        onClick = viewModel::save,
+                        loading = state.isSaving
+                    )
                 }
             )
         },

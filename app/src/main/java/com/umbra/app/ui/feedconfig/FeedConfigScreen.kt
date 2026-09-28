@@ -339,14 +339,14 @@ private fun FilterSummaryChips(filter: FeedFilter) {
         if (filter.hideNsfw) {
             ChipBadge(
                 text = stringResource(R.string.hide_nsfw),
-                backgroundColor = MaterialTheme.colorScheme.error.copy(alpha = 0.18f),
+                backgroundColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                 textColor = MaterialTheme.colorScheme.onSurface
             )
         }
         if (filter.scopeToFollows) {
             ChipBadge(
                 text = stringResource(R.string.filter_follows_only_chip),
-                backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                backgroundColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                 textColor = MaterialTheme.colorScheme.onSurface
             )
         }
