@@ -82,7 +82,7 @@ CI (`.github/workflows/android-ci.yml`) runs `lintDebug`, `testDebugUnitTest`, a
 - **Branch + PR, not `master`.** Start from an up-to-date `master` on `claude/<short-kebab-slug>` (one branch per request, all its commits there), open a PR with a real summary once verification passes, and leave it for the user to merge unless they ask you to. Small doc/config housekeeping the user directs turn-by-turn may go to `master` if they say so.
 - **No literal `@word` in commit messages** — GitHub turns `@Composable`, `@Inject`, `@Named("tor")` into mentions exactly like a username. Drop the `@`, quote it, or spell it out; scan every drafted message for `@` before committing. If one ships on a solo, unmerged branch: tag a backup, `git reset --hard` to the last clean commit, `git cherry-pick <sha> --no-commit` + corrected commit for each (never `rebase -i`), check `git diff <backup> HEAD` is empty, `git push --force-with-lease`, delete the tag. Keep messages neutral and English.
 - **Attribution:** every commit ends with a `Co-Authored-By: <model name> <noreply@anthropic.com>` trailer naming the Claude model that did the work.
-- **Comments and commit bodies stand alone.** `.planning/` docs and git history can be deleted or rewritten, so never cite a GSD phase/plan/task id ("Plan 03-05 Task 2", "D-01") or a commit hash as the explanation — state the constraint or reason itself. A `{type}(phase-plan): ...` subject scope tag is fine.
+- **Comments and commit bodies stand alone.** Never explain code by citing a planning-doc id, ticket number or commit hash — state the constraint or reason itself, since those references go stale.
 
 ## UI and design
 
