@@ -1,5 +1,23 @@
 package com.umbra.app.ui.feed
 
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import com.umbra.app.ui.theme.UmbraTheme
+import com.umbra.app.ui.components.media.rememberRetryingAsyncImagePainter
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import com.umbra.app.ui.theme.MonoStyle
 import com.umbra.app.ui.components.truncatePublicKey
 import com.umbra.app.ui.components.EclipseMark
@@ -199,53 +217,26 @@ internal fun FeedDrawerContent(
 ) {
     ModalDrawerSheet(
         drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp)
+        drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
+        // The banner runs up under the status bar; everything else pads itself.
+        windowInsets = WindowInsets(0)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxHeight()
-                .padding(horizontal = 12.dp, vertical = 16.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp)
         ) {
             if (!currentPubkey.isNullOrBlank()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.large)
-                        .clickable(onClick = onProfile)
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    UserAvatar(
-                        userProfile = currentProfile,
-                        pubkey = currentPubkey,
-                        size = 56.dp,
-                        shape = CircleShape,
-                        authorPubkey = currentPubkey,
-                        userRepository = userRepository
-                    )
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            text = currentProfile?.getUserDisplayName() ?: currentPubkey.truncatePublicKey(8, 6),
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        val nip05 = currentProfile?.nip05?.takeIf {
-                            it.isNotBlank() && currentProfile.nip05VerificationState == Nip05VerificationState.Verified
-                        }
-                        Text(
-                            text = nip05?.removePrefix("_@") ?: Bech32Encoder.encodeNpub(currentPubkey).truncatePublicKey(10, 6),
-                            style = if (nip05 != null) MaterialTheme.typography.bodyMedium else MonoStyle,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
+                DrawerIdentityHeader(
+                    profile = currentProfile,
+                    pubkey = currentPubkey,
+                    onClick = onProfile,
+                    userRepository = userRepository
+                )
             } else {
                 Row(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.statusBarsPadding().padding(24.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -258,6 +249,7 @@ internal fun FeedDrawerContent(
                 }
             }
 
+            Column(modifier = Modifier.weight(1f).padding(horizontal = 12.dp)) {
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
                 color = MaterialTheme.colorScheme.outlineVariant
@@ -298,6 +290,110 @@ internal fun FeedDrawerContent(
                     )
                 }
             }
+            }
+        }
+    }
+}
+
+/**
+ * The drawer's header: your banner (or a soft corona glow when you haven't set one) fading into
+ * the sheet, your avatar overlapping it, then name and verified handle. Tapping opens your profile.
+ */
+@Composable
+private fun DrawerIdentityHeader(
+    profile: UserProfile?,
+    pubkey: String,
+    onClick: () -> Unit,
+    userRepository: UserRepository?
+) {
+    val sheet = MaterialTheme.colorScheme.surfaceContainerLow
+    val corona = UmbraTheme.colors.corona
+    val bannerHeight = 120.dp
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Box(modifier = Modifier.fillMaxWidth().height(statusBarTop + bannerHeight + 30.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(statusBarTop + bannerHeight)
+                    .clip(RoundedCornerShape(topEnd = 28.dp, bottomEnd = 22.dp, bottomStart = 22.dp))
+            ) {
+                val bannerUrl = profile?.banner?.takeIf { it.isNotBlank() }
+                if (bannerUrl != null) {
+                    val density = LocalDensity.current
+                    val gated = rememberRetryingAsyncImagePainter(
+                        url = bannerUrl,
+                        targetWidthPx = with(density) { 320.dp.roundToPx() },
+                        targetHeightPx = with(density) { bannerHeight.roundToPx() },
+                        authorPubkey = pubkey,
+                        userRepository = userRepository
+                    )
+                    Image(
+                        painter = gated.painter,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .drawBehind {
+                                drawRect(
+                                    Brush.radialGradient(
+                                        0f to corona.copy(alpha = 0.28f),
+                                        1f to Color.Transparent,
+                                        center = Offset(size.width * 0.85f, 0f),
+                                        radius = size.width * 0.9f
+                                    )
+                                )
+                            }
+                    )
+                }
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Brush.verticalGradient(0.4f to Color.Transparent, 1f to sheet.copy(alpha = 0.85f)))
+                )
+            }
+            UserAvatar(
+                userProfile = profile,
+                pubkey = pubkey,
+                size = 60.dp,
+                shape = CircleShape,
+                authorPubkey = pubkey,
+                userRepository = userRepository,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 24.dp)
+                    .border(3.dp, sheet, CircleShape)
+            )
+        }
+        Column(
+            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 10.dp, bottom = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = profile?.getUserDisplayName() ?: pubkey.truncatePublicKey(8, 6),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            val nip05 = profile?.nip05?.takeIf {
+                it.isNotBlank() && profile.nip05VerificationState == Nip05VerificationState.Verified
+            }
+            Text(
+                text = nip05?.removePrefix("_@") ?: Bech32Encoder.encodeNpub(pubkey).truncatePublicKey(10, 6),
+                style = if (nip05 != null) MaterialTheme.typography.bodyMedium else MonoStyle,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
