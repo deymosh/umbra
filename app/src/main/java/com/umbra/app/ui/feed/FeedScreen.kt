@@ -283,6 +283,12 @@ fun FeedScreen(
                     navController.navigate(Screen.RelayConfig.route)
                     scope.launch { drawerState.close() }
                 },
+                onBookmarks = if (currentPubkey.isNullOrBlank() || !viewModel.canSignEvents()) null else {
+                    {
+                        navController.navigate(Screen.Bookmarks.route)
+                        scope.launch { drawerState.close() }
+                    }
+                },
                 onReadLater = {
                     navController.navigate(Screen.ReadLater.route)
                     scope.launch { drawerState.close() }

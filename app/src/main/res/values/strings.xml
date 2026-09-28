@@ -661,7 +661,7 @@
     <string name="settings_panic_wipe_title">Panic wipe</string>
     <string name="settings_panic_wipe_subtitle">Long-press the umbra wordmark to wipe everything instantly, no confirmation</string>
     <string name="read_later_title">Read later</string>
-    <string name="read_later_add">Read later</string>
+    <string name="read_later_add">Read later (this device only)</string>
     <string name="read_later_remove">Remove from read later</string>
     <string name="read_later_empty">Nothing saved</string>
     <string name="read_later_empty_message">Save notes from their ⋯ menu. They stay on this device only, encrypted and readable offline — nothing is published.</string>
@@ -669,4 +669,9 @@
     <string name="network_usage_activity_notes">Notes</string>
     <string name="network_usage_activity_reactions">Reactions</string>
     <string name="network_usage_activity_reposts">Reposts</string>
+    <string name="bookmarks_title">Bookmarks</string>
+    <string name="bookmark_add">Bookmark (public, synced)</string>
+    <string name="bookmark_remove">Remove bookmark</string>
+    <string name="bookmarks_empty">No bookmarks</string>
+    <string name="bookmarks_empty_message">Bookmarks are your public NIP-51 list: signed with Amber, stored on your relays and shared with your other Nostr apps. For something only this device keeps, use Read later.</string>
 </resources>

@@ -1,4 +1,4 @@
-package com.umbra.app.ui.readlater
+package com.umbra.app.ui.bookmarks
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -9,25 +9,25 @@ import com.umbra.app.R
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.ui.saved.SavedNotesScreen
 
-/** Save/unsave from any note's menu; null outside the navigation root. */
-class ReadLaterActions(val isSaved: (String) -> Boolean, val toggle: (Event) -> Unit)
+/** Bookmark/unbookmark from any note's menu; null when signed out or outside the root. */
+class BookmarkActions(val isBookmarked: (String) -> Boolean, val toggle: (Event) -> Unit)
 
-val LocalReadLater = staticCompositionLocalOf<ReadLaterActions?> { null }
+val LocalBookmarks = staticCompositionLocalOf<BookmarkActions?> { null }
 
 @Composable
-fun ReadLaterScreen(
-    viewModel: ReadLaterViewModel,
+fun BookmarksScreen(
+    viewModel: BookmarksViewModel,
     onNavigateBack: () -> Unit,
     onOpenThread: (String) -> Unit,
     onOpenProfile: (String) -> Unit
 ) {
-    val items by viewModel.items.collectAsState()
+    val notes by viewModel.notes.collectAsState()
     val profiles by viewModel.profiles.collectAsState()
     SavedNotesScreen(
-        title = stringResource(R.string.read_later_title),
-        emptyTitle = stringResource(R.string.read_later_empty),
-        emptyMessage = stringResource(R.string.read_later_empty_message),
-        notes = items,
+        title = stringResource(R.string.bookmarks_title),
+        emptyTitle = stringResource(R.string.bookmarks_empty),
+        emptyMessage = stringResource(R.string.bookmarks_empty_message),
+        notes = notes,
         profiles = profiles,
         userRepository = viewModel.userRepositoryPublic,
         dataSourceFactory = viewModel.mediaDataSourceFactory,

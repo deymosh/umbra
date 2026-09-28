@@ -699,7 +699,9 @@ class EventRepositoryImpl @Inject constructor(
         val socialGraphKinds = setOf(
             Event.KIND_CONTACT_LIST,       // 3  — NIP-02 follows
             Event.KIND_MUTED_USERS,        // 10000 — NIP-51 mute list
+            Event.KIND_PINNED_EVENTS,      // 10001 — NIP-51 pin list
             Event.KIND_RELAY_LIST_METADATA, // 10002 — NIP-65 relay list
+            Event.KIND_BOOKMARK_LIST,      // 10003 — NIP-51 bookmarks
             Event.KIND_SEARCH_RELAYS,      // 10007 — NIP-51 search relay list
             Event.KIND_DM_RELAY_LIST,      // 10050 — NIP-17 DM relay list
             Event.KIND_INDEX_RELAYS,       // 10086 — index relay list

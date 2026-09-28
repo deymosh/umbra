@@ -67,6 +67,9 @@ import com.umbra.app.ui.components.launchExternalUrl
 import com.umbra.app.ui.components.launchLightningInvoice
 import com.umbra.app.ui.hashtag.LocalHashtagNavigator
 import com.umbra.app.ui.readlater.LocalReadLater
+import com.umbra.app.ui.bookmarks.LocalBookmarks
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.BookmarkRemove
 import com.umbra.app.ui.zap.LocalZapLauncher
@@ -109,7 +112,18 @@ private fun eventActionItems(
     val json = remember(target.id) { getEventJson() }
 
     val readLater = LocalReadLater.current
+    val bookmarks = LocalBookmarks.current
     return buildList {
+        if (bookmarks != null) {
+            val bookmarked = bookmarks.isBookmarked(target.id)
+            add(
+                ActionItem(
+                    icon = if (bookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                    label = stringResource(if (bookmarked) R.string.bookmark_remove else R.string.bookmark_add),
+                    onClick = { bookmarks.toggle(target) }
+                )
+            )
+        }
         if (readLater != null) {
             val saved = readLater.isSaved(target.id)
             add(

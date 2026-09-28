@@ -48,6 +48,10 @@ import com.umbra.app.ui.composer.ComposerScreen
 import com.umbra.app.ui.composer.ComposerViewModel
 import com.umbra.app.ui.zap.ZapHost
 import com.umbra.app.ui.readlater.LocalReadLater
+import com.umbra.app.ui.bookmarks.BookmarkActions
+import com.umbra.app.ui.bookmarks.BookmarksScreen
+import com.umbra.app.ui.bookmarks.BookmarksViewModel
+import com.umbra.app.ui.bookmarks.LocalBookmarks
 import com.umbra.app.ui.readlater.ReadLaterActions
 import com.umbra.app.ui.readlater.ReadLaterScreen
 import com.umbra.app.ui.readlater.ReadLaterViewModel
@@ -104,6 +108,7 @@ sealed class Screen(val route: String) {
     object Notifications : Screen("notifications")
     object NetworkUsage  : Screen("network_usage")
     object ReadLater     : Screen("read_later")
+    object Bookmarks     : Screen("bookmarks")
     object Hashtag       : Screen("tag/{tag}") {
         fun forTag(tag: String) = "tag/${Uri.encode(tag.removePrefix("#").lowercase())}"
     }
@@ -346,8 +351,18 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
     val readLaterActions = remember(savedReadLaterIds) {
         ReadLaterActions(isSaved = { it in savedReadLaterIds }, toggle = readLaterViewModel::toggle)
     }
+    val bookmarksViewModel: BookmarksViewModel = hiltViewModel()
+    val bookmarkedIds by bookmarksViewModel.bookmarkedIds.collectAsState()
+    val bookmarkActions = remember(bookmarkedIds) {
+        if (bookmarksViewModel.canBookmark) {
+            BookmarkActions(isBookmarked = { it in bookmarkedIds }, toggle = bookmarksViewModel::toggle)
+        } else {
+            null
+        }
+    }
     ZapHost {
     CompositionLocalProvider(
+        LocalBookmarks provides bookmarkActions,
         LocalHashtagNavigator provides { tag -> navController.navigate(Screen.Hashtag.forTag(tag)) },
         LocalReadLater provides readLaterActions
     ) {
@@ -403,6 +418,14 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
                 onOpenProfile = { navController.navigate(Screen.Profile.forPubkey(it)) },
                 onReply = { navController.navigate(Screen.Composer.reply(it.id)) },
                 onQuote = { navController.navigate(Screen.Composer.quote(it.id)) }
+            )
+        }
+        composable(Screen.Bookmarks.route) {
+            BookmarksScreen(
+                viewModel = bookmarksViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onOpenThread = { navController.navigate(Screen.Thread.forEvent(it)) },
+                onOpenProfile = { navController.navigate(Screen.Profile.forPubkey(it)) }
             )
         }
         composable(Screen.ReadLater.route) {
