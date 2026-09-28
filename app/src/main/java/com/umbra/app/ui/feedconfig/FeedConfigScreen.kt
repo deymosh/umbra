@@ -1,5 +1,9 @@
 package com.umbra.app.ui.feedconfig
 
+import com.umbra.app.ui.components.ConfirmDialog
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import com.umbra.app.ui.theme.UmbraTheme
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.AnimatedVisibility
@@ -181,7 +185,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.stickySectionHeader(t
 }
 
 @Composable
-private fun ActiveFilterCard(
+internal fun ActiveFilterCard(
     filter: FeedFilter,
     onEdit: () -> Unit,
     onDeactivate: () -> Unit
@@ -207,10 +211,10 @@ private fun ActiveFilterCard(
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
                 )
-                Text(
+                ChipBadge(
                     text = stringResource(R.string.active_feed),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    backgroundColor = UmbraTheme.colors.corona.copy(alpha = 0.16f),
+                    textColor = UmbraTheme.colors.corona
                 )
             }
 
@@ -243,7 +247,7 @@ private fun ActiveFilterCard(
 }
 
 @Composable
-private fun FeedFilterCard(
+internal fun FeedFilterCard(
     filter: FeedFilter,
     isSelected: Boolean,
     onSelect: () -> Unit,
@@ -252,6 +256,20 @@ private fun FeedFilterCard(
     onDelete: () -> Unit
 ) {
     var expanded by remember(filter.id, isSelected) { mutableStateOf(isSelected) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    if (confirmDelete) {
+        ConfirmDialog(
+            title = stringResource(R.string.feed_filter_delete_confirm_title),
+            message = stringResource(R.string.feed_filter_delete_confirm_message),
+            confirmLabel = stringResource(R.string.delete),
+            isDestructive = true,
+            onConfirm = {
+                confirmDelete = false
+                onDelete()
+            },
+            onDismiss = { confirmDelete = false }
+        )
+    }
 
     Surface(
         shape = MaterialTheme.shapes.large,
@@ -287,11 +305,10 @@ private fun FeedFilterCard(
 
             AnimatedVisibility(visible = expanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    HorizontalDivider()
-
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Button(
                             onClick = onActivate,
@@ -304,24 +321,19 @@ private fun FeedFilterCard(
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = stringResource(R.string.edit),
-                                modifier = Modifier.padding(end = 6.dp)
+                                imageVector = Icons.Outlined.Edit,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 6.dp).size(18.dp)
                             )
                             Text(stringResource(R.string.edit))
                         }
-                    }
-
-                    TextButton(
-                        onClick = onDelete,
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = stringResource(R.string.delete),
-                            modifier = Modifier.padding(end = 6.dp)
-                        )
-                        Text(stringResource(R.string.delete))
+                        IconButton(onClick = { confirmDelete = true }) {
+                            Icon(
+                                imageVector = Icons.Outlined.Delete,
+                                contentDescription = stringResource(R.string.delete),
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
                 }
             }

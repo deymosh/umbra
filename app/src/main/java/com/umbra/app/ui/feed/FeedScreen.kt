@@ -11,14 +11,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Hub
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -53,19 +48,14 @@ import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.ui.Screen
 import com.umbra.app.ui.common.resolve
 import com.umbra.app.ui.components.EmptyState
-import com.umbra.app.ui.components.EclipseMark
 import androidx.compose.foundation.border
-import androidx.compose.ui.unit.sp
 import com.umbra.app.ui.components.ErrorBanner
-import com.umbra.app.ui.components.MenuItemRow
 import com.umbra.app.ui.components.NotesTimelineContainer
 import com.umbra.app.ui.components.PrivacyLogoutProgressDialog
 import com.umbra.app.ui.components.buildThreadDepthByEventId
 import com.umbra.app.ui.components.notesFeedSection
 import com.umbra.app.ui.components.QuickActionBottomBar
 import com.umbra.app.ui.components.shareEventUrl
-import com.umbra.app.ui.components.media.UserAvatar
-import com.umbra.app.ui.components.UserIdentityBadge
 import com.umbra.app.ui.common.ImmutableMapSnapshot
 import com.umbra.app.ui.common.awaitViewportPrefetchQuietWindow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -278,140 +268,55 @@ fun FeedScreen(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet(
-                drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    if (!currentPubkey.isNullOrBlank()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable {
-                                    navController.navigate(Screen.Profile.forPubkey(currentPubkey))
-                                    scope.launch { drawerState.close() }
-                                }
-                                .padding(vertical = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            UserAvatar(
-                                userProfile = currentProfile,
-                                pubkey = currentPubkey,
-                                size = 40.dp,
-                                shape = CircleShape,
-                                authorPubkey = currentPubkey,
-                                userRepository = viewModel.userRepositoryPublic
-                            )
-
-                            UserIdentityBadge(
-                                userProfile = currentProfile,
-                                pubkey = currentPubkey,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+            FeedDrawerContent(
+                currentProfile = currentProfile,
+                currentPubkey = currentPubkey,
+                userRepository = viewModel.userRepositoryPublic,
+                onProfile = {
+                    val pubkey = feedState.currentUserPubkey
+                    if (!pubkey.isNullOrBlank()) {
+                        navController.navigate(Screen.Profile.forPubkey(pubkey))
                     }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                    MenuItemRow(
-                        icon = Icons.Default.AccountCircle,
-                        title = stringResource(R.string.menu_profile),
-                        subtitle = stringResource(R.string.menu_profile_subtitle),
-                        onClick = {
-                            val pubkey = feedState.currentUserPubkey
-                            if (!pubkey.isNullOrBlank()) {
-                                navController.navigate(Screen.Profile.forPubkey(pubkey))
+                    scope.launch { drawerState.close() }
+                },
+                onRelays = {
+                    navController.navigate(Screen.RelayConfig.route)
+                    scope.launch { drawerState.close() }
+                },
+                onFilters = {
+                    navController.navigate(Screen.FeedConfig.route)
+                    scope.launch { drawerState.close() }
+                },
+                onSettings = {
+                    navController.navigate(Screen.Settings.route) {
+                        launchSingleTop = true
+                    }
+                    scope.launch { drawerState.close() }
+                },
+                onLogout = {
+                    if (!isLoggingOut) {
+                        scope.launch {
+                            try {
+                                isLoggingOut = true
+                                loginViewModel.logout()
+                            } catch (e: Exception) {
+                                // Logout failing (e.g. a database wipe leaving stale key
+                                // material behind) must not be silently indistinguishable
+                                // from success — still proceed to the login screen below
+                                // since there's no in-app state left to usefully retry from,
+                                // but at least record that it happened.
+                                feedScreenLogger.e(e) { "Logout failed" }
                             }
-                            scope.launch { drawerState.close() }
-                        }
-                    )
-                    MenuItemRow(
-                        icon = Icons.Default.Hub,
-                        title = stringResource(R.string.menu_relays),
-                        subtitle = stringResource(R.string.menu_relays_subtitle),
-                        onClick = {
-                            navController.navigate(Screen.RelayConfig.route)
-                            scope.launch { drawerState.close() }
-                        }
-                    )
-                    MenuItemRow(
-                        icon = Icons.Default.Tune,
-                        title = stringResource(R.string.menu_feed_filters),
-                        subtitle = stringResource(R.string.menu_feed_filters_subtitle),
-                        onClick = {
-                            navController.navigate(Screen.FeedConfig.route)
-                            scope.launch { drawerState.close() }
-                        }
-                    )
-                    MenuItemRow(
-                        icon = Icons.Default.Settings,
-                        title = stringResource(R.string.menu_settings),
-                        subtitle = stringResource(R.string.menu_settings_subtitle),
-                        onClick = {
-                            navController.navigate(Screen.Settings.route) {
+                            isLoggingOut = false
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(0) { inclusive = true }
                                 launchSingleTop = true
                             }
-                            scope.launch { drawerState.close() }
-                        }
-                    )
-                    MenuItemRow(
-                        icon = Icons.AutoMirrored.Filled.ExitToApp,
-                        title = stringResource(R.string.menu_logout),
-                        subtitle = stringResource(R.string.menu_logout_subtitle),
-                        danger = true,
-                        onClick = {
-                            if (isLoggingOut) return@MenuItemRow
-                            scope.launch {
-                                try {
-                                    isLoggingOut = true
-                                    loginViewModel.logout()
-                                } catch (e: Exception) {
-                                    // Logout failing (e.g. a database wipe leaving stale key
-                                    // material behind) must not be silently indistinguishable
-                                    // from success — still proceed to the login screen below
-                                    // since there's no in-app state left to usefully retry from,
-                                    // but at least record that it happened.
-                                    feedScreenLogger.e(e) { "Logout failed" }
-                                }
-                                isLoggingOut = false
-                                navController.navigate(Screen.Login.route) {
-                                    popUpTo(0) { inclusive = true }
-                                    launchSingleTop = true
-                                }
-                                drawerState.close()
-                            }
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.weight(1f))
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        EclipseMark(size = 36.dp)
-                        Column {
-                            Text(
-                                text = stringResource(R.string.app_name).lowercase(),
-                                style = MaterialTheme.typography.displaySmall.copy(fontSize = 24.sp, lineHeight = 26.sp),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = stringResource(R.string.drawer_title_orbot_powered),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            drawerState.close()
                         }
                     }
                 }
-            }
+            )
         }
     ) {
         Column(

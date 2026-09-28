@@ -86,4 +86,27 @@ class FeedChromeSnapshotTest {
             }
         }
     }
+
+    @Test
+    fun drawer() {
+        snapshot("FeedChrome_drawer") {
+            FeedDrawerContent(
+                currentProfile = SnapshotFixtures.alice,
+                currentPubkey = SnapshotFixtures.ALICE,
+                onProfile = {}, onRelays = {}, onFilters = {}, onSettings = {}, onLogout = {},
+                userRepository = SnapshotFixtures.userRepository
+            )
+        }
+    }
+
+    @Test
+    fun drawerAnonymous() {
+        snapshot("FeedChrome_drawerAnonymous") {
+            FeedDrawerContent(
+                currentProfile = null,
+                currentPubkey = null,
+                onProfile = {}, onRelays = {}, onFilters = {}, onSettings = {}, onLogout = {}
+            )
+        }
+    }
 }

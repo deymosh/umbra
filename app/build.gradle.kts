@@ -185,6 +185,11 @@ dependencies {
     testImplementation(libs.roborazzi.junit.rule)
     testImplementation(platform(libs.androidx.compose.bom))
     testImplementation(libs.androidx.compose.ui.test.junit4)
+    // Registers the empty ComponentActivity that createComposeRule() launches — debug builds only,
+    // used by the whole-screen (dialogs/sheets) UI snapshots.
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     androidTestImplementation(libs.junit)

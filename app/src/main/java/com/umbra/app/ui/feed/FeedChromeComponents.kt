@@ -1,5 +1,28 @@
 package com.umbra.app.ui.feed
 
+import com.umbra.app.ui.theme.MonoStyle
+import com.umbra.app.ui.components.truncatePublicKey
+import com.umbra.app.ui.components.EclipseMark
+import com.umbra.app.domain.nip19.Bech32Encoder
+import com.umbra.app.domain.nip05.Nip05VerificationState
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -159,3 +182,142 @@ internal fun FeedSearchBar(
     )
 }
 
+/**
+ * The navigation drawer: who you are at the top, the handful of places you can go as plain
+ * one-line items, Log out set apart at the bottom, and the brand at the foot.
+ */
+@Composable
+internal fun FeedDrawerContent(
+    currentProfile: UserProfile?,
+    currentPubkey: String?,
+    onProfile: () -> Unit,
+    onRelays: () -> Unit,
+    onFilters: () -> Unit,
+    onSettings: () -> Unit,
+    onLogout: () -> Unit,
+    userRepository: UserRepository? = null
+) {
+    ModalDrawerSheet(
+        drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(horizontal = 12.dp, vertical = 16.dp)
+        ) {
+            if (!currentPubkey.isNullOrBlank()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.large)
+                        .clickable(onClick = onProfile)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    UserAvatar(
+                        userProfile = currentProfile,
+                        pubkey = currentPubkey,
+                        size = 56.dp,
+                        shape = CircleShape,
+                        authorPubkey = currentPubkey,
+                        userRepository = userRepository
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = currentProfile?.getUserDisplayName() ?: currentPubkey.truncatePublicKey(8, 6),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        val nip05 = currentProfile?.nip05?.takeIf {
+                            it.isNotBlank() && currentProfile.nip05VerificationState == Nip05VerificationState.Verified
+                        }
+                        Text(
+                            text = nip05?.removePrefix("_@") ?: Bech32Encoder.encodeNpub(currentPubkey).truncatePublicKey(10, 6),
+                            style = if (nip05 != null) MaterialTheme.typography.bodyMedium else MonoStyle,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    EclipseMark(size = 44.dp, ignition = 0.4f)
+                    Text(
+                        text = stringResource(R.string.drawer_anonymous),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
+
+            if (!currentPubkey.isNullOrBlank()) {
+                DrawerItem(Icons.Outlined.Person, stringResource(R.string.menu_profile), onProfile)
+            }
+            DrawerItem(Icons.Outlined.Hub, stringResource(R.string.menu_relays), onRelays)
+            DrawerItem(Icons.Outlined.Tune, stringResource(R.string.menu_feed_filters), onFilters)
+            DrawerItem(Icons.Outlined.Settings, stringResource(R.string.menu_settings), onSettings)
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            DrawerItem(
+                icon = Icons.AutoMirrored.Outlined.Logout,
+                label = stringResource(R.string.menu_logout),
+                onClick = onLogout,
+                tint = MaterialTheme.colorScheme.error
+            )
+
+            Row(
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                EclipseMark(size = 28.dp)
+                Column {
+                    Text(
+                        text = stringResource(R.string.app_name).lowercase(),
+                        style = MaterialTheme.typography.displaySmall.copy(fontSize = 22.sp, lineHeight = 24.sp),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = stringResource(R.string.drawer_title_orbot_powered),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DrawerItem(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    tint: Color = MaterialTheme.colorScheme.onSurface
+) {
+    NavigationDrawerItem(
+        label = { Text(label, style = MaterialTheme.typography.titleSmall) },
+        icon = { Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp)) },
+        selected = false,
+        onClick = onClick,
+        colors = NavigationDrawerItemDefaults.colors(
+            unselectedContainerColor = Color.Transparent,
+            unselectedTextColor = tint,
+            unselectedIconColor = if (tint == MaterialTheme.colorScheme.onSurface) MaterialTheme.colorScheme.onSurfaceVariant else tint
+        )
+    )
+}

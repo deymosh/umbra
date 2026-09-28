@@ -1,5 +1,7 @@
 package com.umbra.app.ui.relay
 
+import com.umbra.app.ui.components.UmbraIcons
+import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -439,7 +441,7 @@ fun RelayConfigScreen(
  * elsewhere in this screen is a read-only display chip, not a selection control.
  */
 @Composable
-private fun NegentropySyncCard(direction: SyncDirection, onDirectionChange: (SyncDirection) -> Unit) {
+internal fun NegentropySyncCard(direction: SyncDirection, onDirectionChange: (SyncDirection) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -480,7 +482,7 @@ private fun NegentropySyncCard(direction: SyncDirection, onDirectionChange: (Syn
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RelayTelemetryCard(telemetry: RelayTelemetrySnapshot, onSubscriptionsClick: () -> Unit) {
+internal fun RelayTelemetryCard(telemetry: RelayTelemetrySnapshot, onSubscriptionsClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -524,7 +526,7 @@ private fun RelayTelemetryCard(telemetry: RelayTelemetrySnapshot, onSubscription
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RelayCard(
+internal fun RelayCard(
     relay: Relay,
     relayInfo: RelayInfo?,
     relayConnectionState: RelayConnectionIndicatorState,
@@ -558,7 +560,8 @@ private fun RelayCard(
             ) {
                 RelayIcon(
                     iconUrl = relayInfo?.icon,
-                    relayConnectionState = relayConnectionState
+                    relayConnectionState = relayConnectionState,
+                    isOnion = relay.isOnion || relay.url.contains(".onion")
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -600,35 +603,29 @@ private fun RelayCard(
                         onToggle(newValue)
                     }
                 )
+                // Removing a role is reversible (re-add it), so it's a quiet icon — not a red
+                // trash can shouting from every row. The whole card opens details, no chevron.
                 if (onDelete != null) {
-                    IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier.size(32.dp)
-                    ) {
+                    IconButton(onClick = onDelete) {
                         Icon(
-                            imageVector = Icons.Default.Delete,
+                            imageVector = Icons.Outlined.RemoveCircleOutline,
                             contentDescription = stringResource(R.string.delete),
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(18.dp)
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
-                )
             }
         }
     }
 }
 
 @Composable
-private fun RelayIconFallback() {
+private fun RelayIconFallback(isOnion: Boolean = false) {
     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
         Icon(
-            imageVector = Icons.Default.Language,
+            // Onion relays are reached inside the Tor network itself, so they get the onion.
+            imageVector = if (isOnion) UmbraIcons.Onion else Icons.Default.Language,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(18.dp)
@@ -639,7 +636,8 @@ private fun RelayIconFallback() {
 @Composable
 internal fun RelayIcon(
     iconUrl: String?,
-    relayConnectionState: RelayConnectionIndicatorState? = null
+    relayConnectionState: RelayConnectionIndicatorState? = null,
+    isOnion: Boolean = false
 ) {
     Box(modifier = Modifier.size(38.dp)) {
         Surface(
@@ -658,11 +656,11 @@ internal fun RelayIcon(
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(MaterialTheme.shapes.small),
-                    loading = { RelayIconFallback() },
-                    error = { RelayIconFallback() }
+                    loading = { RelayIconFallback(isOnion) },
+                    error = { RelayIconFallback(isOnion) }
                 )
             } else {
-                RelayIconFallback()
+                RelayIconFallback(isOnion)
             }
         }
 

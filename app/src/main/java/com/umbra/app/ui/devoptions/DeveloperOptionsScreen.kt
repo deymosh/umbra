@@ -74,7 +74,7 @@ fun DeveloperOptionsScreen(
 }
 
 @Composable
-private fun DeveloperToggleRow(
+internal fun DeveloperToggleRow(
     toggle: DeveloperToggleItem,
     onToggle: (Boolean) -> Unit
 ) {

@@ -8,6 +8,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.github.takahirom.roborazzi.captureScreenRoboImage
+import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import com.umbra.app.ui.components.LocalImageLoadGate
 import com.umbra.app.ui.theme.UmbraTheme
 import com.umbra.app.ui.theme.UmbraThemeOption
@@ -38,6 +40,24 @@ internal fun snapshot(
     ) {
         SnapshotHost(themeOption = themeOption, content = content)
     }
+}
+
+/**
+ * Whole-screen capture for content that opens its own window — dialogs and bottom sheets, which
+ * [snapshot]'s view capture can't see. Call from a test with a `createComposeRule()` rule.
+ */
+internal fun ComposeContentTestRule.snapshotScreen(
+    name: String,
+    content: @Composable () -> Unit
+) {
+    setContent { SnapshotHost(content = content) }
+    waitForIdle()
+    captureScreenRoboImage(
+        filePath = "src/test/snapshots/$name.png",
+        roborazziOptions = RoborazziOptions(
+            compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)
+        )
+    )
 }
 
 /** Wraps [content] in the app theme plus the CompositionLocals real screens get from MainActivity. */

@@ -88,7 +88,7 @@ fun AppearanceScreen(
 }
 
 @Composable
-private fun AppearanceOptionRow(
+internal fun AppearanceOptionRow(
     option: AppearanceOptionItem,
     onClick: () -> Unit
 ) {

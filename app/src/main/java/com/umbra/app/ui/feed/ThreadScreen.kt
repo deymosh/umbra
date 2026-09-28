@@ -259,7 +259,7 @@ fun ThreadScreen(
 
 /** A tap target shaped like a text field that opens the composer as a reply to the focal note. */
 @Composable
-private fun ThreadReplyBar(authorName: String?, onClick: () -> Unit) {
+internal fun ThreadReplyBar(authorName: String?, onClick: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.background) {
         Column {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

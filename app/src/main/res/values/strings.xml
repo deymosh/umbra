@@ -5,27 +5,22 @@
     <string name="copy_hex_toast">Hex copied</string>
     <string name="copy_npub_toast">npub copied</string>
     <string name="menu_profile">Profile</string>
-    <string name="menu_profile_subtitle">View your identity and recent notes</string>
     <string name="menu_relays">Relays</string>
-    <string name="menu_relays_subtitle">Inspect health, permissions and diagnostics</string>
     <string name="menu_feed_filters">Feed filters</string>
-    <string name="menu_feed_filters_subtitle">Tune what appears in your timeline</string>
     <string name="menu_settings">Settings</string>
-    <string name="menu_settings_subtitle">Security, account and app preferences</string>
     <string name="menu_logout">Log out</string>
-    <string name="menu_logout_subtitle">Close current session on this device</string>
     <string name="search_open">Search</string>
     <string name="search_close">Close</string>
     <string name="search_placeholder">Search notes, authors, nip05</string>
     <string name="search_nip50_notice">Results include local cache and relays that support NIP-50 search.</string>
     <string name="connecting_relays">Connecting to relays…</string>
-    <string name="configure_relays">Configure Relays</string>
+    <string name="configure_relays">Configure relays</string>
     <string name="no_events_yet">No events yet</string>
     <string name="search_no_results">No results for "%1$s"</string>
     <string name="no_more_notes_found">You\'ve reached the beginning</string>
     <string name="go_to_top">Go to top</string>
     <string name="back_to_top">Back to top</string>
-    <string name="share_event_url_chooser">Share Event URL</string>
+    <string name="share_event_url_chooser">Share note link</string>
     <string name="share_copy_id">Copy ID</string>
     <string name="share_copy_content">Copy text</string>
     <string name="share_copy_json">Copy JSON</string>
@@ -82,21 +77,21 @@
     <string name="login_failed">Authentication failed. Please try again.</string>
     <string name="login_error_with_detail">Login error: %1$s</string>
 
-    <string name="feed_settings">Feed Settings</string>
+    <string name="feed_settings">Feed settings</string>
     <string name="add_filter">Add filter</string>
     <string name="reset_defaults">Reset defaults</string>
-    <string name="active_feed">Active Feed</string>
-    <string name="active_filters">Active Filters</string>
-    <string name="available_filters">Available Filters</string>
+    <string name="active_feed">Active</string>
+    <string name="active_filters">Active filter</string>
+    <string name="available_filters">Other filters</string>
     <string name="no_filters_configured">No filters configured</string>
     <string name="muted_authors_count">Muted authors: %1$d</string>
     <string name="excluded_tags_count">Excluded tags/prefixes: %1$d</string>
     <string name="excluded_hashtags_count">Excluded hashtags: %1$d</string>
     <string name="excluded_content_prefixes_count">Excluded content prefixes: %1$d</string>
     <string name="activate">Activate</string>
-    <string name="create_feed_filter">Create Feed Filter</string>
-    <string name="edit_filter">Edit Filter</string>
-    <string name="filter_name">Filter Name</string>
+    <string name="create_feed_filter">New feed filter</string>
+    <string name="edit_filter">Edit filter</string>
+    <string name="filter_name">Filter name</string>
     <string name="excluded_tags">Excluded tag or prefix</string>
     <string name="excluded_hashtags">Excluded hashtags</string>
     <string name="excluded_content_prefixes">Excluded content prefixes</string>
@@ -109,7 +104,7 @@
     <string name="filter_follows_only">Only show notes from people I follow</string>
     <string name="filter_follows_only_chip">Follows only</string>
 
-    <string name="relay_config_title">Configure Relays</string>
+    <string name="relay_config_title">Relays</string>
     <string name="relay_publish_lists_action">Publish changes</string>
     <string name="relay_detail_title">Relay details</string>
     <string name="relay_detail_not_found">Relay not found</string>
@@ -186,7 +181,7 @@
     <string name="relay_help_search_body">Search relays are the relays you\'ve declared as capable of full-text search (kind 10007).</string>
     <string name="relay_help_index_body">Index relays are the relays you\'ve declared for indexing/discovery (kind 10086).</string>
     <string name="relay_help_discovered_body">Discovered relays were learned automatically from the NIP-65 lists of people you follow. They aren\'t part of your own declared relay lists yet.</string>
-    <string name="relay_requirement_auth">NIP-42 Auth</string>
+    <string name="relay_requirement_auth">NIP-42 auth</string>
     <string name="relay_requirement_payment">Payment required</string>
     <string name="relay_requirement_pow">PoW ≥ %1$d</string>
     <string name="relay_limit_max_subscriptions">Max subs: %1$d</string>
@@ -195,8 +190,8 @@
     <string name="relay_diag_nips_count">NIPs (%1$d)</string>
     <string name="relay_sync_direction_title">Sync direction</string>
     <string name="relay_sync_direction_subtitle">Choose how your notes are kept in sync with your write relays via NIP-77.</string>
-    <string name="relay_sync_direction_download_only">Download only</string>
-    <string name="relay_sync_direction_upload_only">Upload only</string>
+    <string name="relay_sync_direction_download_only">Download</string>
+    <string name="relay_sync_direction_upload_only">Upload</string>
     <string name="relay_sync_direction_both">Both</string>
     <string name="relay_telemetry_title">Relay telemetry</string>
     <!-- Three counts in one sentence, doesn't fit Android's single-quantity <plurals> model. -->
@@ -232,8 +227,8 @@
     <string name="active_subscriptions_collapse_group">Collapse</string>
     <string name="edit">Edit</string>
     <string name="delete">Delete</string>
-    <string name="add_relay_title">Add Relay</string>
-    <string name="edit_relay_title">Edit Relay</string>
+    <string name="add_relay_title">Add relay</string>
+    <string name="edit_relay_title">Edit relay</string>
     <string name="relay_url_label">URL (ws://, wss://, or .onion)</string>
     <string name="relay_onion_help">.onion relay (routed through TOR)</string>
     <string name="relay_invalid_url">Invalid relay URL. Use ws:// or wss:// with a valid host.</string>
@@ -247,7 +242,7 @@
     <string name="settings_feed_preferences_subtitle">Choose what your feed shows and hides</string>
     <string name="settings_configure_blossom_servers_title">Media servers</string>
     <string name="settings_configure_blossom_servers_subtitle">Manage where your media uploads go</string>
-    <string name="blossom_servers_title">Blossom Servers</string>
+    <string name="blossom_servers_title">Media servers</string>
     <string name="blossom_servers_description">Servers your media uploads to, in priority order. The first server is tried first when uploading and when looking up an author\'s media if a link breaks.</string>
     <string name="blossom_server_url_label">Server URL (https://…)</string>
     <string name="blossom_server_invalid_url">Invalid server URL. Use https:// (or http://) with a valid host.</string>
@@ -276,7 +271,7 @@
     <string name="appearance_theme_verdant">Verdant</string>
     <string name="appearance_theme_slate">Slate</string>
 
-    <string name="dev_options_title">Developer Options</string>
+    <string name="dev_options_title">Developer options</string>
     <string name="dev_options_description">These toggles are for debugging the app and are off by default. They do not affect your account or data.</string>
     <string name="dev_options_enable_error_banner_title">Enable feed error banner</string>
     <string name="dev_options_enable_error_banner_subtitle">Show the feed\'s relay/error banner</string>
@@ -285,7 +280,7 @@
     <string name="dev_options_show_relay_telemetry_title">Show relay telemetry</string>
     <string name="dev_options_show_relay_telemetry_subtitle">Show the subscriptions/events/issues summary card on the Relay Config screen</string>
 
-    <string name="db_inspector_title">DB Inspector</string>
+    <string name="db_inspector_title">Database inspector</string>
     <string name="db_inspector_tables_header">Tables</string>
     <plurals name="db_inspector_row_count">
         <item quantity="one">%1$d row</item>
@@ -308,7 +303,7 @@
     <string name="db_inspector_event_sig">Signature</string>
     <string name="db_inspector_close_action">Close</string>
 
-    <string name="resource_usage_title">App Resource Usage</string>
+    <string name="resource_usage_title">Resource usage</string>
     <string name="resource_usage_jvm_heap">JVM heap</string>
     <string name="resource_usage_native_heap">Native heap</string>
     <string name="resource_usage_device_memory_class">Device memory class</string>
@@ -344,7 +339,7 @@
     <string name="settings_privacy">Privacy</string>
     <string name="settings_privacy_value">Tor-only · No tracking · Keys stay in Amber</string>
     <string name="settings_architecture">Architecture</string>
-    <string name="settings_architecture_value">MVVM • Clean Arch • Jetpack Compose</string>
+    <string name="settings_architecture_value">MVVM · Clean Architecture · Jetpack Compose</string>
     <string name="settings_account_security">Account</string>
     <string name="settings_logout">Log out</string>
     <string name="settings_logout_subtitle">Wipes local data and returns to sign-in</string>
@@ -358,16 +353,16 @@
     <string name="content_warning_title">Content warning</string>
     <string name="content_warning_reason">Content warning: %1$s</string>
     <string name="content_warning_explanation">This note was marked as sensitive by its author.</string>
-    <string name="content_warning_show_button">Show event</string>
+    <string name="content_warning_show_button">Show</string>
     <string name="event_quote_reference">Quote %1$s</string>
     <string name="event_quote_relay_hint">via %1$s</string>
-    <string name="event_lightning_invoice">Lightning Invoice</string>
+    <string name="event_lightning_invoice">Lightning invoice</string>
     <string name="event_lightning_amount_sats">%1$s sats</string>
     <string name="event_lightning_any_amount">Any amount</string>
     <string name="event_lightning_pay">Pay</string>
     <string name="event_lightning_pay_warning">This opens your Lightning wallet app to pay this invoice.</string>
     <string name="event_lightning_expired">Expired</string>
-    <string name="event_lnurl_reference">Lightning Payment Link</string>
+    <string name="event_lnurl_reference">Lightning payment link</string>
     <string name="event_lnurl_open">Open</string>
     <!-- "more" is a count label, not a noun that inflects by quantity. -->
     <string name="event_more_count" tools:ignore="PluralsCandidate">+%1$d more</string>
@@ -501,25 +496,25 @@
     <string name="error_publish_relay_list">Failed to publish relay list: %1$s</string>
 
     <!-- Profile editing -->
-    <string name="edit_profile_title">Edit Profile</string>
-    <string name="edit_profile_display_name">Display Name</string>
+    <string name="edit_profile_title">Edit profile</string>
+    <string name="edit_profile_display_name">Display name</string>
     <string name="edit_profile_name">Username</string>
     <string name="edit_profile_bio">Bio</string>
     <string name="edit_profile_website">Website</string>
-    <string name="edit_profile_nip05">NIP-05 Identifier</string>
-    <string name="edit_profile_lud16">Lightning Address</string>
+    <string name="edit_profile_nip05">NIP-05 identifier</string>
+    <string name="edit_profile_lud16">Lightning address</string>
     <string name="edit_profile_picture_url">Picture URL</string>
     <string name="edit_profile_banner_url">Banner URL</string>
     <string name="edit_profile_banner_upload_cd">Change banner</string>
     <string name="edit_profile_picture_upload_cd">Change profile picture</string>
-    <string name="edit_profile_lud06">Lightning Address (LNURL)</string>
+    <string name="edit_profile_lud06">Lightning address (LNURL)</string>
     <string name="edit_profile_other_fields">Other fields</string>
     <string name="edit_profile_saved">Profile saved successfully</string>
-    <string name="edit_profile_button">Edit Profile</string>
+    <string name="edit_profile_button">Edit profile</string>
     <string name="error_amber_sign_cancelled">AMBER signing cancelled</string>
 
     <!-- Mute actions -->
-    <string name="mute_user">Mute User</string>
+    <string name="mute_user">Mute</string>
     <string name="unmute_user">Unmute</string>
 
     <!-- Pin actions -->
@@ -578,4 +573,7 @@
     <string name="reaction_picker_remove_hint">Long-press an emoji to remove it from this list.</string>
     <string name="profile_stat_following">following</string>
     <string name="profile_stat_followers">followers</string>
+    <string name="feed_filter_delete_confirm_title">Delete this filter?</string>
+    <string name="feed_filter_delete_confirm_message">Its settings are removed from this device. Your feed switches to another filter if this one is active.</string>
+    <string name="drawer_anonymous">Browsing without signing in</string>
 </resources>
