@@ -952,3 +952,17 @@ pattern LOG-51 fixed in `NostrSessionManager`, present unaddressed in the file t
 `runCatchingCancellable` migration (LOG-43/LOG-46) was actively editing — pre-existing from the
 initial commit rather than a regression, but the exact same bug class caught and fixed elsewhere
 in a file already under active review.
+
+### LOG-60 — Totality UI/UX redesign
+- **Status:** done — UI-facing, not yet confirmed on a device
+- **Added:** 2026-09-28
+- **Why:** Requested full redesign of every screen and component for a clean, modern, trustworthy look.
+- **Completed:** 2026-09-28
+- **From:** direct request (not previously logged)
+
+New design system (`ui/theme/`: palettes with full surface ramps, bundled Geist/Geist Mono/
+Instrument Serif, shapes, semantic `UmbraTheme.colors`), eclipse brand mark and per-pubkey
+eclipse avatars, the Tor onion as the Tor-state glyph, refreshed launcher/themed icon, and
+redesigned feed, note card, TorGate, Login, Profile, Settings, Composer, Thread, dialogs, sheets,
+relays and feed filters. Roborazzi UI snapshots (`docs/UI_SNAPSHOTS.md`) are verified in CI.
+Follow-ups: LOG-58 (snapshot coverage for remaining screens), LOG-59 (Tor trademark check).
