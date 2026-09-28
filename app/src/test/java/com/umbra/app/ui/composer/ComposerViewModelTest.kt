@@ -1,5 +1,6 @@
 package com.umbra.app.ui.composer
 
+import com.umbra.app.domain.usecase.ObserveOwnCustomEmojisUseCase
 import androidx.lifecycle.SavedStateHandle
 import com.umbra.app.domain.logging.NoOpUmbraLogger
 import com.umbra.app.domain.media.VideoCacheDataSourceProvider
@@ -92,7 +93,8 @@ class ComposerViewModelTest {
             ),
             uploadBlossomBlobUseCase = UploadBlossomBlobUseCase(FakeMediaUploadRepository(), amberSignerGateway, userPreferences),
             videoCacheDataSourceProvider = FakeVideoCacheDataSourceProvider(),
-            draftRepository = drafts
+            draftRepository = drafts,
+            observeOwnCustomEmojis = ObserveOwnCustomEmojisUseCase(eventRepository)
         )
     }
 

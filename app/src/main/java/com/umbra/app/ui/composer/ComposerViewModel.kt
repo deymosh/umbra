@@ -1,5 +1,9 @@
 package com.umbra.app.ui.composer
 
+import com.umbra.app.domain.nip30.CustomEmoji
+import com.umbra.app.domain.nip30.detectEmojiQuery
+import com.umbra.app.domain.nip30.emojiTagsFor
+import com.umbra.app.domain.usecase.ObserveOwnCustomEmojisUseCase
 import android.net.Uri
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.snapshotFlow
@@ -50,6 +54,7 @@ private const val TAG = "UmbraComposerVM"
 private const val CONTENT_RESOLVE_DEBOUNCE_MS = 400L
 private const val MENTION_QUERY_DEBOUNCE_MS = 250L
 private const val MENTION_SUGGESTION_LIMIT = 8
+private const val EMOJI_SUGGESTION_LIMIT = 6
 private const val DRAFT_SAVE_DEBOUNCE_MS = 500L
 private const val DRAFT_EVENT_ID = "composer-draft"
 
@@ -101,6 +106,10 @@ data class ComposerState(
     val resolvedQuotedEvents: Map<String, Event> = emptyMap(),
     val quotedAuthorProfiles: Map<String, UserProfile> = emptyMap(),
     val mentionSuggestions: List<UserProfile> = emptyList(),
+    // NIP-30: the user's own custom emoji (10030 list + referenced 30030 sets), and those
+    // matching the `:query` at the caret.
+    val customEmojis: List<CustomEmoji> = emptyList(),
+    val emojiSuggestions: List<CustomEmoji> = emptyList(),
     val canSign: Boolean = false,
     val isPublishing: Boolean = false,
     val removedTrackingToken: Boolean = false,
@@ -120,7 +129,7 @@ data class ComposerState(
         pubkey = currentUserPubkey.orEmpty(),
         createdAt = System.currentTimeMillis() / 1000L,
         kind = Event.KIND_TEXT_NOTE,
-        tags = emptyList(),
+        tags = emojiTagsFor(content, customEmojis),
         content = content.trim(),
         sig = ""
     )
@@ -138,7 +147,8 @@ class ComposerViewModel @Inject constructor(
     private val trackReferencedAuthorUseCase: TrackReferencedAuthorUseCase,
     private val uploadBlossomBlobUseCase: UploadBlossomBlobUseCase,
     private val videoCacheDataSourceProvider: VideoCacheDataSourceProvider,
-    private val draftRepository: DraftRepository
+    private val draftRepository: DraftRepository,
+    private val observeOwnCustomEmojis: ObserveOwnCustomEmojisUseCase
 ) : ViewModel() {
 
     val mediaCacheDataSourceFactory get() = videoCacheDataSourceProvider.getCacheDataSourceFactory()
@@ -225,6 +235,12 @@ class ComposerViewModel @Inject constructor(
             }
         }
 
+        if (pubkey != null) {
+            viewModelScope.launch {
+                observeOwnCustomEmojis(pubkey).collect { emojis -> _state.update { it.copy(customEmojis = emojis) } }
+            }
+        }
+
         viewModelScope.launch {
             snapshotFlow { textState.text }
                 .collectLatest { text ->
@@ -249,6 +265,15 @@ class ComposerViewModel @Inject constructor(
 
         viewModelScope.launch {
             snapshotFlow { textState.text to textState.selection }.debounce(MENTION_QUERY_DEBOUNCE_MS).collectLatest { (text, selection) ->
+                val emojiQuery = detectEmojiQuery(text.toString(), selection.end)?.query
+                _state.update { current ->
+                    val matches = emojiQuery?.let { q ->
+                        current.customEmojis.filter { it.shortcode.contains(q, ignoreCase = true) }
+                            .sortedByDescending { it.shortcode.startsWith(q, ignoreCase = true) }
+                            .take(EMOJI_SUGGESTION_LIMIT)
+                    }.orEmpty()
+                    if (current.emojiSuggestions == matches) current else current.copy(emojiSuggestions = matches)
+                }
                 val query = detectMentionQuery(text.toString(), selection.end)?.query
                 if (query.isNullOrEmpty()) {
                     _state.update { it.copy(mentionSuggestions = emptyList()) }
@@ -286,6 +311,13 @@ class ComposerViewModel @Inject constructor(
                 quotedAuthorProfiles = it.quotedAuthorProfiles + (profile.pubkey.lowercase() to profile)
             )
         }
+    }
+
+    fun selectEmoji(emoji: CustomEmoji) {
+        val caret = textState.selection.end
+        val match = detectEmojiQuery(textState.text.toString(), caret) ?: return
+        textState.edit { replace(match.startIndex, caret, ":${emoji.shortcode}: ") }
+        _state.update { it.copy(emojiSuggestions = emptyList()) }
     }
 
     private suspend fun resolvePreviewReferences(content: String) {
@@ -428,12 +460,12 @@ class ComposerViewModel @Inject constructor(
         viewModelScope.launch {
             val target = current.replyToEvent
             val eventJson = when {
-                target == null -> NostrEventBuilder.textNote(body, imetaTags = liveAttachments, sensitiveReason = sensitiveReason)
+                target == null -> NostrEventBuilder.textNote(body, imetaTags = liveAttachments, sensitiveReason = sensitiveReason, emojis = current.customEmojis)
                 // NIP-10 replies are for kind-1 notes only; anything else (pictures, forum
                 // threads, comments) gets a NIP-22 comment.
                 target.kind == Event.KIND_TEXT_NOTE ->
-                    NostrEventBuilder.reply(body, target, imetaTags = liveAttachments, sensitiveReason = sensitiveReason)
-                else -> NostrEventBuilder.commentOn(target, body, imetaTags = liveAttachments, sensitiveReason = sensitiveReason)
+                    NostrEventBuilder.reply(body, target, imetaTags = liveAttachments, sensitiveReason = sensitiveReason, emojis = current.customEmojis)
+                else -> NostrEventBuilder.commentOn(target, body, imetaTags = liveAttachments, sensitiveReason = sensitiveReason, emojis = current.customEmojis)
             }
             val signed = try {
                 amberSignerGateway.signEvent(eventJson, current.currentUserPubkey)

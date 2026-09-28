@@ -1,5 +1,8 @@
 package com.umbra.app.ui.composer
 
+import com.umbra.app.domain.nip30.CustomEmoji
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Context
 import android.graphics.BitmapFactory
@@ -226,6 +229,7 @@ fun ComposerScreen(
             )
         },
         onSelectMention = viewModel::selectMention,
+        onSelectEmoji = viewModel::selectEmoji,
         onSensitiveChange = viewModel::onSensitiveContentChange,
         snackbarHostState = snackbarHostState,
         editorModifier = Modifier
@@ -276,6 +280,7 @@ internal fun ComposerLayout(
     onSelectMention: (UserProfile) -> Unit,
     onSensitiveChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    onSelectEmoji: (CustomEmoji) -> Unit = {},
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     editorModifier: Modifier = Modifier,
     initialShowPreview: Boolean = false,
@@ -398,6 +403,9 @@ internal fun ComposerLayout(
                             userRepository = userRepository,
                             onSelect = onSelectMention
                         )
+                    }
+                    if (state.emojiSuggestions.isNotEmpty()) {
+                        EmojiSuggestions(suggestions = state.emojiSuggestions, onSelect = onSelectEmoji)
                     }
                 }
             }
@@ -590,6 +598,43 @@ private fun ComposerNotice(icon: ImageVector, text: String, color: Color) {
     ) {
         Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
         Text(text = text, style = MaterialTheme.typography.bodySmall, color = color)
+    }
+}
+
+/** NIP-30: the user's custom emoji matching the `:query` being typed. */
+@Composable
+private fun EmojiSuggestions(suggestions: List<CustomEmoji>, onSelect: (CustomEmoji) -> Unit) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+            suggestions.forEach { emoji ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(emoji) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    AsyncImage(
+                        model = emoji.url,
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Text(
+                        text = ":${emoji.shortcode}:",
+                        style = MonoStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
     }
 }
 

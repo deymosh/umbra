@@ -3,6 +3,7 @@ package com.umbra.app.domain.nip01
 import com.umbra.app.domain.nip21.NostrUriEntity
 import com.umbra.app.domain.nip21.resolveNostrUri
 import com.umbra.app.domain.nip30.CustomEmoji
+import com.umbra.app.domain.nip30.emojiTagsFor
 import com.umbra.app.domain.nip36.contentWarningTag
 import com.umbra.app.domain.nip92.ImetaTag
 import com.umbra.app.domain.nip92.toTag
@@ -89,7 +90,8 @@ object NostrEventBuilder {
         content: String,
         replyTo: Event? = null,
         imetaTags: List<ImetaTag> = emptyList(),
-        sensitiveReason: String? = null
+        sensitiveReason: String? = null,
+        emojis: List<CustomEmoji> = emptyList()
     ): String {
         val sanitizedContent = TrackingTokenSanitizer.sanitizeText(content.trim())
         val replyTags = if (replyTo != null) {
@@ -109,7 +111,7 @@ object NostrEventBuilder {
         val tags = replyTags +
             mentionTags(sanitizedContent, alreadyTaggedPubkeys) +
             imetaTags.map { it.toTag() } +
-            attachmentTags(sensitiveReason)
+            attachmentTags(sensitiveReason, sanitizedContent, emojis)
         return buildUnsignedJson(
             kind = Event.KIND_TEXT_NOTE,
             tags = tags,
@@ -118,8 +120,9 @@ object NostrEventBuilder {
     }
 
     /** `[contentWarningTag(reason)]` when [sensitiveReason] is non-null, else empty. */
-    private fun attachmentTags(sensitiveReason: String?): List<List<String>> =
-        if (sensitiveReason != null) listOf(contentWarningTag(sensitiveReason)) else emptyList()
+    private fun attachmentTags(sensitiveReason: String?, content: String, emojis: List<CustomEmoji>): List<List<String>> =
+        (if (sensitiveReason != null) listOf(contentWarningTag(sensitiveReason)) else emptyList()) +
+            emojiTagsFor(content, emojis)
 
     /**
      * NIP-7D: Forum thread (kind 11). Replies use NIP-22 comments (see
@@ -146,7 +149,8 @@ object NostrEventBuilder {
         replyToEvent: Event,
         replyToRelayUrl: String = "",
         imetaTags: List<ImetaTag> = emptyList(),
-        sensitiveReason: String? = null
+        sensitiveReason: String? = null,
+        emojis: List<CustomEmoji> = emptyList()
     ): String {
         val sanitizedContent = TrackingTokenSanitizer.sanitizeText(content.trim())
         val rootId = replyToEvent.getRootEventId() ?: replyToEvent.id
@@ -208,7 +212,7 @@ object NostrEventBuilder {
                 })
             }
 
-            attachmentTags(sensitiveReason).forEach { tag ->
+            attachmentTags(sensitiveReason, sanitizedContent, emojis).forEach { tag ->
                 add(buildJsonArray {
                     tag.forEach { add(JsonPrimitive(it)) }
                 })
@@ -305,7 +309,8 @@ object NostrEventBuilder {
         target: Event,
         content: String,
         imetaTags: List<ImetaTag> = emptyList(),
-        sensitiveReason: String? = null
+        sensitiveReason: String? = null,
+        emojis: List<CustomEmoji> = emptyList()
     ): String {
         require(target.kind != Event.KIND_TEXT_NOTE) {
             "NIP-22 comments must not target kind 1 text notes — use NostrEventBuilder.reply()"
@@ -325,7 +330,7 @@ object NostrEventBuilder {
                 rootTags.forEach { tag -> add(buildJsonArray { tag.forEach { add(JsonPrimitive(it)) } }) }
             }
             appendCommentScope(target, uppercase = false)
-            (mentioned + imetaTags.map { it.toTag() } + attachmentTags(sensitiveReason)).forEach { tag ->
+            (mentioned + imetaTags.map { it.toTag() } + attachmentTags(sensitiveReason, sanitizedContent, emojis)).forEach { tag ->
                 add(buildJsonArray { tag.forEach { add(JsonPrimitive(it)) } })
             }
         }
