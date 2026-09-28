@@ -20,6 +20,9 @@ import com.umbra.app.domain.repository.RelayInfoRepository
 import com.umbra.app.domain.repository.RelayRepository
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.usecase.AddRelayUseCase
+import com.umbra.app.domain.nip01.EventFilter
+import com.umbra.app.domain.relay.normalizeRelayUrl
+import com.umbra.app.domain.usecase.CountOnRelayUseCase
 import com.umbra.app.domain.usecase.GetAllRelaysUseCase
 import com.umbra.app.domain.usecase.PublishSignedEventUseCase
 import com.umbra.app.domain.usecase.RemoveRelayUseCase
@@ -123,7 +126,21 @@ data class RelayConfigState(
     // NOT dev-flag gated, unlike showRelayTelemetry above — this is a real user-facing setting
     // (see NegentropySyncCard), not a diagnostic. Defaults to DOWNLOAD_ONLY, matching
     // SyncPreferencesImpl's own untouched-setting default.
-    val negentropySyncDirection: SyncDirection = SyncDirection.DOWNLOAD_ONLY
+    val negentropySyncDirection: SyncDirection = SyncDirection.DOWNLOAD_ONLY,
+    // NIP-45 answers per relay (by normalized URL) about the signed-in user — see loadRelayCounts.
+    val relayCounts: Map<String, RelayOwnCounts> = emptyMap()
+)
+
+/**
+ * What one relay reports holding for the signed-in user: events they authored, and events that
+ * mention them. Null until that relay answers; [approximate] when the relay said its count is an
+ * estimate.
+ */
+@Immutable
+data class RelayOwnCounts(
+    val yourEvents: Long? = null,
+    val mentions: Long? = null,
+    val approximate: Boolean = false
 )
 
 @HiltViewModel
@@ -141,7 +158,8 @@ class RelayConfigViewModel @Inject constructor(
     private val removeRelayUseCase: RemoveRelayUseCase,
     private val publishSignedEventUseCase: PublishSignedEventUseCase,
     private val developerPreferences: DeveloperPreferences,
-    private val syncPreferences: SyncPreferences
+    private val syncPreferences: SyncPreferences,
+    private val countOnRelay: CountOnRelayUseCase
 ) : ViewModel() {
 
     companion object {
@@ -551,5 +569,31 @@ class RelayConfigViewModel @Inject constructor(
         }
     }
 
-}
+    private val relayCountsRequested = mutableSetOf<String>()
 
+    /**
+     * Asks one relay, via NIP-45 COUNT, how many of the signed-in user's own events it stores and
+     * how many events on it mention them — a direct view of what that relay actually keeps for
+     * you. Asked once per relay per screen session; a relay that doesn't answer shows nothing.
+     */
+    fun loadRelayCounts(relayUrl: String) {
+        val pubkey = _state.value.currentUserPubkey ?: return
+        val normalized = normalizeRelayUrl(relayUrl)
+        if (!relayCountsRequested.add(normalized)) return
+        val queries = listOf(
+            EventFilter(authors = setOf(pubkey)) to { counts: RelayOwnCounts, value: Long -> counts.copy(yourEvents = value) },
+            EventFilter(tagFilters = mapOf("p" to setOf(pubkey))) to { counts: RelayOwnCounts, value: Long -> counts.copy(mentions = value) }
+        )
+        queries.forEach { (filter, apply) ->
+            viewModelScope.launch {
+                val result = countOnRelay(normalized, filter) ?: return@launch
+                _state.update { current ->
+                    val previous = current.relayCounts[normalized] ?: RelayOwnCounts()
+                    val next = apply(previous, result.count.coerceAtLeast(0L))
+                        .copy(approximate = previous.approximate || result.approximate)
+                    current.copy(relayCounts = current.relayCounts + (normalized to next))
+                }
+            }
+        }
+    }
+}

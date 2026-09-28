@@ -193,6 +193,11 @@
     <string name="relay_limit_max_events_per_request">Max events/req: %1$d</string>
     <string name="relay_limit_max_tags_per_event">Max tags/event: %1$d</string>
     <string name="relay_diag_nips_count">NIPs (%1$d)</string>
+    <string name="relay_counts_title">Stored for you</string>
+    <string name="relay_counts_your_events">Your events</string>
+    <string name="relay_counts_mentions">Mentions</string>
+    <string name="relay_counts_approximate">~%1$s</string>
+    <string name="relay_counts_hint">As reported by this relay (NIP-45 COUNT).</string>
     <string name="relay_sync_direction_title">Sync direction</string>
     <string name="relay_sync_direction_subtitle">Choose how your notes are kept in sync with your write relays via NIP-77.</string>
     <string name="relay_sync_direction_download_only">Download</string>

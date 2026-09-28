@@ -67,6 +67,7 @@ import com.umbra.app.domain.relay.RelayIssueKind
 import com.umbra.app.domain.relay.RelayRequestInfo
 import com.umbra.app.domain.relay.groupByPurpose
 import com.umbra.app.domain.relay.normalizeRelayUrl
+import java.text.NumberFormat
 import com.umbra.app.ui.components.ChipBadge
 import com.umbra.app.ui.components.ConfirmDialog
 import com.umbra.app.ui.components.ExternalUrlWarningDialog
@@ -142,6 +143,12 @@ fun RelayDetailsScreen(
             .take(40)
             .toList()
     }
+    val connectionState = normalizedUrl?.let { state.relayConnectionStates[it] }
+    val supportsCount = relay?.relayInfo?.supportedNips?.contains(45) == true
+    val isConnected = connectionState == RelayConnectionIndicatorState.CONNECTED
+    LaunchedEffect(normalizedUrl, supportsCount, isConnected) {
+        if (normalizedUrl != null && supportsCount && isConnected) viewModel.loadRelayCounts(normalizedUrl)
+    }
     val relayIssues = remember(state.relayIssues, normalizedUrl) {
         state.relayIssues.filter { normalizeRelayUrl(it.relayUrl) == normalizedUrl }.takeLast(50).reversed()
     }
@@ -149,7 +156,8 @@ fun RelayDetailsScreen(
     RelayDetailsContent(
         relay = relay,
         relaysLoaded = state.relaysLoaded,
-        connectionState = normalizedUrl?.let { state.relayConnectionStates[it] },
+        connectionState = connectionState,
+        ownCounts = normalizedUrl?.let { state.relayCounts[it] },
         isInfoLoading = relay?.url?.let { it in state.relayInfoLoading } ?: false,
         refreshResult = relay?.url?.let { state.relayInfoRefreshResult[it] },
         requests = relayRequests,
@@ -178,6 +186,7 @@ internal fun RelayDetailsContent(
     relay: Relay?,
     relaysLoaded: Boolean,
     connectionState: RelayConnectionIndicatorState?,
+    ownCounts: RelayOwnCounts?,
     isInfoLoading: Boolean,
     refreshResult: Boolean?,
     requests: List<RelayRequestInfo>,
@@ -334,6 +343,12 @@ internal fun RelayDetailsContent(
                 }
             }
 
+            if (ownCounts != null) {
+                item(key = "counts", contentType = "group") {
+                    RelayOwnCountsGroup(ownCounts)
+                }
+            }
+
             if (info != null) {
                 val requirements = buildList {
                     if (info.requiresAuth) add(R.string.relay_requirement_auth to null)
@@ -431,6 +446,33 @@ internal fun RelayDetailsContent(
                 }
             }
         }
+    }
+}
+
+/** NIP-45 answers about the signed-in user; a row the relay hasn't answered is left out. */
+@Composable
+private fun RelayOwnCountsGroup(counts: RelayOwnCounts) {
+    val rows = listOfNotNull(
+        counts.yourEvents?.let { R.string.relay_counts_your_events to it },
+        counts.mentions?.let { R.string.relay_counts_mentions to it }
+    )
+    SettingsGroup(title = stringResource(R.string.relay_counts_title)) {
+        rows.forEachIndexed { index, (label, value) ->
+            val formatted = NumberFormat.getIntegerInstance().format(value)
+            InfoRow(
+                label = stringResource(label),
+                value = if (counts.approximate) stringResource(R.string.relay_counts_approximate, formatted) else formatted,
+                mono = true,
+                onClick = null,
+                showDivider = index < rows.lastIndex
+            )
+        }
+        Text(
+            text = stringResource(R.string.relay_counts_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp)
+        )
     }
 }
 

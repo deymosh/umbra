@@ -342,9 +342,7 @@ class ProfileViewModel @Inject constructor(
         profileObserversCoordinator.observeLocalNotesCount()
 
         profileObserversCoordinator.observeNip45NoteCounts()
-        profileObserversCoordinator.requestNip45NoteCountsOnRelayChanges()
         profileObserversCoordinator.observeNip45FollowersCount()
-        profileObserversCoordinator.requestNip45FollowersCountOnRelayChanges()
 
         val isOwnProfile = isCurrentUserProfile()
         observeProfileUpdates()

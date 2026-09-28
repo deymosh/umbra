@@ -50,6 +50,7 @@ class RelayDetailsSnapshotTest {
             relay = relay,
             relaysLoaded = true,
             connectionState = RelayConnectionIndicatorState.CONNECTED,
+            ownCounts = RelayOwnCounts(yourEvents = 1_284, mentions = 5_310, approximate = true),
             isInfoLoading = false,
             refreshResult = null,
             requests = listOf(
