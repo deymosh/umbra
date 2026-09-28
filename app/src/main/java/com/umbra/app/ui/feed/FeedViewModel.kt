@@ -5,6 +5,7 @@ package com.umbra.app.ui.feed
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.umbra.app.R
+import com.umbra.app.domain.nip51.ListEdit
 import com.umbra.app.domain.nip55.AmberSignerGateway
 import com.umbra.app.domain.media.VideoCacheDataSourceProvider
 import com.umbra.app.domain.nip01.Event
@@ -40,14 +41,10 @@ import com.umbra.app.domain.nip01.NostrEventBuilder
 import com.umbra.app.domain.usecase.TrackReferencedAuthorUseCase
 import com.umbra.app.domain.usecase.CheckTorStatusUseCase
 import com.umbra.app.domain.tor.TorRuntimeController
-import com.umbra.app.domain.usecase.PublishSignedEventUseCase
 import com.umbra.app.domain.usecase.PublishAuthEventUseCase
-import com.umbra.app.domain.usecase.DeleteNoteUseCase
-import com.umbra.app.domain.usecase.RemoveDeletedNoteFromCacheUseCase
 import com.umbra.app.domain.usecase.BuildProfileHydrationRequestsUseCase
 import com.umbra.app.domain.usecase.BuildHydrationAuthorSetUseCase
 import com.umbra.app.domain.usecase.BuildEngagementFiltersUseCase
-import com.umbra.app.domain.usecase.BuildEventShareUrlUseCase
 import com.umbra.app.ui.common.ImmutableListSnapshot
 import com.umbra.app.ui.common.ImmutableMapSnapshot
 import com.umbra.app.ui.common.InteractionActionsCoordinator
@@ -245,22 +242,19 @@ class FeedViewModel @Inject constructor(
     private val userPreferences: UserPreferences,
     private val developerPreferences: DeveloperPreferences,
     private val amberSignerGateway: AmberSignerGateway,
+    coordinatorFactory: InteractionActionsCoordinator.Factory,
     private val mediaDataSourceProvider: MediaDataSourceProvider,
     private val videoCacheDataSourceProvider: VideoCacheDataSourceProvider,
     private val imageLoader: ImageLoader,
     private val imagePrefetcher: ImagePrefetcher,
     private val urlPrefetcher: UrlPrefetcher,
-    private val publishSignedEventUseCase: PublishSignedEventUseCase,
     private val checkTorStatusUseCase: CheckTorStatusUseCase,
     private val torRuntimeController: TorRuntimeController,
-    private val deleteNoteUseCase: DeleteNoteUseCase,
-    private val removeDeletedNoteFromCacheUseCase: RemoveDeletedNoteFromCacheUseCase,
     private val publishAuthEventUseCase: PublishAuthEventUseCase,
     private val buildProfileHydrationRequestsUseCase: BuildProfileHydrationRequestsUseCase,
     private val buildHydrationAuthorSetUseCase: BuildHydrationAuthorSetUseCase,
     private val buildEngagementFiltersUseCase: BuildEngagementFiltersUseCase,
     private val trackReferencedAuthorUseCase: TrackReferencedAuthorUseCase,
-    private val buildEventShareUrlUseCase: BuildEventShareUrlUseCase
 ) : ViewModel() {
     val mediaCacheDataSourceFactory get() = videoCacheDataSourceProvider.getCacheDataSourceFactory()
 
@@ -391,18 +385,7 @@ class FeedViewModel @Inject constructor(
     // sign/publish/mute/pin plumbing shared by likeEvent/repostEvent/muteUser/togglePin/
     // deleteEvent/shareEvent/publishSignedEvent/getEventJson/canSignEvents below; each of those
     // methods keeps its own canSignWithAmber() guard and mutate-after-confirm ordering inline.
-    private val interactionActionsCoordinator = InteractionActionsCoordinator(
-        userPreferences = userPreferences,
-        muteListRepository = muteListRepository,
-        pinListRepository = pinListRepository,
-        feedRepository = feedRepository,
-        amberSignerGateway = amberSignerGateway,
-        publishSignedEventUseCase = publishSignedEventUseCase,
-        deleteNoteUseCase = deleteNoteUseCase,
-        removeDeletedNoteFromCacheUseCase = removeDeletedNoteFromCacheUseCase,
-        buildEventShareUrlUseCase = buildEventShareUrlUseCase,
-        scope = viewModelScope
-    )
+    private val interactionActionsCoordinator = coordinatorFactory.create(viewModelScope)
 
     /** Public user repository exposed for components that need to resolve profiles */
     val userRepositoryPublic: UserRepository
@@ -827,7 +810,11 @@ class FeedViewModel @Inject constructor(
 
             interactionActionsCoordinator.requestSignAndPublish(
                 buildEventJson = {
-                    NostrEventBuilder.muteList(muteListRepository.getCurrentMutedPubkeys() + target)
+                    interactionActionsCoordinator.buildListEdit(
+                        Event.KIND_MUTED_USERS,
+                        ListEdit("p", add = setOf(target)),
+                        fallbackValues = muteListRepository.getCurrentMutedPubkeys()
+                    )
                 },
                 currentUserHex = userPreferences.getPublicKey(),
                 onSigned = {
@@ -859,8 +846,11 @@ class FeedViewModel @Inject constructor(
         viewModelScope.launch {
             interactionActionsCoordinator.requestSignAndPublish(
                 buildEventJson = {
-                    val currentPinned = pinListRepository.getCurrentPinnedEventIds()
-                    NostrEventBuilder.pinList(if (wasPinned) currentPinned - eventId else currentPinned + eventId)
+                    interactionActionsCoordinator.buildListEdit(
+                        Event.KIND_PINNED_EVENTS,
+                        if (wasPinned) ListEdit("e", remove = setOf(eventId)) else ListEdit("e", add = setOf(eventId)),
+                        fallbackValues = pinListRepository.getCurrentPinnedEventIds()
+                    )
                 },
                 currentUserHex = userPreferences.getPublicKey(),
                 onSigned = {

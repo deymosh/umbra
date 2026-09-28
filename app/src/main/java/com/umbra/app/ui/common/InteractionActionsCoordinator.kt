@@ -8,6 +8,8 @@ import com.umbra.app.domain.repository.FeedRepository
 import com.umbra.app.domain.repository.MuteListRepository
 import com.umbra.app.domain.repository.PinListRepository
 import com.umbra.app.domain.usecase.BuildEventShareUrlUseCase
+import com.umbra.app.domain.usecase.BuildOwnListEditUseCase
+import com.umbra.app.domain.nip51.ListEdit
 import com.umbra.app.domain.usecase.DeleteNoteUseCase
 import com.umbra.app.domain.usecase.PublishSignedEventUseCase
 import com.umbra.app.domain.usecase.RemoveDeletedNoteFromCacheUseCase
@@ -45,6 +47,7 @@ class InteractionActionsCoordinator(
     private val deleteNoteUseCase: DeleteNoteUseCase,
     private val removeDeletedNoteFromCacheUseCase: RemoveDeletedNoteFromCacheUseCase,
     private val buildEventShareUrlUseCase: BuildEventShareUrlUseCase,
+    private val buildOwnListEdit: BuildOwnListEditUseCase,
     private val scope: CoroutineScope
 ) {
     private val logger = UmbraLog.tag("InteractionActionsCoordinator")
@@ -62,14 +65,22 @@ class InteractionActionsCoordinator(
         private val publishSignedEventUseCase: PublishSignedEventUseCase,
         private val deleteNoteUseCase: DeleteNoteUseCase,
         private val removeDeletedNoteFromCacheUseCase: RemoveDeletedNoteFromCacheUseCase,
-        private val buildEventShareUrlUseCase: BuildEventShareUrlUseCase
+        private val buildEventShareUrlUseCase: BuildEventShareUrlUseCase,
+        private val buildOwnListEdit: BuildOwnListEditUseCase
     ) {
         fun create(scope: CoroutineScope) = InteractionActionsCoordinator(
             userPreferences, muteListRepository, pinListRepository, feedRepository, amberSignerGateway,
             publishSignedEventUseCase, deleteNoteUseCase, removeDeletedNoteFromCacheUseCase,
-            buildEventShareUrlUseCase, scope
+            buildEventShareUrlUseCase, buildOwnListEdit, scope
         )
     }
+
+    /**
+     * The next version of one of the user's lists as an edit of their latest published one — see
+     * BuildOwnListEditUseCase for why other clients' tags and private content must survive.
+     */
+    suspend fun buildListEdit(kind: Int, edit: ListEdit, fallbackValues: Set<String>): String =
+        buildOwnListEdit(kind, edit, fallbackValues)
 
     fun canSignEvents(): Boolean = userPreferences.canSignWithAmber()
 

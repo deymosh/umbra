@@ -615,6 +615,14 @@ object NostrEventBuilder {
         return buildUnsignedEvent(kind = com.umbra.app.domain.nipa3.KIND_PAYMENT_TARGETS, content = "", tags = tags)
     }
 
+    /** An unsigned list event of [kind] with exactly [tags] and [content] (see applyListEdit). */
+    fun listEvent(kind: Int, content: String, tags: List<List<String>>): String =
+        buildUnsignedEvent(
+            kind = kind,
+            content = content,
+            tags = buildJsonArray { tags.forEach { tag -> add(buildJsonArray { tag.forEach { add(JsonPrimitive(it)) } }) } }
+        )
+
     /**
      * NIP-42: relay authentication event (kind 22242).
      */
