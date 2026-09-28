@@ -122,4 +122,7 @@ object NostrChannels {
     fun paymentTargets(pubkey: String): String = "$PAYMENT_TARGETS_PREFIX-${pubkey.take(16)}"
 
     fun hashtag(tag: String): String = "$HASHTAG_PREFIX-${tag.lowercase().take(32)}"
+
+    /** Shares the profile-backfill prefix so it is classified with that screen's other fetches. */
+    fun profilePictures(pubkey: String): String = "$PROFILE_BACKFILL_NOTES_PREFIX-pictures-${pubkey.take(16)}"
 }

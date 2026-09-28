@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.umbra.app.domain.nip55.AmberSignerGateway
 import com.umbra.app.domain.crypto.normalizePubkey
 import com.umbra.app.domain.nip01.Event
+import com.umbra.app.domain.nip01.EventFilter
 import com.umbra.app.domain.model.NostrChannels
 import com.umbra.app.domain.model.PendingRepost
 import com.umbra.app.domain.nip01.NostrEventBuilder
@@ -101,6 +102,8 @@ data class ProfileState(
     val followedProfiles: ImmutableMapSnapshot<String, UserProfile> = ImmutableMapSnapshot(),
     val mutedPubkeys: List<String> = emptyList(),
     val pinnedNotes: List<Event> = emptyList(),
+    /** NIP-68 picture posts by this author, newest first. */
+    val pictures: List<Event> = emptyList(),
     val relays: List<Relay> = emptyList(),
     val relayStats: ProfileRelayStats = ProfileRelayStats(),
     // Target user's published relay lists (NIP-65 kind 10002 + NIP-17 kind 10050)
@@ -164,6 +167,7 @@ class ProfileViewModel @Inject constructor(
     )
 
     companion object {
+        private const val PICTURES_LIMIT = 60
         private const val TAG = "UmbraProfileVM"
         private const val INITIAL_DISPLAY_LIMIT = 50
         private const val PAGE_SIZE = 50
@@ -213,6 +217,7 @@ class ProfileViewModel @Inject constructor(
     }
     val state: StateFlow<ProfileState> = _state.asStateFlow()
     private val profileBackfillNotesChannelId = NostrChannels.profileBackfillNotes(pubkey)
+    private val profilePicturesChannelId = NostrChannels.profilePictures(pubkey)
     private val profileBackfillMetadataChannelId = NostrChannels.profileBackfillMetadata(pubkey)
     private var lastProfileEngagementKey: String? = null
     private var lastProfileEngagementAtMs: Long = 0L
@@ -250,6 +255,7 @@ class ProfileViewModel @Inject constructor(
     private val interactionActionsCoordinator = coordinatorFactory.create(viewModelScope)
 
     init {
+        observePictures()
         // Show cached profile immediately
         viewModelScope.launch {
             userRepository.getProfile(pubkey)?.let { cached ->
@@ -785,7 +791,20 @@ class ProfileViewModel @Inject constructor(
      */
     fun getUrlMetadata(url: String) = urlPrefetcher?.getMetadata(url)
 
+    private fun observePictures() {
+        eventRepository.subscribeChannel(
+            profilePicturesChannelId,
+            listOf(EventFilter(authors = setOf(pubkey), kinds = setOf(Event.KIND_PICTURE), limit = PICTURES_LIMIT))
+        )
+        viewModelScope.launch {
+            eventRepository.observeEventsByPubkeyAndKind(pubkey, Event.KIND_PICTURE, PICTURES_LIMIT).collect { pictures ->
+                _state.update { it.copy(pictures = pictures.filterNot { p -> p.isFromFuture() }) }
+            }
+        }
+    }
+
     override fun onCleared() {
+        eventRepository.clearChannel(profilePicturesChannelId)
         profileObserversCoordinator.cancelScheduledWork()
         viewportPrefetchJob?.cancel()
         // profileBackfillMetadataChannelId also covers kinds 3/10000/10002/10050 (see BackfillProfileUseCase)

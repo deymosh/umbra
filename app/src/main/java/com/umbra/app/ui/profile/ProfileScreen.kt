@@ -52,6 +52,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
@@ -114,6 +115,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 
 internal enum class ProfileTab {
     NOTES,
+    PICTURES,
     REPLIES,
     FOLLOWS,
     RELAYS,
@@ -162,9 +164,12 @@ fun ProfileScreen(
         }
     }
 
-    val tabs = remember(isOwnProfile) {
+    // NIP-68 picture posts get their own tab, only once this author has any.
+    val hasPictures = state.pictures.isNotEmpty()
+    val tabs = remember(isOwnProfile, hasPictures) {
         buildList {
             add(ProfileTab.NOTES)
+            if (hasPictures) add(ProfileTab.PICTURES)
             add(ProfileTab.REPLIES)
             add(ProfileTab.FOLLOWS)
             add(ProfileTab.RELAYS)
@@ -179,7 +184,8 @@ fun ProfileScreen(
         snapshotFlow { pagerState.currentPage }.collect { page -> selectedTab = tabs[page] }
     }
     // One list per tab so each keeps its own scroll position while swiping between them.
-    val listStates = tabs.associateWith { rememberLazyListState() }
+    // Keyed per tab: tabs can appear (Pictures), so positional remember would shift scroll states.
+    val listStates = tabs.associateWith { tab -> key(tab) { rememberLazyListState() } }
     val listState = listStates.getValue(selectedTab)
     LaunchedEffect(listState, selectedTab) {
         snapshotFlow {
@@ -257,6 +263,7 @@ fun ProfileScreen(
         ProfileTab.NOTES -> topLevelNotes
         ProfileTab.REPLIES -> replyNotes
         ProfileTab.PINNED -> state.pinnedNotes
+        ProfileTab.PICTURES -> state.pictures
         else -> emptyList()
     }
     val visibleNotes = notesFor(selectedTab)
@@ -380,6 +387,7 @@ fun ProfileScreen(
             ) {
             when (pageTab) {
                 ProfileTab.NOTES,
+                ProfileTab.PICTURES,
                 ProfileTab.REPLIES,
                 ProfileTab.PINNED -> {
                     notesFeedSection(
@@ -395,9 +403,9 @@ fun ProfileScreen(
                         repostedAtForEvent = state.repostedAtByEvent,
                         repostEventForEvent = state.repostEventByEvent,
                         pendingReposts = state.pendingReposts,
-                        isLoading = pageTab != ProfileTab.PINNED && state.isLoading,
-                        isLoadingMore = pageTab != ProfileTab.PINNED && state.isLoadingMore,
-                        noOlderNotesFound = pageTab != ProfileTab.PINNED && state.olderNotesExhausted,
+                        isLoading = pageTab in PAGED_TABS && state.isLoading,
+                        isLoadingMore = pageTab in PAGED_TABS && state.isLoadingMore,
+                        noOlderNotesFound = pageTab in PAGED_TABS && state.olderNotesExhausted,
                         // The tab row already shows the count; a second header line repeated it.
                         notesHeaderText = null,
                         emptyTitle = emptyTitleFor(pageTab),
@@ -669,6 +677,7 @@ fun ProfileScreen(
                         ProfileTab.RELAYS -> relaysCount
                         ProfileTab.MUTES -> state.mutedPubkeys.size
                         ProfileTab.PINNED -> state.pinnedNotes.size
+                        ProfileTab.PICTURES -> state.pictures.size
                     }
                 },
                 onSelect = { index -> scope.launch { pagerState.animateScrollToPage(index) } },
@@ -1110,7 +1119,11 @@ private fun ProfileTab.labelRes(): Int = when (this) {
     ProfileTab.RELAYS -> R.string.profile_tab_relays
     ProfileTab.MUTES -> R.string.profile_tab_mutes
     ProfileTab.PINNED -> R.string.profile_tab_pins
+    ProfileTab.PICTURES -> R.string.profile_tab_pictures
 }
+
+/** Tabs backed by the paged note history (the others are complete in memory). */
+private val PAGED_TABS = setOf(ProfileTab.NOTES, ProfileTab.REPLIES)
 
 /**
  * Back button floating over the banner (scrim circle so it reads on any image), which becomes a

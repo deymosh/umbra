@@ -691,7 +691,7 @@ class EventRepositoryImpl @Inject constructor(
         // ever showed up if its *target* note happened to already be visible (fetched purely as
         // an engagement-count signal via BuildEngagementFiltersUseCase, never rendered as its own
         // feed item). See selectHybridFeedNotes/buildIndexedNoteViews for the unwrap+dedup step.
-        val feedKinds = setOf(Event.KIND_TEXT_NOTE, Event.KIND_EVENT_DELETION, Event.KIND_REPOST, Event.KIND_GENERIC_REPOST)
+        val feedKinds = setOf(Event.KIND_TEXT_NOTE, Event.KIND_PICTURE, Event.KIND_EVENT_DELETION, Event.KIND_REPOST, Event.KIND_GENERIC_REPOST)
         // Profile kinds: metadata of logged user.
         val profileKinds = setOf(Event.KIND_METADATA)
         // User social graph kinds (replaceable): follows, mute list, relay list, search/index

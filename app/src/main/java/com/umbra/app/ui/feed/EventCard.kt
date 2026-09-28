@@ -66,6 +66,11 @@ import com.umbra.app.ui.components.computeTextRenderMetrics
 import com.umbra.app.ui.components.launchExternalUrl
 import com.umbra.app.ui.components.launchLightningInvoice
 import com.umbra.app.ui.hashtag.LocalHashtagNavigator
+import com.umbra.app.ui.components.media.FullscreenImageDialog
+import com.umbra.app.ui.components.media.ImageGalleryAttachment
+import com.umbra.app.ui.components.media.ImageAttachment
+import com.umbra.app.domain.nip68.extractPictureEvent
+import com.umbra.app.domain.nip68.PictureEvent
 import com.umbra.app.ui.readlater.LocalReadLater
 import com.umbra.app.ui.bookmarks.LocalBookmarks
 import androidx.compose.material.icons.filled.Bookmark
@@ -393,6 +398,7 @@ fun EventCard(
     val hashtags = remember(event.id, event.tags) { event.getHashtags() }
     val eventTagsSnapshot = remember(event.id, event.tags) { event.tags.toImmutableSnapshot() }
     val contentWarning = remember(event.id, event.tags) { extractContentWarning(event) }
+    val picture = remember(event.id) { extractPictureEvent(event)?.takeIf { it.images.isNotEmpty() } }
     val isCurrentUserEvent = remember(event.pubkey, currentUserPubkey) {
         !currentUserPubkey.isNullOrBlank() && event.pubkey.equals(currentUserPubkey, ignoreCase = true)
     }
@@ -633,6 +639,16 @@ fun EventCard(
                     }
                 }
 
+                // NIP-68 picture post: title and images (from imeta) above the description.
+                if (picture != null && (contentWarning == null || isContentRevealed)) {
+                    PicturePostBody(
+                        picture = picture,
+                        authorPubkey = event.pubkey,
+                        userRepository = userRepository,
+                        modifier = Modifier.fillMaxWidth().padding(end = 8.dp, bottom = 6.dp)
+                    )
+                }
+
                 // Content with images, mentions, hashtags, URLs
                 if (contentWarning != null && !isContentRevealed) {
                     ContentWarningPlaceholder(
@@ -841,6 +857,7 @@ internal fun getEventKindLabelModel(event: Event, hasQuoteRefs: Boolean, hasProf
         Event.KIND_REPOST -> EventKindLabel(R.string.event_kind_repost)
         Event.KIND_REACTION -> EventKindLabel(R.string.event_kind_reaction)
         Event.KIND_COMMENT -> EventKindLabel(R.string.event_kind_comment)
+        Event.KIND_PICTURE -> EventKindLabel(R.string.event_kind_picture)
         Event.KIND_BADGE_AWARD -> EventKindLabel(R.string.event_kind_badge)
         Event.KIND_LONG_FORM -> EventKindLabel(R.string.event_kind_article)
         Event.KIND_MUTED_USERS -> EventKindLabel(R.string.event_kind_mutes)
@@ -852,3 +869,43 @@ internal fun getEventKindLabelModel(event: Event, hasQuoteRefs: Boolean, hasProf
 private fun hasProfileMentions(event: Event): Boolean = PROFILE_MENTION_REGEX.containsMatchIn(event.content)
 
 
+
+
+/** A NIP-68 picture post's title and image gallery; the description renders as the note text. */
+@Composable
+private fun PicturePostBody(
+    picture: PictureEvent,
+    authorPubkey: String,
+    userRepository: UserRepository,
+    modifier: Modifier = Modifier
+) {
+    var viewerIndex by remember { mutableStateOf<Int?>(null) }
+    val urls = remember(picture) { picture.images.map { it.url } }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        picture.title?.takeIf { it.isNotBlank() }?.let { title ->
+            Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+        }
+        val single = picture.images.singleOrNull()
+        if (single != null) {
+            // One image: use its imeta size, blurhash and alt so the layout is right before it loads.
+            ImageAttachment(
+                url = single.url,
+                onOpenFullscreen = { viewerIndex = 0 },
+                contentDescription = single.alt,
+                aspectRatio = single.dimensions?.takeIf { it.width > 0 && it.height > 0 }
+                    ?.ratio,
+                blurHash = single.blurhash
+            )
+        } else {
+            ImageGalleryAttachment(
+                urls = urls,
+                onOpenFullscreen = { url -> viewerIndex = urls.indexOf(url).coerceAtLeast(0) },
+                authorPubkey = authorPubkey,
+                userRepository = userRepository
+            )
+        }
+    }
+    viewerIndex?.let { index ->
+        FullscreenImageDialog(imageUrls = urls, initialIndex = index, onDismiss = { viewerIndex = null })
+    }
+}

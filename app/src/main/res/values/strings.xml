@@ -674,4 +674,6 @@
     <string name="bookmark_remove">Remove bookmark</string>
     <string name="bookmarks_empty">No bookmarks</string>
     <string name="bookmarks_empty_message">Bookmarks are your public NIP-51 list: signed with Amber, stored on your relays and shared with your other Nostr apps. For something only this device keeps, use Read later.</string>
+    <string name="profile_tab_pictures">Pictures</string>
+    <string name="event_kind_picture">Picture</string>
 </resources>

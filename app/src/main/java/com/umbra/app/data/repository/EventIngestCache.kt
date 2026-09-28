@@ -53,6 +53,7 @@ internal data class PendingEventInsert(
 internal val USEFUL_PERSISTED_KINDS = setOf(
     Event.KIND_METADATA,
     Event.KIND_TEXT_NOTE,
+    Event.KIND_PICTURE,
     Event.KIND_CONTACT_LIST,
     Event.KIND_MUTED_USERS,
     Event.KIND_RELAY_LIST_METADATA,
@@ -471,7 +472,8 @@ internal class EventIngestCache(
         // not the unconditional hardcoded defaults isUsefulClientNote() falls back to for callers
         // with no live filter to pass (e.g. ProfileScreen).
         val filter = activeFeedFilter()
-        if (event.kind == Event.KIND_TEXT_NOTE &&
+        // Picture posts (NIP-68) go through the same user-owned hashtag/prefix filters as notes.
+        if ((event.kind == Event.KIND_TEXT_NOTE || event.kind == Event.KIND_PICTURE) &&
             !event.isUsefulClientNote(
                 excludedHashtags = filter.excludedHashtags,
                 excludedTagNamePrefixes = filter.excludedTags,
