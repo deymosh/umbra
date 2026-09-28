@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Hashtag feeds, a private on-device read-later queue, and composer drafts
 - Per-relay network usage screen, and per-relay "stored for you" counts (NIP-45) on Relay details
 - Tracking parameters stripped from opened links; optional panic wipe
+- NIP-30 custom emoji in the composer: your kind-10030 list and referenced 30030 sets are suggested while typing `:`, and used emoji are tagged on publish
 
 ### Changed
 

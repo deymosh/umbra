@@ -24,7 +24,7 @@ Legend:
 | 25 | Reactions | YES | YES | Kind constants + new `nip25` reaction semantics helpers. |
 | 27 | Text Note References | YES | YES | Mention/reference parsing (rendering) plus outgoing tagging: `textNote`/`reply` now auto-scan composed content for `nostr:` entities and add the matching `p`/`q` tags. |
 | 29 | Relay-based Groups | YES | PARTIAL | On hold — kind constants present; group UX and controls incomplete. Deliberately deferred (large feature, not started this pass). |
-| 30 | Custom Emoji | YES | PARTIAL | `nip30` parser feeds `:shortcode:` rendering in notes and custom-emoji reactions (`EmojiReactionPickerSheet`). Emoji sets (`10030` user list, `30030` sets) and inserting custom emoji from the composer are pending. |
+| 30 | Custom Emoji | YES | YES | `nip30` parses `emoji` tags for `:shortcode:` rendering in notes and custom-emoji reactions (`EmojiReactionPickerSheet`). `ObserveOwnCustomEmojisUseCase` loads the user's kind-`10030` list and the kind-`30030` sets it references; the composer suggests matching emoji while a `:query` is typed and `emojiTagsFor` adds an `emoji` tag only for shortcodes the note actually uses. |
 | 32 | Labeling | YES | NO | No label event workflow implemented. |
 | 36 | Sensitive Content | YES | YES | `domain/nip36` reads/builds the `content-warning` tag; feed's NSFW filter hides posts carrying it; composer's media upload dialog has a "mark as sensitive" toggle that attaches it to the note on publish. |
 | 38 | User Statuses | YES | NO | No dedicated status publishing/subscription flow. |
@@ -97,7 +97,6 @@ explicit product decision to finish the NIP layer before starting UI work or pus
 
 ### UI-sized follow-ups
 
-- **NIP-30** — emoji sets (`10030`/`30030`) and inserting custom emoji from the composer.
 - **NIP-A3** — editing and publishing your own payment-target list (reading and paying others'
   targets is done).
 - **NIP-51** — communities (`10004`), blocked relays (`10006`), search relays (`10007`) and

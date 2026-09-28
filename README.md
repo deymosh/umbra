@@ -146,7 +146,7 @@ Requires JDK 21 and Android SDK 37. Use the included Gradle wrapper; do not rely
 | NIP-22 | Comments | ✅ Implemented | Kind-1111 comments render in feeds and threads (root `E`/`A`/`I` scopes, `#E` thread subscription) and are composed when replying to anything that isn't a kind-1 note |
 | NIP-25 | Reactions | ✅ Implemented | Reaction event types and engagement flow are in the domain and feed path |
 | NIP-27 | Text Note References | ✅ Implemented | Mention/reference parsing and rendering, plus outgoing `p`/`q` tagging on compose |
-| NIP-30 | Custom Emoji | ⏳ Partial | `:shortcode:` emoji render in notes and can be sent as custom-emoji reactions; emoji sets (`10030`/`30030`) and composer insertion pending |
+| NIP-30 | Custom Emoji | ✅ Implemented | `:shortcode:` emoji render in notes and reactions; the composer suggests your own emoji (kind-`10030` list plus referenced `30030` sets) as you type `:` and tags the ones a note uses |
 | NIP-36 | Sensitive Content | ✅ Implemented | Reads/builds the `content-warning` tag; wired into the feed's NSFW filter and the composer's "mark as sensitive" toggle |
 | NIP-42 | Client Authentication | ✅ Implemented | AUTH challenge/response, with active subscriptions replayed to the relay after a successful login |
 | NIP-44 | Encrypted payloads | ⏳ Partial | Envelope model and domain scaffold exist; cryptographic payload pipeline remains incomplete |

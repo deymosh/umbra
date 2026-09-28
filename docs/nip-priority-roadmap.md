@@ -27,19 +27,18 @@ here just because it once appeared — check coverage status first.
 1. NIP-7D Forum threads — pending: domain builder/parser only, no subscription or UI
 2. NIP-A4 Public messages — pending: domain builder/parser only, no subscription or UI
 3. NIP-C7 Chats — pending: domain builder/parser only, no chat UI
-4. NIP-30 Custom emoji — emoji sets (`10030`/`30030`) and composer insertion
-5. NIP-A3 Payment targets — editing/publishing your own list (reading and paying is done)
-6. NIP-51 Lists — communities, blocked relays, search relays and interests, plus the addressable
+4. NIP-A3 Payment targets — editing/publishing your own list (reading and paying is done)
+5. NIP-51 Lists — communities, blocked relays, search relays and interests, plus the addressable
    sets (`30000`/`30003`/`30015`)
-7. NIP-58 Badges — kind constants only, no badge UX
-8. NIP-71 Video events end-to-end
-9. NIP-84 Highlights
-10. NIP-88 Polls
-11. NIP-89 Recommended app handlers
-12. NIP-A0 Voice messages
-13. NIP-B0 Web bookmarks
+6. NIP-58 Badges — kind constants only, no badge UX
+7. NIP-71 Video events end-to-end
+8. NIP-84 Highlights
+9. NIP-88 Polls
+10. NIP-89 Recommended app handlers
+11. NIP-A0 Voice messages
+12. NIP-B0 Web bookmarks
 
-*(NIP-27, 36, 57, 68 and 92 shipped — removed from this tier.)*
+*(NIP-27, 30, 36, 57, 68 and 92 shipped — removed from this tier.)*
 
 ## Deferred (large features, explicitly on hold)
 
