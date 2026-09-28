@@ -66,11 +66,11 @@
     <string name="tor_connected">Connected through Tor</string>
     <string name="dismiss">Dismiss</string>
 
-    <string name="login_no_public_key">No public key received from AMBER</string>
-    <string name="login_amber_response_error">Error processing AMBER response: %1$s</string>
-    <string name="login_with_amber">Sign in with Amber</string>
-    <string name="install_amber_signer">Get Amber</string>
-    <string name="amber_recommended">Amber holds your key in its own app. Umbra only ever asks it to sign.</string>
+    <string name="login_no_public_key">No public key received from the signer</string>
+    <string name="login_amber_response_error">Error processing the signer response: %1$s</string>
+    <string name="login_with_amber">Sign in with your signer</string>
+    <string name="install_amber_signer">Get Amber (suggested signer)</string>
+    <string name="amber_recommended">Any NIP-55 signer app works, and Amber is the suggested one. It holds your key in its own app; Umbra only ever asks it to sign.</string>
     <string name="continue_anonymously">Browse without signing in</string>
     <string name="anonymous_limited_features">Read-only. You can\'t post, react or follow until you sign in.</string>
     <string name="nostr_powered_tor">Nostr, from the shadow.</string>
@@ -357,7 +357,7 @@
     <string name="settings_about_umbra">About</string>
     <string name="settings_version">Version</string>
     <string name="settings_privacy">Privacy</string>
-    <string name="settings_privacy_value">Tor-only · No tracking · Keys stay in Amber</string>
+    <string name="settings_privacy_value">Tor-only · No tracking · Keys stay in your signer</string>
     <string name="settings_architecture">Architecture</string>
     <string name="settings_architecture_value">MVVM · Clean Architecture · Jetpack Compose</string>
     <string name="settings_account_security">Account</string>
@@ -425,7 +425,7 @@
     <string name="copy_formatted_json">Copy JSON</string>
     <string name="profile_follow">Follow</string>
     <string name="profile_unfollow">Unfollow</string>
-    <string name="profile_follow_anonymous_hint">Anonymous mode is read-only. Sign in with AMBER to follow users.</string>
+    <string name="profile_follow_anonymous_hint">Anonymous mode is read-only. Sign in with your signer to follow users.</string>
     <string name="event_image_cd">Event image</string>
     <string name="image_download_action">Download image</string>
     <string name="image_copy_action">Copy image</string>
@@ -461,9 +461,9 @@
     <string name="open_anyway">Open outside Tor</string>
 
     <!-- Feed action error messages -->
-    <string name="error_anonymous_read_only_react">Anonymous mode is read-only. Sign in with AMBER to react.</string>
-    <string name="error_anonymous_read_only_repost">Anonymous mode is read-only. Sign in with AMBER to repost.</string>
-    <string name="error_anonymous_read_only_publish">Anonymous mode is read-only. Sign in with AMBER to publish notes.</string>
+    <string name="error_anonymous_read_only_react">Anonymous mode is read-only. Sign in with your signer to react.</string>
+    <string name="error_anonymous_read_only_repost">Anonymous mode is read-only. Sign in with your signer to repost.</string>
+    <string name="error_anonymous_read_only_publish">Anonymous mode is read-only. Sign in with your signer to publish notes.</string>
     <string name="error_publish_failed">Failed to publish event</string>
     <string name="error_picture_upload_failed">Failed to upload picture</string>
     <string name="error_picture_metadata_strip_failed">Couldn\'t verify this file\'s metadata was removed, so it wasn\'t uploaded</string>
@@ -513,7 +513,7 @@
     <string name="error_inbox_anonymous_disabled">Inbox relays are disabled in anonymous mode.</string>
     <string name="error_dm_anonymous_disabled">DM relays are disabled in anonymous mode.</string>
     <string name="error_update_relay">Failed to update relay: %1$s</string>
-    <string name="error_publish_relay_lists_unavailable">Sign in with Amber to publish your relay lists.</string>
+    <string name="error_publish_relay_lists_unavailable">Sign in with your signer to publish your relay lists.</string>
     <string name="error_publish_relay_list">Failed to publish relay list: %1$s</string>
 
     <!-- Profile editing -->
@@ -537,7 +537,7 @@
     <string name="edit_profile_public_notice">Your profile is public: every relay you publish to stores it and anyone can read it.</string>
     <string name="edit_profile_saved">Profile saved successfully</string>
     <string name="edit_profile_button">Edit profile</string>
-    <string name="error_amber_sign_cancelled">AMBER signing cancelled</string>
+    <string name="error_amber_sign_cancelled">Signing cancelled</string>
 
     <!-- Mute actions -->
     <string name="mute_user">Mute</string>
@@ -579,7 +579,7 @@
     <string name="tor_gate_error_title">Couldn\'t reach Tor</string>
     <string name="tor_gate_footer">Umbra never connects outside Tor. If Tor is down, nothing leaves your phone.</string>
     <string name="login_promise_tor">Every connection goes through Tor</string>
-    <string name="login_promise_amber">Your key stays in Amber, never in Umbra</string>
+    <string name="login_promise_amber">Your key stays in your signer app, never in Umbra</string>
     <string name="login_promise_moderation">You decide what to hide, not the app</string>
     <string name="profile_tab_notes">Notes</string>
     <string name="profile_tab_replies">Replies</string>
@@ -611,7 +611,7 @@
     <string name="zap_custom_amount">Amount (sats)</string>
     <string name="zap_comment">Message</string>
     <string name="zap_comment_placeholder">Optional, public with the zap</string>
-    <string name="zap_receipt_note">Signed with Amber. The zap receipt appears on the note once your wallet pays.</string>
+    <string name="zap_receipt_note">Signed by your signer. The zap receipt appears on the note once your wallet pays.</string>
     <string name="zap_no_receipt_note">This wallet doesn\'t support zaps, so this is a plain Lightning payment with no public receipt.</string>
     <string name="zap_action">Zap %1$s sats</string>
     <string name="zap_working">Signing and requesting invoice…</string>
@@ -634,7 +634,7 @@
     <string name="notifications_filter_reactions">Reactions</string>
     <string name="notifications_empty">Nothing yet</string>
     <string name="notifications_empty_message">Replies, mentions, reactions and zaps show up here as your relays deliver them.</string>
-    <string name="notifications_anonymous">Sign in with Amber to see who replied, reacted or zapped you.</string>
+    <string name="notifications_anonymous">Sign in with your signer to see who replied, reacted or zapped you.</string>
     <plurals name="notifications_and_others">
         <item quantity="one">and %1$d other</item>
         <item quantity="other">and %1$d others</item>
@@ -678,7 +678,7 @@
     <string name="bookmark_add">Bookmark (public, synced)</string>
     <string name="bookmark_remove">Remove bookmark</string>
     <string name="bookmarks_empty">No bookmarks</string>
-    <string name="bookmarks_empty_message">Bookmarks are your public NIP-51 list: signed with Amber, stored on your relays and shared with your other Nostr apps. For something only this device keeps, use Read later.</string>
+    <string name="bookmarks_empty_message">Bookmarks are your public NIP-51 list: signed by your signer, stored on your relays and shared with your other Nostr apps. For something only this device keeps, use Read later.</string>
     <string name="profile_tab_pictures">Pictures</string>
     <string name="event_kind_picture">Picture</string>
 </resources>

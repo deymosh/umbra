@@ -24,7 +24,7 @@ class EntryFlowSnapshotTest {
     @Test
     fun loginNoAmberWithError() = snapshot("EntryFlow_loginNoAmber") {
         LoginContent(
-            AuthState(errorMessage = UiMessage.Literal("Amber didn't return a public key.")),
+            AuthState(errorMessage = UiMessage.Literal("The signer didn't return a public key.")),
             amberInstalled = false, onAmberLogin = {}, onInstallAmber = {}, onAnonymous = {}
         )
     }

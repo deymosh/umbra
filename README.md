@@ -35,17 +35,17 @@ Privacy and censorship resistance are what Nostr is for, and Umbra doesn't compr
 - **Feed** — chronological notes and picture posts (NIP-68) with images, video, hashtags, mentions, replies, reposts, reactions, and thread support
 - **Threads & comments** — full reply trees for notes, plus NIP-22 comments rendered and composed for anything that isn't a plain note
 - **Composer** — replies, quotes, mentions, media attachments, a "mark as sensitive" toggle, and drafts that survive leaving the screen
-- **Zaps** — NIP-57 zaps signed with Amber and paid in your own wallet; NIP-A3 payment targets offered when the recipient publishes them
+- **Zaps** — NIP-57 zaps signed by your NIP-55 signer and paid in your own wallet; NIP-A3 payment targets offered when the recipient publishes them
 - **Notifications** — replies, mentions, reactions, reposts and zaps grouped per note, with an unread marker
 - **Profiles** — notes, replies, pictures, pinned notes, counters (NIP-45 COUNT where relays support it) and NIP-05 verification state
-- **Profile editing** — update your own name, about, website, NIP-05, and LUD-16, published via Amber
+- **Profile editing** — update your own name, about, website, NIP-05, and LUD-16, published via your signer
 - **Hashtag feeds, bookmarks and read later** — follow a tag, save notes to your NIP-51 bookmark list, or keep a private on-device reading queue
 - **Mute list & feed filters** — mute/unmute users with a dedicated review UI (NIP-51), plus editable feed filters (NSFW, excluded hashtags/tags/content) with sensible-but-removable defaults — moderation is always user-controlled, never enforced by the app
 - **Search** — search events by content, author, or profile name (NIP-50 relay search)
 - **Relays** — connect to clearnet and .onion relays, always routed through TOR; per-relay details, subscriptions, logs and what each relay stores for you
 - **Transparency** — per-relay network usage, app resource usage, and an on-device database inspector
 - **Privacy extras** — tracking parameters stripped from opened links, and an optional panic wipe
-- **Signing** — Amber integration for key management; `nsec` never touches Umbra
+- **Signing** — any installed NIP-55 signer app (Amber suggested); `nsec` never touches Umbra
 - **Anonymous mode** — read-only usage without providing identity
 - **Blossom media uploads** — profile/banner and composer media upload path via NIP-B7/Blossom with upload server selection, fallback retrieval, and EXIF stripping before upload
 - **Media metadata** — NIP-92 `imeta` generation for uploads, and alt text, aspect ratio, blurhash and extensionless-media detection when rendering
@@ -61,7 +61,7 @@ Your app → Orbot (SOCKS5 :9050) → TOR network → Nostr relay
 
 All network traffic (WebSockets, image/video loading, NIP-11 relay queries) uses a single proxied OkHttp client. There is no code path that bypasses the Tor proxy. Relay URLs and sensitive fields are scrubbed from logs in production.
 
-Signing is performed by Amber via Android intents; Umbra never exposes private keys.
+Signing is performed by a NIP-55 signer app (Amber is the suggested one) via Android intents; Umbra never exposes private keys.
 
 ---
 
@@ -77,7 +77,7 @@ Signature verification uses BIP-340 Schnorr on secp256k1 via BouncyCastle. Event
 
 - Android 8.0+ (API 26)
 - Orbot installed and running
-- Amber (optional) for signing; read-only mode works without it
+- A NIP-55 signer such as Amber (optional) for signing; read-only mode works without it
 - JDK 21 and Android SDK 37 (for local development)
 
 ---
@@ -151,11 +151,11 @@ Requires JDK 21 and Android SDK 37. Use the included Gradle wrapper; do not rely
 | NIP-42 | Client Authentication | ✅ Implemented | AUTH challenge/response, with active subscriptions replayed to the relay after a successful login |
 | NIP-44 | Encrypted payloads | ⏳ Partial | Envelope model and domain scaffold exist; cryptographic payload pipeline remains incomplete |
 | NIP-45 | Counting results | ✅ Implemented | COUNT asked only of relays advertising NIP-45; profile note/follower counts (merged by maximum, never summed) and per-relay "stored for you" counts on Relay details. Threads count from the events they already download. HyperLogLog (`hll`) merging not supported |
-| NIP-46 | Nostr Connect | ❌ Not applicable | Umbra signs via **NIP-55** (Amber local Android-intent signing), not NIP-46 relay-based remote signing; no NIP-46 code path exists |
+| NIP-46 | Nostr Connect | ❌ Not applicable | Umbra signs via **NIP-55** (local Android-intent signing, e.g. Amber), not NIP-46 relay-based remote signing; no NIP-46 code path exists |
 | NIP-50 | Search | ✅ Implemented | Full-text event search via relays — a relay-side filter capability negotiated per-relay, not a `domain/nip50` package, since there's no event/tag shape to model |
 | NIP-51 | Lists | ⏳ Partial | Mute (`10000`), pin (`10001`) and bookmark (`10003`) lists have repository + UI, edited as deltas so other clients' entries survive; remaining list kinds are builder/parser-only and the addressable sets (`30000`/`30003`/`30015`) are missing |
-| NIP-55 | Android Signer Application | ✅ Implemented | Amber-only signing via Android intents; `nsec` never touches the device |
-| NIP-57 | Lightning Zaps | ✅ Implemented | Zap requests signed with Amber, LNURL-pay over Tor, invoice handed to the user's wallet; receipts counted on notes and grouped in Notifications |
+| NIP-55 | Android Signer Application | ✅ Implemented | Any installed NIP-55 signer (Amber suggested): Android asks which one when several are installed, and every later request goes to the one chosen; `nsec` never touches the device |
+| NIP-57 | Lightning Zaps | ✅ Implemented | Zap requests signed by the NIP-55 signer, LNURL-pay over Tor, invoice handed to the user's wallet; receipts counted on notes and grouped in Notifications |
 | NIP-65 | Relay List Metadata | ✅ Implemented | Domain model and relay metadata workflow in place |
 | NIP-67 | EOSE Completeness Hint | ✅ Implemented | Parses EOSE's optional completeness hint; a `more` hint withholds the feed's per-relay resume watermark instead of assuming full coverage |
 | NIP-68 | Picture-first feeds | ✅ Implemented | Kind-20 posts in the home feed and a Pictures tab on profiles, rendered with `imeta` aspect ratio/blurhash/alt; composing kind-20 posts is not offered |

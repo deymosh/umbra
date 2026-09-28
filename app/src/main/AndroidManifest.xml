@@ -9,9 +9,14 @@
          BatteryOptimizationHelper.kt. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
-    <!-- Allow querying for AMBER (external signer) and Orbot (TOR proxy) -->
+    <!-- Allow querying for NIP-55 signer apps (Amber or any other) and Orbot (TOR proxy) -->
     <queries>
         <package android:name="com.greenart7c3.nostrsigner" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="nostrsigner" />
+        </intent>
         <package android:name="org.torproject.android" />
         <intent>
             <action android:name="org.torproject.android.intent.action.START" />

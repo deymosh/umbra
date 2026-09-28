@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project identity
 
-Umbra is a privacy-first, censorship-resistant Nostr client for Android — privacy and censorship resistance are what Nostr as a protocol is for, and Umbra's job is to not compromise either. Its defining, non-negotiable constraints: **all network traffic routes through TOR via Orbot's SOCKS5 proxy (127.0.0.1:9050) — no exceptions, no plaintext fallback**, and **all content moderation is performed by the user, never enforced by the app.** Signing is done exclusively through Amber (external signer); `nsec` never touches the device.
+Umbra is a privacy-first, censorship-resistant Nostr client for Android — privacy and censorship resistance are what Nostr as a protocol is for, and Umbra's job is to not compromise either. Its defining, non-negotiable constraints: **all network traffic routes through TOR via Orbot's SOCKS5 proxy (127.0.0.1:9050) — no exceptions, no plaintext fallback**, and **all content moderation is performed by the user, never enforced by the app.** Signing is done exclusively through an external NIP-55 signer app (Amber is the suggested one; any installed signer works); `nsec` never touches the device.
 
 The moderation constraint means: muting, NSFW hiding, and feed content filters (excluded hashtags/tags/content-prefixes) are all user-owned state — editable and fully removable via `FeedConfigScreen`/`ProfileScreen`, never a fixed app-side decision about what a user is allowed to see. Umbra ships with sensible defaults (a starter set of muted-noise hashtags/tags, NSFW hidden by default) so a new install isn't a wall of spam, but every one of those defaults is just a normal, user-editable `FeedFilter` entry — nothing is hardcoded or unremovable. When adding a new content-hiding mechanism, it must be built the same way: a default the user can see and turn off, not a silent app-side rule. See `domain/feed/FeedFilter.kt`/`FilterDefaults.kt` for the existing pattern.
 
@@ -106,7 +106,7 @@ data/ implements domain/repository interfaces, maps data entities ↔ domain mod
 - State: `StateFlow<UiState>` exclusively (no `LiveData`), updated via `_state.update { it.copy(...) }`. UI state data classes are `@Immutable`.
 - Side effects (navigation, Amber signing) go through `SharedFlow`, never mutable callback vars or direct `startActivity()` from a ViewModel.
 - All network access funnels through a single `@Named("tor") OkHttpClient` from `NetworkModule` — Coil's `ImageLoader` and Media3's `OkHttpDataSource.Factory` both reuse it. There is intentionally no code path that constructs a second client.
-- Signing flows exclusively through `AmberSignerGateway` (domain) → `AmberConnector` (data/amber) → Amber via Android intents. `canSignWithAmber()` gates every write action.
+- Signing flows exclusively through `AmberSignerGateway` (domain) → `AmberConnector` (data/amber) → the NIP-55 signer chosen at login via Android intents. `canSignWithAmber()` gates every write action.
 - Persistence: a single encrypted (SQLCipher) Room database — there is no second, unencrypted one. Only the signed-in user's own events persist there; everyone else's content lives only in an in-memory, access-order `EventLruCache` (`data/repository/EventLruCache.kt`) and is re-fetched from relays as needed (matching Amethyst's pure in-memory event graph — see `EventRepository.fetchEventById()`). `EventCrypto.verifyEvent()` (event ID integrity + BIP-340 Schnorr) runs before anything is persisted; failed verification is dropped silently.
 - Reusable Compose components live in `ui/components/` (e.g. `UserAvatar`, `NostrTextRenderer`, `AmberSignEffect`, `ExternalUrlWarningDialog`) — check there before writing a new composable; duplicating one is a review flag.
 
@@ -126,15 +126,15 @@ See `AUDIT.md` for the complete rule set and the exact "what to flag" checklist 
 
 ## NIP coverage
 
-Implementation status per NIP: `README.md` (quick view) and [docs/nip-social-coverage.md](../docs/nip-social-coverage.md) (detailed). Sequencing/priority for unimplemented NIPs: [docs/nip-priority-roadmap.md](../docs/nip-priority-roadmap.md). Any new NIP work must preserve the TOR-only and Amber-only constraints above — they are not negotiable per-feature.
+Implementation status per NIP: `README.md` (quick view) and [docs/nip-social-coverage.md](../docs/nip-social-coverage.md) (detailed). Sequencing/priority for unimplemented NIPs: [docs/nip-priority-roadmap.md](../docs/nip-priority-roadmap.md). Any new NIP work must preserve the TOR-only and external-signer-only constraints above — they are not negotiable per-feature.
 
 ## Reference client: Amethyst
 
-[Amethyst](https://github.com/vitorpamplona/amethyst) is the most feature-complete Nostr client on Android and is known for staying fluid under heavy feed/list load. It's also Kotlin/Compose, so it's a directly comparable reference point — not something to port wholesale, since Umbra's threat model (TOR-only, Amber-only signing, no on-device keys) is stricter than Amethyst's and must never be relaxed to match it.
+[Amethyst](https://github.com/vitorpamplona/amethyst) is the most feature-complete Nostr client on Android and is known for staying fluid under heavy feed/list load. It's also Kotlin/Compose, so it's a directly comparable reference point — not something to port wholesale, since Umbra's threat model (TOR-only, external-signer-only signing, no on-device keys) is stricter than Amethyst's and must never be relaxed to match it.
 
 Use it as a comparison point for:
 - **NIP scope/breadth** — when deciding whether a NIP is worth prioritizing or how a rarer one is typically modeled as events/tags.
 - **Feed and list performance** — LazyColumn item stability, recomposition avoidance, and caching strategy for a high-churn, high-volume event stream, which is the same core performance problem Umbra's feed has.
 - **Event/profile caching patterns** — Umbra's non-owned-event cache is already modeled directly on Amethyst's approach (pure in-memory, no general-purpose event database, on-demand relay fetch for cache misses) rather than just compared against it — see `data/repository/EventLruCache.kt` and `EventRepository.fetchEventById()`.
 
-Nothing about Amethyst overrides `AUDIT.md`; if a pattern conflicts with the TOR-only or Amber-only rules, the rule wins.
+Nothing about Amethyst overrides `AUDIT.md`; if a pattern conflicts with the TOR-only or external-signer-only rules, the rule wins.
