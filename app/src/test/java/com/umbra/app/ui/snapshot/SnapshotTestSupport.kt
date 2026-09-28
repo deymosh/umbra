@@ -6,6 +6,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.github.takahirom.roborazzi.captureScreenRoboImage
@@ -46,6 +47,9 @@ internal fun snapshot(
  * Whole-screen capture for content that opens its own window — dialogs and bottom sheets, which
  * [snapshot]'s view capture can't see. Call from a test with a `createComposeRule()` rule.
  */
+// captureScreenRoboImage is Roborazzi's only way to capture dialog/sheet windows and is still
+// marked experimental.
+@OptIn(ExperimentalRoborazziApi::class)
 internal fun ComposeContentTestRule.snapshotScreen(
     name: String,
     content: @Composable () -> Unit

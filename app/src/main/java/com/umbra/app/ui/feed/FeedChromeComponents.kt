@@ -48,6 +48,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
@@ -91,7 +92,10 @@ internal fun FeedTopBar(
     onAvatarClick: () -> Unit,
     onToggleSearch: () -> Unit,
     onStatusClick: (() -> Unit)? = null,
-    userRepository: UserRepository? = null
+    userRepository: UserRepository? = null,
+    // Null hides the bell (anonymous sessions have no notifications).
+    onNotifications: (() -> Unit)? = null,
+    hasUnreadNotifications: Boolean = false
 ) {
     UmbraTopAppBar(
         navigationIcon = {
@@ -128,6 +132,26 @@ internal fun FeedTopBar(
                 onClick = onStatusClick
             )
             Spacer(modifier = Modifier.width(4.dp))
+            if (onNotifications != null) {
+                IconButton(onClick = onNotifications) {
+                    Box {
+                        Icon(
+                            imageVector = Icons.Outlined.Notifications,
+                            contentDescription = stringResource(R.string.notifications_cd),
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                        if (hasUnreadNotifications) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(UmbraTheme.colors.corona)
+                            )
+                        }
+                    }
+                }
+            }
             IconButton(onClick = onToggleSearch) {
                 Icon(
                     imageVector = if (searchVisible) Icons.Default.Close else Icons.Default.Search,

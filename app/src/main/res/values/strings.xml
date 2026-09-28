@@ -621,4 +621,22 @@
     <string name="zap_error_amount">That amount is outside what their wallet accepts.</string>
     <string name="zap_error_invoice">Their wallet didn\'t return an invoice.</string>
     <string name="zap_cd">Zap</string>
+    <string name="notifications_title">Notifications</string>
+    <string name="notifications_cd">Notifications</string>
+    <string name="notifications_filter_all">All</string>
+    <string name="notifications_filter_replies">Replies &amp; mentions</string>
+    <string name="notifications_filter_zaps">Zaps</string>
+    <string name="notifications_filter_reactions">Reactions</string>
+    <string name="notifications_empty">Nothing yet</string>
+    <string name="notifications_empty_message">Replies, mentions, reactions and zaps show up here as your relays deliver them.</string>
+    <string name="notifications_anonymous">Sign in with Amber to see who replied, reacted or zapped you.</string>
+    <plurals name="notifications_and_others">
+        <item quantity="one">and %1$d other</item>
+        <item quantity="other">and %1$d others</item>
+    </plurals>
+    <string name="notifications_verb_reply">replied</string>
+    <string name="notifications_verb_mention">mentioned you</string>
+    <string name="notifications_verb_reaction">reacted to your note</string>
+    <string name="notifications_verb_repost">reposted your note</string>
+    <string name="notifications_verb_zap">zapped %1$s sats</string>
 </resources>

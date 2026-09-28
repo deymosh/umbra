@@ -26,7 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -339,7 +339,7 @@ private fun InvoiceBlock(bolt11: String, isZap: Boolean, onOpenUri: (String) -> 
             colors = ButtonDefaults.buttonColors(containerColor = UmbraTheme.colors.zap, contentColor = MaterialTheme.colorScheme.background),
             modifier = Modifier.fillMaxWidth().height(52.dp)
         ) {
-            Icon(Icons.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.zap_open_wallet))
         }

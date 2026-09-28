@@ -131,6 +131,17 @@ android {
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        // Zero-warning policy: a new compiler warning fails the build, like lint warnings do.
+        allWarningsAsErrors.set(true)
+    }
+}
+
+// Tests drive coroutines with kotlinx-coroutines-test's virtual time (advanceUntilIdle,
+// runCurrent, TestScope), which is still marked experimental; opting in here keeps each test
+// file free of per-call opt-in noise while production code stays strict.
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    if (name.contains("UnitTest")) {
+        compilerOptions.optIn.add("kotlinx.coroutines.ExperimentalCoroutinesApi")
     }
 }
 

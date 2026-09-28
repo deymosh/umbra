@@ -18,6 +18,9 @@ class UserPreferencesImpl @Inject constructor(
 
     private val encryptedPreferences = SecurePreferences(context, "user_prefs")
     private val pubkeyFlow = MutableStateFlow(getPublicKey())
+    private val notificationsSeenAt = MutableStateFlow(
+        encryptedPreferences.getString(KEY_NOTIFICATIONS_SEEN_AT)?.toLongOrNull() ?: 0L
+    )
 
     override fun savePublicKey(pubkey: String) {
         val normalized = normalizePubkey(pubkey)
@@ -51,7 +54,20 @@ class UserPreferencesImpl @Inject constructor(
     override fun clearAll() {
         encryptedPreferences.clear()
         pubkeyFlow.value = null
+        notificationsSeenAt.value = 0L
     }
 
     override fun getPublicKeyFlow(): StateFlow<String?> = pubkeyFlow.asStateFlow()
+
+    override fun getNotificationsSeenAtFlow(): StateFlow<Long> = notificationsSeenAt.asStateFlow()
+
+    override fun markNotificationsSeen(epochSeconds: Long) {
+        if (epochSeconds <= notificationsSeenAt.value) return
+        encryptedPreferences.putString(KEY_NOTIFICATIONS_SEEN_AT, epochSeconds.toString())
+        notificationsSeenAt.value = epochSeconds
+    }
+
+    private companion object {
+        const val KEY_NOTIFICATIONS_SEEN_AT = "notifications_seen_at"
+    }
 }

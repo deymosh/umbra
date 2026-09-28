@@ -1456,6 +1456,20 @@ class EventRepositoryImpl @Inject constructor(
             }.distinctUntilChanged().flowOn(Dispatchers.Default)
         }
 
+    override fun observeInbox(pubkey: String, limit: Int): Flow<List<Event>> {
+        val normalized = pubkey.lowercase()
+        return eventIngestCache.cachedEventsFlow.map { events ->
+            events.asSequence()
+                .filter { event ->
+                    !event.pubkey.equals(normalized, ignoreCase = true) &&
+                        event.tags.any { it.size >= 2 && it[0] == "p" && it[1].equals(normalized, ignoreCase = true) }
+                }
+                .sortedWith(compareByDescending<Event> { it.createdAt }.thenBy { it.id })
+                .take(limit)
+                .toList()
+        }.distinctUntilChanged().flowOn(Dispatchers.Default)
+    }
+
     override fun observeCountEventsByPubkeyAndKind(pubkey: String, kind: Int): Flow<Int> =
         if (isCurrentUserPubkey(pubkey)) {
             encryptedEventDao.observeCountEventsByPubkeyAndKind(pubkey, kind).flowOn(Dispatchers.IO)

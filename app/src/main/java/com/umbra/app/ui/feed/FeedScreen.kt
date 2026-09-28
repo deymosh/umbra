@@ -40,7 +40,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.umbra.app.ui.auth.LoginViewModel
 import androidx.navigation.NavController
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.umbra.app.R
+import com.umbra.app.ui.notifications.UnreadNotificationsViewModel
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip25.ReactionEmoji
 import com.umbra.app.domain.nip30.CustomEmoji
@@ -256,6 +258,8 @@ fun FeedScreen(
             }
     }
     val currentPubkey = feedState.currentUserPubkey
+    val unreadNotificationsViewModel: UnreadNotificationsViewModel = hiltViewModel()
+    val hasUnreadNotifications by unreadNotificationsViewModel.hasUnread.collectAsStateWithLifecycle()
     val currentProfile = feedState.currentUserProfile ?: feedState.profiles.profileFor(currentPubkey)
 
     // Amber sign round trips go through the single app-wide launcher (AppSessionEffects) now —
@@ -335,6 +339,10 @@ fun FeedScreen(
                 isTorStarting = feedState.torStatus == "STARTING_TOR",
                 onAvatarClick = { scope.launch { drawerState.open() } },
                 onStatusClick = { navController.navigate(Screen.RelayConfig.route) },
+                onNotifications = if (currentPubkey.isNullOrBlank() || !viewModel.canSignEvents()) null else {
+                    { navController.navigate(Screen.Notifications.route) }
+                },
+                hasUnreadNotifications = hasUnreadNotifications,
                 onToggleSearch = {
                     val nowVisible = !searchVisible
                     searchVisible = nowVisible

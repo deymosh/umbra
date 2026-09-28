@@ -9,7 +9,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import com.umbra.app.domain.nip25.ReactionEmoji
 import com.umbra.app.ui.components.ActionItem
 import com.umbra.app.ui.components.ActionsBottomSheet

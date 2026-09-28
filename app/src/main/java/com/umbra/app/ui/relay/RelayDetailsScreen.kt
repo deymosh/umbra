@@ -464,9 +464,10 @@ private fun RelayHero(relay: Relay, info: RelayInfo?, connectionState: RelayConn
                     )
                 )
         ) {
-            if (!info?.banner.isNullOrBlank()) {
+            val banner = info?.banner
+            if (!banner.isNullOrBlank()) {
                 AsyncImage(
-                    model = info?.banner,
+                    model = banner,
                     contentDescription = stringResource(R.string.relay_diag_banner_cd),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

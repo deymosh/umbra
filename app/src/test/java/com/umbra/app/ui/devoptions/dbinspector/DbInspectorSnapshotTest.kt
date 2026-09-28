@@ -1,7 +1,7 @@
 package com.umbra.app.ui.devoptions.dbinspector
 
 import android.app.Application
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import com.umbra.app.domain.model.DbEventDetail
 import com.umbra.app.domain.model.DbTableSummary
 import com.umbra.app.ui.snapshot.PHONE
@@ -60,6 +60,6 @@ class DbInspectorSnapshotTest {
 
     @Test
     fun eventDetail() = compose.snapshotScreen("DbInspector_event") {
-        DbInspectorContent(state.copy(selectedEvent = results.first()), {}, {}, {}, {}, {}, {}, {}, {})
+        DbInspectorContent(state.copy(selectedEvent = results.first().copy(createdAt = 1_750_000_000L)), {}, {}, {}, {}, {}, {}, {}, {})
     }
 }
