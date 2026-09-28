@@ -63,7 +63,7 @@ LaunchedEffect(Unit) { repository.events(latestUserId).collect { handle(it) } }
 LaunchedEffect(userId) { repository.events(userId).collect { handle(it) } }
 ```
 
-`rememberUpdatedState` also does not make render state "non-recomposing." For frame-rate values, see [`compose-state-deferred-reads`](../compose-state-deferred-reads/SKILL.md).
+`rememberUpdatedState` also does not make render state "non-recomposing." For frame-rate values, see [`compose-performance`](../compose-performance/SKILL.md).
 
 ## Collecting Flow
 
@@ -75,7 +75,7 @@ LaunchedEffect(events) {
 }
 ```
 
-Do not collect render state imperatively just to mutate local state — that's the state-holder/UI split, covered in [`compose-state-holder-ui-split`](../compose-state-holder-ui-split/SKILL.md). On Android, prefer lifecycle-aware collection (`collectAsStateWithLifecycle()`).
+Do not collect render state imperatively just to mutate local state — that's the state-holder/UI split, covered in [`compose-api-style`](../compose-api-style/SKILL.md). On Android, prefer lifecycle-aware collection (`collectAsStateWithLifecycle()`).
 
 For Compose state reads, use `snapshotFlow`:
 
@@ -128,5 +128,5 @@ Use `DisposableEffect` for paired setup/teardown; every registration path should
 
 ## Related
 
-- [`compose-state-holder-ui-split`](../compose-state-holder-ui-split/SKILL.md) — where state-holder vs UI split applies when passing state/callbacks across boundaries.
-- [`compose-state-deferred-reads`](../compose-state-deferred-reads/SKILL.md) — frame-rate `State` reads that shouldn't happen in composition.
+- [`compose-api-style`](../compose-api-style/SKILL.md) — where state-holder vs UI split applies when passing state/callbacks across boundaries.
+- [`compose-performance`](../compose-performance/SKILL.md) — frame-rate `State` reads that shouldn't happen in composition.

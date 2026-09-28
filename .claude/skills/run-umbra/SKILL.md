@@ -237,3 +237,17 @@ processes, and neither shuts itself down promptly on its own:
 - **Screenshot shows only the "umbra" wordmark + "Orbot is starting..."**:
   Orbot isn't installed/running on this device. `adb shell pm list packages
   | grep orbot` to check; install Orbot's APK if missing.
+
+## Signing in / approving with Amber
+
+Amber (`com.greenart7c3.nostrsigner`) must be installed with an account. Check with `adb shell pm list packages | grep nostrsigner`.
+
+```bash
+.claude/skills/run-umbra/amber_login.sh login     # from Umbra's login screen
+.claude/skills/run-umbra/amber_login.sh approve   # from Amber's approval sheet mid-session
+```
+
+- The script taps "Login with AMBER", waits for Amber's sheet, then taps "Connect". Buttons are found by text in a live `uiautomator dump`, never by coordinates estimated from a screenshot (a guess was once ~800px off).
+- With "Approve basic actions" (the default), later sign requests go through silently. With "Manually approve each permission", run `approve` per action.
+- The session persists across restarts. Screenshot first: if the top bar shows a pubkey, you're already signed in.
+- An Amber PIN/biometric lock isn't handled. The script reports "still in Amber after tapping Connect" and stops.

@@ -1,40 +1,54 @@
 ---
 name: umbra-kotlin-patterns
-description: StateFlow vs SharedFlow, sealed class vs interface, Immutable on new UI state classes.
+description: Kotlin modeling choices — StateFlow/SharedFlow/Channel, stateIn/shareIn, sentinel defaults, sealed class vs interface, Immutable UI state, value class vs data class.
 ---
 
 # Kotlin patterns in Umbra
 
-## StateFlow vs SharedFlow
+## Flow primitives
 
-CLAUDE.md is direct here: **`StateFlow<UiState>` exclusively for state, no `LiveData`, updated via `_state.update { it.copy(...) }`.** SharedFlow is for one-shot side effects (navigation, Amber sign correlation), never for anything a screen needs a synchronous "current value" from.
+| Need | Use |
+|---|---|
+| Screen state, always has a value | `StateFlow`, private `MutableStateFlow` + `asStateFlow()`, mutated with `_state.update { it.copy(...) }` (never `_state.value = _state.value.copy(...)`) |
+| Hot stream, many subscribers, no `.value` needed | `SharedFlow` |
+| One-shot event for one consumer (nav, snackbar) | `Channel(BUFFERED).receiveAsFlow()` — a replay-less `SharedFlow` drops events with no collector |
+| One consumer per collection | cold `Flow` |
 
-```kotlin
-// Private mutable, public read-only — the pattern every ViewModel in Umbra follows
-private val _state = MutableStateFlow(FeedState())
-val state: StateFlow<FeedState> = _state.asStateFlow()
-```
+- No `LiveData`, ever.
+- `stateIn`/`shareIn` go on a `val`, never inside a function (a new sharing coroutine per call).
+- `WhileSubscribed(t)` goes stale when nothing collects. Use `Eagerly` when code reads `.value` synchronously.
+- `.map` on a `StateFlow` loses `.value`, so re-`stateIn` if it's needed.
+- Don't invent fake domain sentinels (`NoUser`) for an async initial value. Model absence (`T?`, a sealed state) instead.
+- Keep expensive work outside `update {}`, because the block can be retried.
 
-For the deeper decision tree (when a `Channel` beats `SharedFlow`, `WhileSubscribed` vs `Eagerly`, `stateIn`/`shareIn` placement), see [`kotlin-flow-state-event-modeling`](../kotlin-flow-state-event-modeling/SKILL.md) — its "In Umbra" section covers `FeedViewModel.notesFlow`'s real `shareIn` config and `UmbraNostrClient`'s relay-issue `SharedFlow` sizing.
+Real cases, so you don't "fix" them:
+- `FeedViewModel.notesFlow` is `shareIn(viewModelScope, WhileSubscribed(5_000), replay = 1)` as a property. It is only collected asynchronously, so the 5s grace window is intended.
+- `UmbraNostrClient._relayIssueFlow` is a `MutableSharedFlow(replay = 3000, extraBufferCapacity = 128)` on purpose. It has multiple consumers, so a `Channel` (fan-out to one) would be wrong.
+- `_eventFlow` is a plain `MutableSharedFlow<Event>()` for loss-tolerant transient consumers.
 
-## Sealed classes vs sealed interfaces
+## Sealed class vs sealed interface
 
-Umbra uses sealed classes for state-variant modeling — `TorState` (`ui/tor/TorState.kt`), `TorSideEffect`, `NostrUriEntity` (`domain/nip21/NostrUri.kt`), `CommentPointer` (`domain/nip22/Comment.kt`), `RelayMessage` (`domain/nip01/Event.kt`), `UiMessage` (`ui/common/UiMessage.kt`), `Screen` (`ui/NavHost.kt`, navigation routes — see [`umbra-android-platform`](../umbra-android-platform/SKILL.md)). One sealed interface exists — `BlossomUploadResult` (`domain/usecase/UploadBlossomBlobUseCase.kt`) — for a generic-shaped result type.
+- Sealed **class** is the dominant shape: `TorState`, `UiMessage`, `NostrUriEntity`, `CommentPointer`, `RelayMessage`, `Screen`.
+- Sealed **interface** is for generic results that need variance or multiple inheritance: `BlossomUploadResult`.
+- Match the existing shape for the kind of thing you add.
 
-The decision: sealed **class** when variants share common constructor data or the hierarchy doesn't need multiple inheritance/variance (Umbra's dominant shape); sealed **interface** when the result type needs variance (`out T`) or a variant needs to implement something else too. Match the existing shape for the kind of thing you're adding — a new "UI state variant with data" is a sealed class like `TorState`/`UiMessage`, a new generic result type is a sealed interface like `BlossomUploadResult`.
+## UI state is `@Immutable`
 
-## `@Immutable` UI state — already policy, not optional
+This is policy (e.g. `FeedState`, `RelayConfigState`). For list/map fields, wrap them in `ImmutableListSnapshot`/`ImmutableMapSnapshot` (`ui/common/ImmutableCollections.kt`). Don't add `kotlinx.collections.immutable`.
 
-CLAUDE.md: "UI state data classes are `@Immutable`." Real examples: `FeedState` (`ui/feed/FeedViewModel.kt`), `RelayConfigState` (`ui/relay/RelayConfigViewModel.kt`). For a collection-typed field inside one of these, don't reach for `kotlinx.collections.immutable` (not a Umbra dependency) — wrap it in `ImmutableListSnapshot<T>`/`ImmutableMapSnapshot<K,V>` from `ui/common/ImmutableCollections.kt`, which exist specifically to keep `List`/`Map`-shaped state parameters skippable without a new external dependency. See [`compose-stability-diagnostics`](../compose-stability-diagnostics/SKILL.md) for the full mechanism.
+## Value class vs data class
 
-## DSL builders and inline/reified — not an established pattern here
+- A single field with domain meaning → `@JvmInline value class` (Stable for Compose when the underlying type is stable).
+- Multiple fields or custom equality → data class.
+- No domain meaning → the primitive itself.
+- Gotchas:
+  - boxing when nullable, generic or vararg
+  - no `copy`, `init` state or custom `equals`
+  - kotlinx.serialization writes the bare value, so swapping between value class and data class breaks JSON contracts
 
-A `TagArrayBuilder`-style fluent DSL (`inline fun tagArray { add(...); remove(...) }` with method chaining) has no equivalent in Umbra: `NostrEventBuilder` (`domain/nip01/NostrEventBuilder.kt`) is a plain `object` of functions building tag arrays directly, not a chained builder. There are also **no `inline fun <reified T>` usages anywhere in the app module** (the one `inline fun` that exists, `ImmutableCollections.kt:60`'s `forEach`, is a non-reified perf-only inline on a wrapper type, not a JSON/type-erasure workaround).
-
-**Don't introduce a new fluent DSL builder or a `reified`-based utility as a "nice to have" while implementing an unrelated feature.** If a new NIP's tag-building genuinely gets complex enough to want one, that's a deliberate, scoped decision (and should follow `nostr-nip-implementation`'s existing `NostrEventBuilder` function-per-kind shape first, per that skill's own guidance) — not something to add opportunistically because another client has the pattern.
+Umbra has **zero** value classes today. Pubkeys and event ids are bare `String`s everywhere, which is a legitimate future hardening but a huge surface. Only do it if a task asks, and scope it narrowly.
 
 ## Don't
 
-- Don't use `LiveData` anywhere — CLAUDE.md forbids it outright, `StateFlow` only.
-- Don't add a `kotlinx.collections.immutable` dependency for a stability fix — use `ImmutableListSnapshot`/`ImmutableMapSnapshot`.
-- Don't add a DSL builder or `reified` inline function just because another client has one — neither pattern exists in Umbra today; introduce one only if a specific, scoped need justifies it.
+- Add a fluent DSL builder or `inline reified` helper opportunistically. `NostrEventBuilder` is a plain `object` of functions, one per kind.
+- Retrofit patterns onto unrelated code as a drive-by.
