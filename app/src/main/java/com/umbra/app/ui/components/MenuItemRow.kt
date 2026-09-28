@@ -1,15 +1,15 @@
 package com.umbra.app.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.HorizontalDivider
@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 
@@ -30,102 +31,100 @@ fun MenuItemRow(
     subtitle: String? = null,
     onClick: () -> Unit,
     danger: Boolean = false,
-    showDivider: Boolean = true
+    showDivider: Boolean = true,
+    trailing: (@Composable () -> Unit)? = null
 ) {
-    val containerShape = RoundedCornerShape(22.dp)
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .background(
-                if (danger) {
-                    MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)
-                },
-                containerShape
-            )
-            .border(
-                width = 1.dp,
-                color = if (danger) {
-                    MaterialTheme.colorScheme.error.copy(alpha = 0.35f)
-                } else {
-                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.85f)
-                },
-                shape = containerShape
-            )
-            .padding(horizontal = 16.dp, vertical = 18.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    val accent = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    Column(modifier = modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
+            Box(
                 modifier = Modifier
+                    .size(36.dp)
                     .background(
                         color = if (danger) {
                             MaterialTheme.colorScheme.error.copy(alpha = 0.12f)
                         } else {
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                            MaterialTheme.colorScheme.surfaceContainerHighest
                         },
-                        shape = RoundedCornerShape(16.dp)
-                    )
-                    .padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+                        shape = MaterialTheme.shapes.small
+                    ),
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = title,
-                    tint = if (danger) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    },
-                    modifier = Modifier.size(22.dp)
+                    contentDescription = null,
+                    tint = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
                 )
             }
-
-            Column {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (danger) {
-                        MaterialTheme.colorScheme.onErrorContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    }
+                    style = MaterialTheme.typography.titleSmall,
+                    color = accent
                 )
                 if (!subtitle.isNullOrBlank()) {
                     Text(
                         text = subtitle,
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (danger) {
-                            MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.82f)
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
+            if (trailing != null) {
+                trailing()
+            } else if (!danger) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
-
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = if (danger) {
-                MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
-            } else {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-            },
-            modifier = Modifier.size(18.dp)
-        )
+        if (showDivider) {
+            // Inset to the text column so the icon column reads as one unbroken rail.
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 66.dp),
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
+        }
     }
+}
 
-    if (showDivider) {
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+/**
+ * A titled group of rows on one rounded surface — the settings-style list container. Rows inside
+ * draw their own inset dividers (pass showDivider = false on the last one).
+ */
+@Composable
+fun SettingsGroup(
+    modifier: Modifier = Modifier,
+    title: String? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (title != null) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp)
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clip(MaterialTheme.shapes.large)
+                .background(MaterialTheme.colorScheme.surfaceContainer),
+            content = content
+        )
     }
 }

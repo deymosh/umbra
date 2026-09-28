@@ -1,6 +1,6 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">Umbra</string>
-    <string name="drawer_title_orbot_powered">Umbra - Orbot Powered</string>
+    <string name="drawer_title_orbot_powered">Private by default, through Orbot</string>
     <string name="profile_image_cd">Profile image</string>
     <string name="copy_hex_toast">Hex copied</string>
     <string name="copy_npub_toast">npub copied</string>
@@ -40,7 +40,7 @@
     <string name="compose_note_hint">Write a new note…</string>
     <string name="composer_attach_media_cd">Attach image or GIF</string>
     <string name="tracking_token_removed_notice">Tracking token removed from URL for privacy.</string>
-    <string name="publish">Publish</string>
+    <string name="publish">Post</string>
     <string name="thread_title">Thread</string>
     <string name="thread_not_found">Thread not available in local cache yet</string>
     <string name="note_not_found_title">Note not found</string>
@@ -53,11 +53,7 @@
     <string name="no_notes_yet">No notes yet</string>
     <string name="profile_tab_notes_count">Notes %1$d</string>
     <string name="profile_tab_replies_count">Replies %1$d</string>
-    <string name="profile_tab_follows_count">Follows %1$d</string>
     <string name="profile_followers_count">Followers %1$d</string>
-    <string name="profile_tab_relays_count">Relays %1$d</string>
-    <string name="profile_tab_mutes_count">Mutes %1$d</string>
-    <string name="profile_tab_pins_count">Pinned %1$d</string>
     <string name="profile_no_replies_yet">No replies yet</string>
     <string name="profile_no_follows">No follows found for this profile</string>
     <string name="profile_no_mutes">No muted authors in your active feed</string>
@@ -70,27 +66,24 @@
     <string name="profile_relays_onion_stat">Onion %1$d</string>
     <string name="profile_relays_uptime_hint">Bandwidth/uptime per relay will be shown when telemetry metrics are available.</string>
     <string name="profile_no_relays_published">No relay list found for this profile</string>
-    <string name="tor_checking_orbot">Checking Orbot…</string>
-    <string name="tor_starting_orbot">Orbot is starting. Connecting to TOR…</string>
-    <string name="tor_waiting_network">No internet connection. Waiting for network to start TOR.</string>
-    <string name="tor_waiting_orbot">Orbot is not running.
-Open Orbot and tap Connect.</string>
+    <string name="tor_checking_orbot">Looking for Orbot…</string>
+    <string name="tor_starting_orbot">Orbot is building a Tor circuit…</string>
+    <string name="tor_waiting_network">You\'re offline. Umbra will connect through Tor as soon as there\'s a network.</string>
+    <string name="tor_waiting_orbot">Orbot isn\'t running. Open it and tap Start, then come back.</string>
     <string name="tor_open_orbot">Open Orbot</string>
-    <string name="retry">Retry</string>
-    <string name="tor_connected">TOR connected</string>
-    <string name="error_label">Error:</string>
+    <string name="retry">Try again</string>
+    <string name="tor_connected">Connected through Tor</string>
     <string name="dismiss">Dismiss</string>
 
     <string name="login_no_public_key">No public key received from AMBER</string>
     <string name="login_amber_response_error">Error processing AMBER response: %1$s</string>
-    <string name="login_with_amber">Login with AMBER</string>
-    <string name="install_amber_signer">Install AMBER Signer</string>
-    <string name="amber_recommended">AMBER recommended for secure key management</string>
-    <string name="continue_anonymously">Continue Anonymously</string>
-    <string name="anonymous_limited_features">Anonymous: Limited features, no identity publishing</string>
-    <string name="privacy_info">🔒 Your privacy is paramount. All connections routed through TOR.
-No tracking. No analytics. No ads.</string>
-    <string name="nostr_powered_tor">Nostr client powered by TOR</string>
+    <string name="login_with_amber">Sign in with Amber</string>
+    <string name="install_amber_signer">Get Amber</string>
+    <string name="amber_recommended">Amber holds your key in its own app. Umbra only ever asks it to sign.</string>
+    <string name="continue_anonymously">Browse without signing in</string>
+    <string name="anonymous_limited_features">Read-only. You can\'t post, react or follow until you sign in.</string>
+    <string name="privacy_info">No tracking, no analytics, no ads. Your key never touches this app.</string>
+    <string name="nostr_powered_tor">Nostr, from the shadow.</string>
     <string name="login_failed">Authentication failed. Please try again.</string>
     <string name="login_error_with_detail">Login error: %1$s</string>
 
@@ -569,4 +562,17 @@ No tracking. No analytics. No ads.</string>
     <string name="network_status_starting_cd">Tor is connecting</string>
     <string name="network_status_offline_cd">Tor is not connected</string>
     <string name="network_status_relays_offline_cd">Tor connected, relays offline</string>
+    <string name="tor_gate_error_title">Couldn\'t reach Tor</string>
+    <string name="tor_gate_footer">Umbra never connects outside Tor. If Tor is down, nothing leaves your phone.</string>
+    <string name="login_promise_tor">Every connection goes through Tor</string>
+    <string name="login_promise_amber">Your key stays in Amber, never in Umbra</string>
+    <string name="login_promise_moderation">You decide what to hide, not the app</string>
+    <string name="profile_tab_notes">Notes</string>
+    <string name="profile_tab_replies">Replies</string>
+    <string name="profile_tab_follows">Following</string>
+    <string name="profile_tab_relays">Relays</string>
+    <string name="profile_tab_mutes">Muted</string>
+    <string name="profile_tab_pins">Pinned</string>
+    <string name="copy_to_clipboard_cd">Copy %1$s</string>
+    <string name="composer_preview_label">Preview</string>
 </resources>

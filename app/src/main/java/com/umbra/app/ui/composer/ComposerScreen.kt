@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -44,6 +46,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -74,6 +80,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.umbra.app.R
+import com.umbra.app.ui.theme.UmbraTheme
+import androidx.compose.ui.draw.clip
 import com.umbra.app.ui.common.resolve
 import com.umbra.app.ui.components.MENTION_URI_REGEX
 import com.umbra.app.ui.components.LoadingSpinner
@@ -222,14 +230,17 @@ fun ComposerScreen(
                     )
                 },
                 actions = {
-                    TextButton(
+                    Button(
                         onClick = viewModel::publish,
-                        enabled = viewModel.textState.text.isNotBlank() && state.canSign && !state.isPublishing
+                        enabled = viewModel.textState.text.isNotBlank() && state.canSign && !state.isPublishing,
+                        colors = ButtonDefaults.buttonColors(containerColor = UmbraTheme.colors.corona),
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        modifier = Modifier.padding(end = 8.dp).height(38.dp)
                     ) {
                         if (state.isPublishing) {
-                            LoadingSpinner(size = 18.dp, strokeWidth = 2.dp)
+                            LoadingSpinner(size = 18.dp, strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
                         } else {
-                            Text(stringResource(R.string.publish))
+                            Text(stringResource(R.string.publish), style = MaterialTheme.typography.titleSmall)
                         }
                     }
                 }
@@ -330,24 +341,24 @@ fun ComposerScreen(
                                     Text(
                                         stringResource(
                                             if (state.isReplyMode) R.string.reply_note_hint else R.string.compose_note_hint
-                                        )
+                                        ),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 },
-                                container = {
-                                    OutlinedTextFieldDefaults.Container(
-                                        enabled = true,
-                                        isError = false,
-                                        interactionSource = interactionSource,
-                                        colors = OutlinedTextFieldDefaults.colors(),
-                                        shape = OutlinedTextFieldDefaults.shape
-                                    )
-                                }
+                                // A bare writing surface: no box around the text, the page is the field.
+                                contentPadding = PaddingValues(top = 8.dp),
+                                container = {}
                             )
                         }
                     )
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
+                        FilledTonalIconButton(
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MaterialTheme.colorScheme.primary
+                            ),
                             onClick = {
                                 pickMediaLauncher.launch(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
@@ -371,8 +382,9 @@ fun ComposerScreen(
 
                     if (state.mentionSuggestions.isNotEmpty()) {
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            shadowElevation = 8.dp,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             LazyColumn(modifier = Modifier.heightIn(max = 220.dp)) {
@@ -425,8 +437,18 @@ fun ComposerScreen(
             }
 
             if (viewModel.textState.text.isNotBlank()) {
-                HorizontalDivider()
-                Box(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))) {
+                Text(
+                    text = stringResource(R.string.composer_preview_label),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp)
+                )
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp)
+                        .clip(MaterialTheme.shapes.large)
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                ) {
                     EventCard(
                         event = state.draftEvent(viewModel.textState.text.toString()),
                         enableEventClick = false,

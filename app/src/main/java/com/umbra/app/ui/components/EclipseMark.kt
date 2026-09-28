@@ -3,6 +3,7 @@ package com.umbra.app.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -106,38 +107,37 @@ internal fun DrawScope.drawEclipse(
 }
 
 /**
- * Deterministic per-pubkey avatar for accounts with no picture: an eclipse whose corona hue and
- * diamond-ring angle are derived from the key, so different people stay visually distinct in a
- * feed instead of all sharing one identical placeholder.
+ * Avatar for accounts with no picture: a quiet eclipse on a neutral disc. Only the small
+ * diamond-ring point moves — its angle is derived from the pubkey — so different people are
+ * subtly distinguishable without a field of coloured placeholders competing with real avatars.
  */
 @Composable
 fun PubkeyEclipseAvatar(
     pubkey: String,
     modifier: Modifier = Modifier
 ) {
-    val (hue, angle) = remember(pubkey) { pubkeySeed(pubkey) }
-    val corona = remember(hue) { Color.hsl(hue, 0.7f, 0.76f) }
-    val background = remember(hue) { Color.hsl(hue, 0.4f, 0.2f) }
+    val angle = remember(pubkey) { pubkeySeed(pubkey).second }
+    val background = MaterialTheme.colorScheme.surfaceContainerHigh
+    val rim = MaterialTheme.colorScheme.outline
     val flare = UmbraTheme.colors.zap
     Canvas(modifier) {
-        drawRect(
+        drawRect(background)
+        val r = size.minDimension / 2f * 0.62f
+        drawCircle(color = Color(0xFF09080E), radius = r, center = center)
+        drawCircle(color = rim, radius = r, center = center, style = Stroke(width = r * 0.06f))
+        val rad = Math.toRadians(angle.toDouble())
+        val point = Offset(center.x + r * cos(rad).toFloat(), center.y + r * sin(rad).toFloat())
+        drawCircle(
             brush = Brush.radialGradient(
-                0f to corona.copy(alpha = 0.45f),
-                0.6f to background,
-                1f to background,
-                center = center,
-                radius = size.minDimension * 0.75f
-            )
+                0f to flare.copy(alpha = 0.7f),
+                1f to Color.Transparent,
+                center = point,
+                radius = r * 0.45f
+            ),
+            radius = r * 0.45f,
+            center = point
         )
-        drawEclipse(
-            ignition = 1f,
-            corona = corona,
-            flare = flare,
-            disc = Color(0xFF09080E),
-            flareAngleDeg = angle,
-            discScale = 0.68f,
-            drawHalo = false
-        )
+        drawCircle(color = flare, radius = r * 0.11f, center = point)
     }
 }
 

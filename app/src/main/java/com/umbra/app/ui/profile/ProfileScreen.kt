@@ -15,8 +15,20 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.automirrored.outlined.VolumeOff
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import com.umbra.app.ui.components.formatCount
+import com.umbra.app.ui.theme.MonoStyle
+import com.umbra.app.ui.theme.UmbraTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -62,7 +74,6 @@ import com.umbra.app.ui.common.resolve
 import com.umbra.app.ui.components.EmptyState
 import com.umbra.app.ui.components.ErrorBanner
 import com.umbra.app.ui.components.ExternalUrlWarningDialog
-import com.umbra.app.ui.components.KeyValueCopyRow
 import com.umbra.app.ui.components.LoadingSpinner
 import com.umbra.app.ui.components.NotesTimelineContainer
 import com.umbra.app.domain.nip05.Nip05VerificationState
@@ -76,7 +87,6 @@ import com.umbra.app.ui.components.launchExternalUrl
 import com.umbra.app.ui.components.shareEventUrl
 import com.umbra.app.ui.components.media.UserAvatar
 import com.umbra.app.ui.components.media.rememberRetryingAsyncImagePainter
-import com.umbra.app.ui.components.UserIdentityBadge
 import com.umbra.app.ui.components.truncatePublicKey
 import com.umbra.app.ui.common.awaitViewportPrefetchQuietWindow
 import kotlinx.coroutines.launch
@@ -548,44 +558,26 @@ fun ProfileScreen(
                             key = { it },
                             contentType = { "muted_pubkey_row" }
                         ) { mutedPubkey ->
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceContainer,
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 5.dp)
+                                    .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Row(
+                                UserAvatar(userProfile = null, pubkey = mutedPubkey, size = 36.dp)
+                                Text(
+                                    text = Bech32Encoder.encodeNpub(mutedPubkey).truncatePublicKey(12, 8),
+                                    style = MonoStyle,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Column(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .clickable { navController.navigate(Screen.Profile.forPubkey(mutedPubkey)) },
-                                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                                    ) {
-                                        Text(
-                                            text = mutedPubkey.truncatePublicKey(8, 8),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = Bech32Encoder.encodeNpub(mutedPubkey).truncatePublicKey(10, 8),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                    TextButton(onClick = { viewModel.unmuteUser(mutedPubkey) }) {
-                                        Text(stringResource(R.string.unmute_user))
-                                    }
+                                        .weight(1f)
+                                        .clickable { navController.navigate(Screen.Profile.forPubkey(mutedPubkey)) }
+                                )
+                                TextButton(onClick = { viewModel.unmuteUser(mutedPubkey) }) {
+                                    Text(stringResource(R.string.unmute_user))
                                 }
                             }
                         }
@@ -620,103 +612,118 @@ private fun ProfileHero(
     // banner/avatar Blossom-fallback candidacy now that they share the unified engine.
     userRepository: UserRepository
 ) {
+    val background = MaterialTheme.colorScheme.background
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 10.dp)
+            .padding(bottom = 8.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(175.dp)
-        ) {
-            if (!profile?.banner.isNullOrBlank()) {
-                val bannerUrl = profile.banner
-                // Retries on Tor-circuit-build failure via the same unified engine every other
-                // image entry point uses — a plain AsyncImage(model = url) here previously
-                // got stuck on a blank banner until an unrelated recomposition created a fresh
-                // request.
-                val windowInfo = LocalWindowInfo.current
-                val bannerHeightPx = with(LocalDensity.current) { 150.dp.roundToPx() }
-                val gatedState = rememberRetryingAsyncImagePainter(
-                    url = bannerUrl,
-                    targetWidthPx = windowInfo.containerSize.width.coerceAtLeast(1),
-                    targetHeightPx = bannerHeightPx.coerceAtLeast(1),
-                    authorPubkey = pubkey,
-                    userRepository = userRepository
-                )
-                Image(
-                    painter = gatedState.painter,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
+        Box(modifier = Modifier.fillMaxWidth().height(ProfileBannerHeight + ProfileAvatarSize / 2)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(ProfileBannerHeight)
+            ) {
+                if (!profile?.banner.isNullOrBlank()) {
+                    val bannerUrl = profile.banner
+                    // Retries on Tor-circuit-build failure via the same unified engine every other
+                    // image entry point uses — a plain AsyncImage(model = url) here previously
+                    // got stuck on a blank banner until an unrelated recomposition created a fresh
+                    // request.
+                    val windowInfo = LocalWindowInfo.current
+                    val bannerHeightPx = with(LocalDensity.current) { ProfileBannerHeight.roundToPx() }
+                    val gatedState = rememberRetryingAsyncImagePainter(
+                        url = bannerUrl,
+                        targetWidthPx = windowInfo.containerSize.width.coerceAtLeast(1),
+                        targetHeightPx = bannerHeightPx.coerceAtLeast(1),
+                        authorPubkey = pubkey,
+                        userRepository = userRepository
+                    )
+                    Image(
+                        painter = gatedState.painter,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    // No banner: a faint corona glow instead of a flat colour block.
+                    val corona = UmbraTheme.colors.corona
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .drawBehind {
+                                drawRect(
+                                    Brush.radialGradient(
+                                        0f to corona.copy(alpha = 0.22f),
+                                        1f to Color.Transparent,
+                                        center = Offset(size.width * 0.8f, size.height * 0.1f),
+                                        radius = size.width * 0.8f
+                                    )
+                                )
+                            }
+                    )
+                }
+                // Fade the banner into the page so the header reads as one surface.
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp)
-                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                0.55f to background.copy(alpha = 0.15f),
+                                1f to background
+                            )
+                        )
                 )
             }
 
             UserAvatar(
                 userProfile = profile,
                 pubkey = pubkey,
-                size = 88.dp,
+                size = ProfileAvatarSize,
                 shape = CircleShape,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 16.dp),
+                    .padding(start = 16.dp)
+                    .border(4.dp, background, CircleShape),
                 authorPubkey = pubkey,
                 userRepository = userRepository
             )
-        }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                UserIdentityBadge(
-                    userProfile = profile,
-                    pubkey = pubkey
-                )
-
-                // Best-effort NIP-45 COUNT across relays that advertise support; null (hidden)
-                // until at least one has actually answered, so we never flash a false "0".
-                followersCount?.let { count ->
-                    Text(
-                        text = stringResource(R.string.profile_followers_count, count),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                val lightning = profile?.lud16 ?: profile?.lud06
-
-                if (!lightning.isNullOrBlank()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        if (!lightning.isNullOrBlank()) {
-                            IdentityTagRow(icon = Icons.Default.FlashOn, value = lightning)
+                if (!isOwnProfile) {
+                    if (canSign) {
+                        IconButton(
+                            onClick = onMuteUser,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.VolumeOff,
+                                contentDescription = stringResource(R.string.mute_user),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
-                }
-            }
-
-            if (!isOwnProfile) {
-                Column(horizontalAlignment = Alignment.End) {
+                    val followColors = if (isFollowing) {
+                        ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
+                    } else {
+                        ButtonDefaults.buttonColors(containerColor = UmbraTheme.colors.corona)
+                    }
                     Button(
                         onClick = onToggleFollow,
-                        enabled = canSign && !isFollowActionInFlight
+                        enabled = canSign && !isFollowActionInFlight,
+                        colors = followColors,
+                        border = if (isFollowing) BorderStroke(1.dp, MaterialTheme.colorScheme.outline) else null,
+                        modifier = Modifier.height(40.dp)
                     ) {
                         if (isFollowActionInFlight) {
                             LoadingSpinner(size = 16.dp)
@@ -726,49 +733,63 @@ private fun ProfileHero(
                                     stringResource(R.string.profile_unfollow)
                                 } else {
                                     stringResource(R.string.profile_follow)
-                                }
+                                },
+                                style = MaterialTheme.typography.titleSmall
                             )
                         }
                     }
-
-                    if (canSign) {
-                        OutlinedButton(onClick = onMuteUser) {
-                            Text(stringResource(R.string.mute_user))
-                        }
+                } else if (canSign) {
+                    OutlinedButton(
+                        onClick = onEditProfile,
+                        modifier = Modifier.height(40.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
+                    ) {
+                        Text(stringResource(R.string.edit_profile_button), style = MaterialTheme.typography.titleSmall)
                     }
-
-                    if (!canSign) {
-                        Text(
-                            text = stringResource(R.string.profile_follow_anonymous_hint),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.widthIn(max = 160.dp)
-                        )
-                    }
-                }
-            } else if (canSign) {
-                OutlinedButton(onClick = onEditProfile) {
-                    Text(stringResource(R.string.edit_profile_button))
                 }
             }
         }
 
-        ProfileInfoCard(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .padding(horizontal = 16.dp)
+                .padding(top = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            KeyValueCopyRow(
-                label = stringResource(R.string.hex_label),
-                value = pubkey.truncatePublicKey(8, 8),
-                onCopy = onCopyHex
-            )
-
-            KeyValueCopyRow(
-                label = stringResource(R.string.npub_label),
-                value = npub.truncatePublicKey(10, 8),
-                onCopy = onCopyNpub
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = profile?.getUserDisplayName() ?: pubkey.truncatePublicKey(),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (profile?.nip05VerificationState == Nip05VerificationState.Verified && !profile.nip05.isNullOrBlank()) {
+                        Icon(
+                            imageVector = Icons.Default.Verified,
+                            contentDescription = stringResource(R.string.nip05_verified_cd),
+                            tint = UmbraTheme.colors.secure,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                val nip05 = profile?.nip05?.trim().orEmpty()
+                if (nip05.isNotBlank() && profile?.nip05VerificationState == Nip05VerificationState.Verified) {
+                    Text(
+                        text = nip05.removePrefix("_@"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
 
             if (!profile?.about.isNullOrBlank()) {
                 HashtagAwareBio(
@@ -778,21 +799,100 @@ private fun ProfileHero(
                 )
             }
 
-            if (!profile?.website.isNullOrBlank()) {
-                TextButton(
-                    onClick = { onWebsiteClick(profile.website) },
-                    contentPadding = PaddingValues(0.dp)
+            val lightning = profile?.lud16 ?: profile?.lud06
+            val website = profile?.website?.takeIf { it.isNotBlank() }
+            if (website != null || !lightning.isNullOrBlank() || followersCount != null) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = stringResource(R.string.profile_website_label, profile.website),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    // Best-effort NIP-45 COUNT across relays that advertise support; null (hidden)
+                    // until at least one has actually answered, so we never flash a false "0".
+                    followersCount?.let { count ->
+                        Text(
+                            text = stringResource(R.string.profile_followers_count, count),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    if (website != null) {
+                        IdentityTagRow(
+                            icon = Icons.Outlined.Link,
+                            value = website.removePrefix("https://").removePrefix("http://").trimEnd('/'),
+                            tint = MaterialTheme.colorScheme.primary,
+                            onClick = { onWebsiteClick(website) }
+                        )
+                    }
+                    if (!lightning.isNullOrBlank()) {
+                        IdentityTagRow(icon = Icons.Default.Bolt, value = lightning, tint = UmbraTheme.colors.zap)
+                    }
                 }
             }
+
+            if (!isOwnProfile && !canSign) {
+                Text(
+                    text = stringResource(R.string.profile_follow_anonymous_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                KeyChip(
+                    label = stringResource(R.string.npub_label),
+                    value = npub.truncatePublicKey(10, 6),
+                    onCopy = onCopyNpub,
+                    modifier = Modifier.weight(1f)
+                )
+                KeyChip(
+                    label = stringResource(R.string.hex_label),
+                    value = pubkey.truncatePublicKey(6, 4),
+                    onCopy = onCopyHex
+                )
+            }
         }
+    }
+}
+
+private val ProfileBannerHeight = 150.dp
+private val ProfileAvatarSize = 88.dp
+
+/** A copyable identifier: tiny label, the value in mono, and a copy affordance. */
+@Composable
+private fun KeyChip(
+    label: String,
+    value: String,
+    onCopy: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .clickable(onClick = onCopy)
+            .padding(start = 10.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MonoStyle,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
+        )
+        Icon(
+            imageVector = Icons.Outlined.ContentCopy,
+            contentDescription = stringResource(R.string.copy_to_clipboard_cd, label),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(14.dp)
+        )
     }
 }
 
@@ -809,33 +909,61 @@ private fun ProfileTabsRow(
     showPins: Boolean,
     onSelect: (ProfileTab) -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        val tabs = buildList {
-            add(Triple(ProfileTab.NOTES, stringResource(R.string.profile_tab_notes_count, notesCount), notesCount))
-            add(Triple(ProfileTab.REPLIES, stringResource(R.string.profile_tab_replies_count, repliesCount), repliesCount))
-            add(Triple(ProfileTab.FOLLOWS, stringResource(R.string.profile_tab_follows_count, followsCount), followsCount))
-            add(Triple(ProfileTab.RELAYS, stringResource(R.string.profile_tab_relays_count, relaysCount), relaysCount))
-            if (showMutes) {
-                add(Triple(ProfileTab.MUTES, stringResource(R.string.profile_tab_mutes_count, mutesCount), mutesCount))
-            }
-            if (showPins) {
-                add(Triple(ProfileTab.PINNED, stringResource(R.string.profile_tab_pins_count, pinsCount), pinsCount))
+    val tabs = buildList {
+        add(Triple(ProfileTab.NOTES, stringResource(R.string.profile_tab_notes), notesCount))
+        add(Triple(ProfileTab.REPLIES, stringResource(R.string.profile_tab_replies), repliesCount))
+        add(Triple(ProfileTab.FOLLOWS, stringResource(R.string.profile_tab_follows), followsCount))
+        add(Triple(ProfileTab.RELAYS, stringResource(R.string.profile_tab_relays), relaysCount))
+        if (showMutes) add(Triple(ProfileTab.MUTES, stringResource(R.string.profile_tab_mutes), mutesCount))
+        if (showPins) add(Triple(ProfileTab.PINNED, stringResource(R.string.profile_tab_pins), pinsCount))
+    }
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            tabs.forEach { (tab, label, count) ->
+                val selected = selectedTab == tab
+                Column(
+                    modifier = Modifier
+                        .clip(MaterialTheme.shapes.small)
+                        .clickable { onSelect(tab) }
+                        .padding(horizontal = 10.dp)
+                        .padding(top = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (count > 0) {
+                            Text(
+                                text = formatCount(count),
+                                style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Box(
+                        modifier = Modifier
+                            .height(3.dp)
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
+                            .background(if (selected) UmbraTheme.colors.corona else Color.Transparent)
+                    )
+                }
             }
         }
-
-        tabs.forEach { (tab, label, _) ->
-            FilterChip(
-                selected = selectedTab == tab,
-                onClick = { onSelect(tab) },
-                label = { Text(label) }
-            )
-        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
@@ -845,11 +973,11 @@ private fun RelayStatsCard(
     onOpenRelayConfig: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainer,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
@@ -887,41 +1015,37 @@ private fun RelayStatsCard(
 
 @Composable
 private fun RelaySummaryRow(relay: Relay) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 5.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+        Text(
+            text = relay.relayInfo?.name?.takeIf { it.isNotBlank() } ?: relay.url,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = relay.url,
+            style = MonoStyle,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Row(
+            modifier = Modifier.padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text(
-                text = relay.relayInfo?.name?.takeIf { it.isNotBlank() } ?: relay.url,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Text(
-                text = relay.url,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (relay.isWriteEnabled) StatPill(stringResource(R.string.relay_subscriptions_outbox))
-                if (relay.isReadEnabled) StatPill(stringResource(R.string.relay_subscriptions_inbox))
-                if (relay.isDmEnabled) StatPill(stringResource(R.string.relay_dm))
-                if (relay.isOnion) StatPill(stringResource(R.string.relay_onion))
-            }
+            if (relay.isWriteEnabled) StatPill(stringResource(R.string.relay_subscriptions_outbox))
+            if (relay.isReadEnabled) StatPill(stringResource(R.string.relay_subscriptions_inbox))
+            if (relay.isDmEnabled) StatPill(stringResource(R.string.relay_dm))
+            if (relay.isOnion) StatPill(stringResource(R.string.relay_onion), highlight = true)
         }
     }
+    HorizontalDivider(modifier = Modifier.padding(start = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 @Composable
@@ -931,132 +1055,107 @@ private fun FollowListRow(
     onClick: () -> Unit,
     userRepository: UserRepository? = null
 ) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 5.dp)
             .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+        UserAvatar(
+            userProfile = profile,
+            pubkey = pubkey,
+            size = 44.dp,
+            shape = CircleShape,
+            authorPubkey = pubkey,
+            userRepository = userRepository
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            UserAvatar(
-                userProfile = profile,
-                pubkey = pubkey,
-                size = 42.dp,
-                shape = CircleShape,
-                authorPubkey = pubkey,
-                userRepository = userRepository
+            Text(
+                text = profile?.getUserDisplayName() ?: pubkey.truncatePublicKey(8, 8),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Text(
-                    text = profile?.getUserDisplayName() ?: pubkey.truncatePublicKey(8, 8),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = Bech32Encoder.encodeNpub(pubkey).truncatePublicKey(10, 8),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            val about = profile?.about?.trim()?.lineSequence()?.firstOrNull { it.isNotBlank() }
+            Text(
+                text = about ?: Bech32Encoder.encodeNpub(pubkey).truncatePublicKey(10, 8),
+                style = if (about != null) MaterialTheme.typography.bodySmall else MonoStyle,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
-
 
 @Composable
 private fun RelaySectionHeader(title: String) {
     Text(
         text = title,
-        style = MaterialTheme.typography.labelMedium,
+        style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 4.dp)
     )
 }
 
 @Composable
 private fun RelayUrlRow(url: String) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
+    Text(
+        text = url,
+        style = MonoStyle,
+        color = MaterialTheme.colorScheme.onSurface,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-    ) {
-        Text(
-            text = url,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
-        )
-    }
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    )
+    HorizontalDivider(modifier = Modifier.padding(start = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 @Composable
-private fun StatPill(text: String) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-        )
-    }
+private fun StatPill(text: String, highlight: Boolean = false) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = if (highlight) UmbraTheme.colors.secure else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(horizontal = 9.dp, vertical = 3.dp)
+    )
 }
 
 @Composable
-private fun IdentityTagRow(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String) {
+private fun IdentityTagRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    value: String,
+    tint: Color,
+    onClick: (() -> Unit)? = null
+) {
     Row(
+        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(14.dp)
+            tint = tint,
+            modifier = Modifier.size(16.dp)
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (onClick != null) tint else MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-private fun ProfileInfoCard(
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = modifier
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            content = content
         )
     }
 }
@@ -1102,8 +1201,8 @@ private fun HashtagAwareBio(
 
     Text(
         text = annotated,
-        style = MaterialTheme.typography.bodySmall.copy(
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f)
+        style = MaterialTheme.typography.bodyMedium.copy(
+            color = MaterialTheme.colorScheme.onSurface
         ),
         modifier = modifier
     )
