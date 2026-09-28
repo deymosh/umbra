@@ -1,6 +1,6 @@
 ---
 name: compose-side-effects
-description: Use when writing or reviewing Jetpack Compose code with LaunchedEffect, DisposableEffect, SideEffect, rememberCoroutineScope, rememberUpdatedState, snapshotFlow, snackbar, navigation, focus requests, analytics, or event Flow collection. Technique-layer skill, framework-generic — grounded in Umbra's AmberSignEffect/AppSessionEffects.
+description: Writing/reviewing LaunchedEffect, DisposableEffect, SideEffect, rememberCoroutineScope/UpdatedState, snapshotFlow, or event collection in Compose.
 ---
 
 # Compose: side effects

@@ -1,6 +1,6 @@
 ---
 name: nostr-nips-reference
-description: Use when you need to look up a Nostr NIP number, an event kind number, or check exact protocol semantics (tag structure, required fields, kind ranges) before implementing or reviewing NIP-related code in Umbra. Points at the canonical source (nostr-protocol/nips on GitHub) with the exact lookup commands, plus the kind-numbering convention and a table of the kinds Umbra's own domain/nipXX packages already implement — so protocol questions get answered from the spec, not guessed from memory or from what one other client happens to do.
+description: Looking up a NIP, event kind number, or exact tag semantics from the spec before NIP work.
 ---
 
 # Nostr NIPs / event-kind reference

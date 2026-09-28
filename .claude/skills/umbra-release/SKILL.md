@@ -1,6 +1,6 @@
 ---
 name: umbra-release
-description: Use when cutting a Umbra release — bumping the version fields, dating the changelog entry, verifying the release build, recording the checklist, tagging, and triggering the signed GitHub Release.
+description: "Cutting a release: version bump, changelog, release build check, tag, signed GitHub Release."
 ---
 
 # Cutting a Umbra release

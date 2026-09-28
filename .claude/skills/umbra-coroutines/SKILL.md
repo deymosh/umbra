@@ -1,6 +1,6 @@
 ---
 name: umbra-coroutines
-description: Use when working with Umbra's WebSocket-to-Flow bridge, debounce/conflate/flowOn usage in the relay/repository layer, or deciding where a new coroutine-based data flow should live. Adapted from a broader kotlin-coroutines skill built around a relay pool on callbackFlow + supervisorScope; Umbra's isn't (zero usages of either), it's WebSocketListener callbacks feeding class-scoped MutableSharedFlows plus per-@Singleton CoroutineScopes.
+description: The WebSocket-to-Flow bridge, debounce/conflate/flowOn in relay/repository code, or where a new data flow lives.
 ---
 
 # Coroutines in Umbra's data layer

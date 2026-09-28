@@ -1,6 +1,6 @@
 ---
 name: umbra-signer
-description: Use when wiring a new flow that signs/publishes a Nostr event, encrypts/decrypts via NIP-44, debugging "Amber sign request approved but nothing happens," or touching AmberSignerGateway/AmberConnector/AmberRequestCoordinator. Umbra is Amber-only by design — no local-key signer exists or should ever be added. Adapted from a broader multi-signer auth-signers skill, which does not apply directly here: that skill covers 3 signer kinds, Umbra supports exactly 1.
+description: Any flow that signs/publishes events or NIP-44 encrypts via Amber, or Amber sign results that never arrive.
 ---
 
 # Signing in Umbra: Amber-only

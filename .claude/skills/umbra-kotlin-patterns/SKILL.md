@@ -1,6 +1,6 @@
 ---
 name: umbra-kotlin-patterns
-description: Use when deciding StateFlow vs SharedFlow, sealed class vs sealed interface, or applying @Immutable to a new UI state class in Umbra. Adapted from a broader kotlin-expert skill — its DSL-builder and inline/reified sections don't apply, Umbra has neither pattern anywhere in the codebase today.
+description: StateFlow vs SharedFlow, sealed class vs interface, Immutable on new UI state classes.
 ---
 
 # Kotlin patterns in Umbra

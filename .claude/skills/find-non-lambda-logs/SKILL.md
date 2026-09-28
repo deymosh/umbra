@@ -1,6 +1,6 @@
 ---
 name: find-non-lambda-logs
-description: Use when auditing or reviewing logger.d/w/e calls in Umbra — checks two things, not three: (1) unscrubbed relay URL/pubkey/hex/nsec-shaped content reaching log calls (AUDIT.md violation, the most important check here), (2) catch blocks that lose the throwable by calling logger.d/w with a scrubbed message string instead of logger.e(throwable) { }. Umbra uses a lambda-taking wrapper (UmbraLog.tag(TAG) → Logger, implementing the domain-layer UmbraLogger interface) with Log.isLoggable gating built into the wrapper itself — there is no plain android.util.Log call site left anywhere outside the wrapper's own implementation file, and no manual isLoggable guard for callers to add.
+description: "Auditing logger.d/w/e calls: unscrubbed relay URLs/pubkeys/content in logs, and catch blocks that drop the throwable."
 ---
 
 # Auditing log calls in Umbra

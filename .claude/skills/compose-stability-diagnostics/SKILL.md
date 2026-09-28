@@ -1,6 +1,6 @@
 ---
 name: compose-stability-diagnostics
-description: Use when writing or reviewing Jetpack Compose parameter stability, compiler reports, skippability, unstable UI state classes, collection parameters, or Kotlin 2.0+ strong skipping behavior. Technique-layer skill, framework-generic — grounded in Umbra's @Immutable UI states and hand-rolled ImmutableCollections.kt (Umbra does not depend on kotlinx.collections.immutable).
+description: Compose parameter stability, skippability, unstable UI state/collection params, strong skipping (Umbra uses its own ImmutableCollections.kt).
 ---
 
 # Compose stability diagnostics

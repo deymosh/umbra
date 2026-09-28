@@ -77,59 +77,25 @@ CI (`.github/workflows/android-ci.yml`) runs `lintDebug`, `testDebugUnitTest`, a
 
 ## Workflow
 
-- **Emulator/device testing (the `run-umbra` skill, `installDebug`, on-device screenshots/UI driving) is opt-in only** — use it exclusively when the user explicitly asks to run/test on the emulator. Otherwise, verify changes with `compileDebugKotlin` / `lintDebug` / `testDebugUnitTest` alone; do not launch the emulator on your own initiative just because a change is UI-related.
-- **When a request breaks down into multiple tasks or phases**, work through them one at a time: implement, verify with `compileDebugKotlin` + `lintDebug` + `testDebugUnitTest`, then commit that task before starting the next (see branch/PR below for where those commits land). Don't batch unrelated tasks into one commit.
-- **Branch + PR, not direct commits to `master`.** For code/feature/fix work, start from an up-to-date `master`, create a branch named `claude/<short-kebab-slug>` (e.g. `claude/fix-composer-gif-paste`), and do all of that request's commits there — one branch per request/feature, not per commit; a multi-phase request's several commits share the same branch. Once verification passes, open a PR with `gh pr create` (a real summary, not a placeholder) instead of pushing to `master` directly. This keeps `master` reviewable in PR-sized units and lets the release workflow's `generate_release_notes: true` step produce a real per-change changelog instead of a raw commit list. Leave the PR open for the user to merge — don't merge it yourself unless they explicitly ask to merge/ship it. Small doc/config housekeeping the user is directing turn-by-turn in the same conversation can still go straight to `master` if they ask for that in the moment; the default is branch+PR, not a rule with zero exceptions.
-- **Commit safety:** keep commit subjects/bodies neutral, English-only, and free of any literal `@word` — not just mention-shaped text, but Kotlin/Java annotations and DI qualifiers too (`@Composable`, `@Inject`, `@Named("tor")`, ...). GitHub's markdown auto-links any `@word` on sight, so an annotation reference notifies a real account exactly like a mention would — this is the most common way the rule gets missed, since writing `@Composable` in a sentence about Compose code doesn't *feel* like mentioning someone. Fix: drop the `@` (`OptIn`, `Composable`), quote the token, or spell it out ("the `Named(\"tor\")` qualifier") — unless a real GitHub mention is genuinely intended. Before every `git commit`, scan the drafted message for `@` characters specifically; "does this look like a person's name" isn't a sufficient filter, since annotation references don't. Recovery, if a violation ships to a solo-authored unmerged branch anyway: tag the current tip as a backup, `git reset --hard` to the last clean commit, then `git cherry-pick <sha> --no-commit` + a corrected `git commit` per offending commit in order (never `git rebase -i`), confirm `git diff <backup-tag> HEAD` is empty, `git push --force-with-lease` (never plain `--force`), delete the backup tag.
-- **Commit attribution:** every commit Claude Code creates — on a feature branch or, per the exception above, directly on `master` — must end its message with a `Co-Authored-By: <model name> <noreply@anthropic.com>` trailer (e.g. `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>`), naming whichever Claude model actually did the work. This isn't optional per-commit; apply it every time, without being asked.
-- **Comments and commits must stand on their own, independent of `.planning/` or git history.** GSD's `.planning/` phase/plan docs and git history are both workflow scaffolding, not permanent fixtures — either can be deleted, squashed, or rewritten. Anything that lives permanently in the tracked source tree (code comments) or in a commit message must therefore be understandable without either one:
-  - **Source code comments** must never reference a GSD phase/plan/task identifier (e.g. "Plan 03-05 Task 2", "D-01", "per 03-RESEARCH.md Pitfall 3") or a specific commit hash / "see `git show <sha>`" for context. State the actual constraint, invariant, or behavior being preserved directly in the comment, not by pointing at an external planning doc or another commit's diff.
-  - **Commit messages:** the required `{type}(phase-plan): ...` subject scope tag is fine — it's GSD's own traceability convention for `git log --grep`, not a comment referencing external context. But the body/description must still explain what changed and why in terms understandable without opening the plan or diffing another commit — avoid "matches Task 2's spec" or "see commit `<sha>` for the original extraction"; restate the actual reasoning inline instead.
-  - This is the general instruction (see "Doing tasks" above) not to reference the current task/fix/callers in comments, made explicit for GSD phase-execution work, where following a detailed PLAN.md makes it easy to drift into planning-doc-shaped comments without noticing.
+- **Emulator/device testing is opt-in only** (`run-umbra`, `installDebug`, on-device UI driving) — only when the user explicitly asks. Otherwise verify with `compileDebugKotlin` / `lintDebug` / `testDebugUnitTest`, plus Roborazzi snapshots for UI.
+- **Multi-part requests:** one task at a time — implement, verify, commit — before the next. Don't batch unrelated changes into one commit.
+- **Branch + PR, not `master`.** Start from an up-to-date `master` on `claude/<short-kebab-slug>` (one branch per request, all its commits there), open a PR with a real summary once verification passes, and leave it for the user to merge unless they ask you to. Small doc/config housekeeping the user directs turn-by-turn may go to `master` if they say so.
+- **No literal `@word` in commit messages** — GitHub turns `@Composable`, `@Inject`, `@Named("tor")` into mentions exactly like a username. Drop the `@`, quote it, or spell it out; scan every drafted message for `@` before committing. If one ships on a solo, unmerged branch: tag a backup, `git reset --hard` to the last clean commit, `git cherry-pick <sha> --no-commit` + corrected commit for each (never `rebase -i`), check `git diff <backup> HEAD` is empty, `git push --force-with-lease`, delete the tag. Keep messages neutral and English.
+- **Attribution:** every commit ends with a `Co-Authored-By: <model name> <noreply@anthropic.com>` trailer naming the Claude model that did the work.
+- **Comments and commit bodies stand alone.** `.planning/` docs and git history can be deleted or rewritten, so never cite a GSD phase/plan/task id ("Plan 03-05 Task 2", "D-01") or a commit hash as the explanation — state the constraint or reason itself. A `{type}(phase-plan): ...` subject scope tag is fine.
 
 ## Bug tracking
 
-Bugs and backlog items found or suggested mid-session — via code review, manual testing, or the user pointing one out — are logged across three files, distinct from GitHub Issues (CONTRIBUTING.md's "Reporting bugs" section is for external contributors formally filing an issue; these are Claude Code's own running lists for items that aren't necessarily issues yet):
+Bugs and backlog items found mid-session are logged as they're found — open bugs in
+`docs/KNOWN_ISSUES.md`, backlog in `docs/TODO.md`, finished work in `docs/DONE.md` — with one
+global `LOG-<n>` counter across all three (never `#<n>`, which GitHub auto-links). Formats and
+status transitions: the `umbra-issue-log` skill.
 
-- **[docs/KNOWN_ISSUES.md](../docs/KNOWN_ISSUES.md)** — open bugs not yet fixed.
-- **[docs/TODO.md](../docs/TODO.md)** — the general project backlog: suggested/planned tasks, features, and refactors that are *not* bugs. NIP-specific sequencing stays in `docs/nip-priority-roadmap.md` and is cross-linked from TODO.md rather than duplicated.
-- **[docs/DONE.md](../docs/DONE.md)** — append-only log of completed work, fed by both of the above once an item is finished.
+## UI and design
 
-Each entry gets a locally sequential ID (`LOG-1`, `LOG-2`, ...) — independent of and never matching a GitHub issue/PR number, and never reused once an entry moves to DONE.md — so the user can say "fix LOG-3" or "do LOG-7" and mean one exact, unambiguous item regardless of which file it's currently in or whether it was ever filed as a GitHub issue. The `LOG-` prefix (rather than a bare `#<n>`) is deliberate: a plain `#14` in a doc or commit message is indistinguishable from a GitHub issue/PR reference and GitHub auto-links it as one, which is wrong here. This is a **single global counter shared across all three files**: before assigning a new ID, check the highest number already used across all three, and increment — there's no separately-maintained per-file counter to fall out of sync.
-
-### Bugs (docs/KNOWN_ISSUES.md → docs/DONE.md)
-
-- **`docs/KNOWN_ISSUES.md`** — one entry per open bug:
-  ```
-  ### LOG-<n> — <short title>
-  - **Status:** open
-  - **Found:** <YYYY-MM-DD>
-  - **Where:** <file/screen/flow>
-
-  <description — what's wrong, how to repro if known>
-  ```
-- When a fix is committed, update that entry's status in place to `fix applied — needs on-device validation` and add a `**Fix:**` line pointing at the commit/PR. Don't move it to DONE.md yet — an applied fix isn't confirmed working until it's actually been run.
-- **Emulator/device validation stays opt-in** (see Workflow above) — Umbra doesn't run autonomous on-device test passes. A `fix applied` entry just sits in KNOWN_ISSUES.md until the user explicitly asks to validate it (e.g. via the `run-umbra` skill) or confirms it themselves.
-- Once validated, move the entry verbatim from `docs/KNOWN_ISSUES.md` to `docs/DONE.md`, appending a `**Validated:** <YYYY-MM-DD>` line.
-
-### Backlog (docs/TODO.md → docs/DONE.md)
-
-- **`docs/TODO.md`** — one entry per backlog item:
-  ```
-  ### LOG-<n> — <short title>
-  - **Status:** backlog | in progress | not applicable
-  - **Added:** <YYYY-MM-DD>
-  - **Why:** <1-2 line rationale — why this is worth doing / where it came from>
-
-  <description — what the task/feature/refactor actually is>
-  ```
-- An item that gets triaged out is marked `not applicable` in place rather than deleted, so the reasoning stays on record.
-- Once shipped, move the entry verbatim from `docs/TODO.md` to `docs/DONE.md`, appending a `**Completed:** <YYYY-MM-DD>` line and a `**From:** TODO LOG-<n>` back-reference. A backlog item doesn't need on-device validation the way a bug fix does (no `**Validated:**` line), though it can still get one if it was UI-facing and the user confirms it on-device.
-
-### General
-
-- `docs/DONE.md` is an append-only historical record — don't edit past entries beyond adding the one date line each transition calls for.
-- Keep all three files updated as a normal part of the work itself — log an item the moment it's found/suggested, update its status the moment a fix or a piece of work lands — not just when the user separately asks for it.
+All UI work follows the `umbra-design` skill (tokens, components, copy, and the snapshot review
+loop in `docs/UI_SNAPSHOTS.md`). Verify visual changes with `recordRoborazziDebug` and look at
+the images — no emulator needed.
 
 ## Architecture
 

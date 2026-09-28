@@ -1,6 +1,6 @@
 ---
 name: compose-modifier-and-layout-style
-description: Use when writing or reviewing Jetpack Compose layout APIs, modifier parameters, modifier chain construction, hardcoded root layout decisions, or layout wrappers around a single conditional. Technique-layer skill, framework-generic — grounded in Umbra's own `ui/components/` catalog rather than any other client's code.
+description: Writing/reviewing Compose modifier parameters, modifier chains, root layout choices, or wrappers around a single conditional.
 ---
 
 # Compose modifier and layout style

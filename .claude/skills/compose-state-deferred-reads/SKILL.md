@@ -1,6 +1,6 @@
 ---
 name: compose-state-deferred-reads
-description: Use when Jetpack Compose code reads scroll, animation, gesture, or other frame-rate State in composition, passes changing values across composable boundaries, or uses value-form layout/draw modifiers. Technique-layer skill, framework-generic — grounded in Umbra's FeedScreen scroll-aware animation gating.
+description: Compose code reading scroll/animation/gesture state in composition, or value-form layout/draw modifiers.
 ---
 
 # Compose state deferred reads

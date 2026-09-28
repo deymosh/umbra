@@ -1,6 +1,6 @@
 ---
 name: umbra-gradle
-description: Use when touching app/build.gradle.kts, gradle/libs.versions.toml, proguard-rules.pro, or the benchmark build type. Adapted from a broader 10-module gradle-expert skill — Umbra is single-module (:app), so there's no cross-module dependency graph to troubleshoot; the real hazards here are R8/minification-only bugs that assembleDebug can never catch.
+description: Editing build.gradle.kts, libs.versions.toml, proguard rules or the benchmark build type (R8-only bugs).
 ---
 
 # Gradle in Umbra

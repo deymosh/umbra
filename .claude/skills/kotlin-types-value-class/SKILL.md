@@ -1,6 +1,6 @@
 ---
 name: kotlin-types-value-class
-description: Use when writing or reviewing Kotlin type declarations to choose @JvmInline value class over data class where appropriate, including Compose stability implications. Technique-layer skill — Umbra has zero value classes today, so this is about new code, not a retrofit.
+description: Choosing a value class vs data class for new Kotlin types, incl. Compose stability effects.
 ---
 
 # Kotlin value class vs data class

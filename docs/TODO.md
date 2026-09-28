@@ -2,7 +2,7 @@
 
 General project backlog — suggested/planned tasks (features, refactors, roadmap items), distinct
 from open bugs (tracked in [KNOWN_ISSUES.md](KNOWN_ISSUES.md)) and completed work (logged in
-[DONE.md](DONE.md)). See [`.claude/CLAUDE.md`](../.claude/CLAUDE.md)'s "Bug tracking" section for
+[DONE.md](DONE.md)). See the `umbra-issue-log` skill (`.claude/skills/umbra-issue-log/`) for
 the full convention — locally sequential numbers shared across all three files, independent of
 GitHub issue numbers.
 
@@ -114,4 +114,21 @@ timeout before self-aborting, adding up to 5 seconds of hung teardown time and o
 assertion failure behind an unrelated `MarkerAbortException` printed later on a different thread.
 Fix: wrap the body from `entered.await()` through the final assertions in a `try`/`finally` that
 always calls `release.countDown()`.
+
+### LOG-58 — Snapshot-test coverage for remaining screens
+- **Status:** backlog
+- **Added:** 2026-09-28
+- **Why:** The Totality redesign added Roborazzi snapshots for the feed, entry flow and brand; other screens still take a ViewModel directly and can't be rendered in isolation.
+
+Split RelayConfig, RelayDetails, FeedConfig, Settings, Appearance, EditProfile and Thread into
+`XScreen(viewModel)` → stateless `XContent(state, callbacks)` (as `LoginContent`/`TorGateContent`
+now are) and add a snapshot per screen/state, so every UI change is reviewable as an image diff.
+
+### LOG-59 — Confirm Tor onion trademark use before release
+- **Status:** backlog
+- **Added:** 2026-09-28
+- **Why:** The redesign uses the Tor onion (`res/drawable/ic_tor_onion.xml`) as the Tor-status glyph.
+
+Check The Tor Project's trademark guidelines for using the onion logo to indicate Tor
+connectivity in a third-party app (Amethyst and others do the same) before the next public release.
 

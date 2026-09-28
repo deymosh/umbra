@@ -461,7 +461,11 @@ trusting a hardcoded count here.
 | `ErrorBanner` | `ui/components/ErrorBanner.kt` | Error messages in screens |
 | `NostrTextRenderer` | `ui/components/NostrTextRenderer.kt` | Nostr event content rendering entry point (delegates to `TextRenderPrimitives.kt` and `ui/components/media/RenderInlineMediaSegments.kt`) |
 | `TimeFormatter` | `ui/components/Formatters.kt` | All timestamp formatting |
-| `MenuItemRow` | `ui/components/MenuItemRow.kt` | Icon + title + subtitle rows |
+| `MenuItemRow` | `ui/components/MenuItemRow.kt` | Icon + title + subtitle rows; with `SettingsGroup` (same file) for rounded settings-style groups |
+| `EclipseMark` / `PubkeyEclipseAvatar` | `ui/components/EclipseMark.kt` | Brand mark drawn in code (animatable `ignition`) and the no-picture avatar used by `UserAvatar` |
+| `UmbraIcons` | `ui/components/UmbraIcons.kt` | Custom glyphs; `UmbraIcons.Onion` is the Tor onion and means Tor state only |
+| `NetworkStatusPill` | `ui/components/NetworkStatusPill.kt` | Combined Tor + relay status for top bars |
+| `NoteAuthorLine` | `ui/components/NoteHeader.kt` | One-line note attribution (name, verified, handle, time) |
 | `GatedImagePainter`/`ImageAttachment`/`ImageGalleryAttachment`/`FullscreenImageViewer` | `ui/components/media/` | Shared gated (`ImageLoadGate`) image-loading engine and its call sites — every image entry point (feed, avatar, banner, gallery, fullscreen) goes through this, not a one-off `AsyncImage` |
 | `InlineVideoAttachment`/`FullscreenVideoDialog`/`VideoPlayerController` | `ui/components/media/` | Shared ExoPlayer wrapper; the only files where `@UnstableApi` may appear |
 
@@ -582,7 +586,8 @@ ui/
                    RelayConfigViewModel, plus RelayCrudCoordinator, RelayListPublishingCoordinator,
                    and the pure computeRelayDerivedState() function (RelayDerivedState.kt)
   settings/       SettingsScreen
-  theme/          UmbraTheme + selectable dark color palettes (UmbraThemeOption)
+  theme/          UmbraTheme (palettes/UmbraThemeOption, UmbraTypography + bundled fonts,
+                   UmbraShapes, UmbraTheme.colors semantic tokens) — see the umbra-design skill
   tor/            TorGateScreen, TorGateViewModel, TorSideEffect
 ```
 

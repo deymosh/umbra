@@ -1,6 +1,6 @@
 ---
 name: umbra-android-platform
-description: Use when working with Umbra's navigation (NavHost.kt, Screen routes), permissions/ActivityResultContracts, external URL launching, Coil setup, or MainActivity's single-activity structure. Adapted from a much larger android-expert skill built for a multi-platform codebase — Umbra has no Desktop/iOS counterpart, so there's no shared-vs-platform-specific decision to make; everything here just is the app.
+description: Navigation (NavHost, Screen routes), permissions/ActivityResult, external URL launching, Coil setup, MainActivity.
 ---
 
 # Android platform patterns in Umbra

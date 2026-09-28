@@ -1,6 +1,6 @@
 ---
 name: nostr-nip-implementation
-description: Use when implementing or extending a Nostr NIP in Umbra (new kind, new domain/nipXX module, new list type, new repository). Encodes the established ContactList/MuteList pattern plus concrete kind constants and tag semantics cross-referenced from two other Nostr clients (named in the Reference clients section below) so new NIP work is consistent with the rest of the codebase and protocol-correct.
+description: Implementing or extending a Nostr NIP (new kind, domain/nipXX package, list type, repository).
 ---
 
 # Implementing a NIP in Umbra

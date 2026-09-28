@@ -1,6 +1,6 @@
 ---
 name: umbra-collaborator-extraction
-description: Use when a Umbra ViewModel or repository implementation has grown large enough that it mixes multiple unrelated method clusters, or when asked to decompose/refactor/split a large class in this codebase. Documents the established collaborator-extraction pattern (EventChannelRouting, EventIngestCache, RelayIssueBannerCoordinator, FeedStateMergeCoordinator, FeedEngagementSchedulingCoordinator, ProfileObserversCoordinator, InteractionActionsCoordinator, RelayCrudCoordinator, RelayListPublishingCoordinator) so a new decomposition matches the existing shape instead of inventing a new one.
+description: Splitting a large ViewModel/repository into collaborator classes the way existing coordinators are built.
 ---
 
 # Decomposing a large ViewModel/repository in Umbra

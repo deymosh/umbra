@@ -1,6 +1,6 @@
 ---
 name: compose-state-holder-ui-split
-description: Use when a Jetpack Compose screen-level composable takes a ViewModel directly, collects state or effects, handles navigation/snackbars, or wires callbacks while also rendering layout. Technique-layer skill, framework-generic — this is already CLAUDE.md's mandated ui/screen -> ui/viewmodel architecture, so use this skill to check a screen is actually following it, not to introduce something new.
+description: A screen composable that takes a ViewModel, collects state/effects and also renders layout — check the Screen/Content split.
 ---
 
 # Compose: state holder/UI split

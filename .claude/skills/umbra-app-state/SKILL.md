@@ -1,6 +1,6 @@
 ---
 name: umbra-app-state
-description: Use when working with EventLruCache, EventRepositoryImpl's two-tier cache, the SQLCipher Room database (EncryptedUmbraDatabase), UserPreferences, or deciding whether a new kind of event/state should persist to Room or stay in-memory only. Adapted from a broader account-state skill built around a mutable, always-persist-everything object graph; Umbra's state model is a deliberately different, stricter design (immutable + own-user-only persistence) and the two should not be conflated.
+description: EventLruCache, the SQLCipher Room DB, UserPreferences, or deciding whether new state persists or stays in memory.
 ---
 
 # App state in Umbra: Room (own user) + EventLruCache (everyone else)

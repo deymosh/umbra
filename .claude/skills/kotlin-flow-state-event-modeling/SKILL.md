@@ -1,6 +1,6 @@
 ---
 name: kotlin-flow-state-event-modeling
-description: Use when writing or reviewing Kotlin StateFlow/SharedFlow/Channel choices, sentinel default values, stateIn/shareIn placement, WhileSubscribed staleness, or MutableStateFlow update patterns. Technique-layer skill — grounded in Umbra's FeedViewModel.notesFlow (shareIn) and UmbraNostrClient's relay-issue SharedFlow.
+description: Choosing StateFlow/SharedFlow/Channel, sentinel defaults, stateIn/shareIn placement, WhileSubscribed staleness.
 ---
 
 # Kotlin Flow: state and event modeling

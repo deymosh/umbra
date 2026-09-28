@@ -1,6 +1,6 @@
 ---
 name: run-umbra
-description: Build, install, launch, and drive the Umbra Android app on an emulator — take screenshots, tap/type/swipe, capture logcat, run unit tests. Use when asked to run Umbra, start the app, screenshot its UI, verify a change works in the real app, or interact with the running app.
+description: Build, install and drive Umbra on an emulator (screenshots, input, logcat). Only when the user explicitly asks to run on a device.
 ---
 
 Umbra is a single-module Android app (Kotlin/Compose, package `com.umbra.app`),

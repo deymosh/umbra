@@ -1,6 +1,6 @@
 ---
 name: amber-signin
-description: Log in to Umbra via Amber (NIP-55 signer) or approve a pending Amber sign request during a live on-device UI session. Use when driving the app with run-umbra and you need an authenticated session (not anonymous), or when a compose/like/repost/follow action needs Amber approval.
+description: Sign in via Amber or approve a pending Amber request while driving the app on a device/emulator (with run-umbra).
 ---
 
 Depends on [`run-umbra`](../run-umbra/SKILL.md) — start there (`avd-start` → `install` → `launch`)

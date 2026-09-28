@@ -1,6 +1,6 @@
 ---
 name: umbra-feed-patterns
-description: Use when adding or modifying a feed (home, thread, profile), working with FeedFilter/FeedViewModel.notesFlow, EventRepository.observeFeedNotes, or wiring mute/follow-list filtering into a feed. Adapted from a broader feed-patterns skill built around a FeedFilter<T>/ChangesFlowFilter abstraction layer — Umbra has no such layer; filtering is parameters into one repository method, not a class hierarchy.
+description: Adding/changing a feed (home, thread, profile), FeedFilter/notesFlow, observeFeedNotes, mute/follow filtering.
 ---
 
 # Feed patterns in Umbra

@@ -1,6 +1,6 @@
 ---
 name: compose-recomposition-performance
-description: Use when investigating Jetpack Compose recomposition performance, skippable/restartable composables, composables.txt or compiler reports, Layout Inspector recomposition counts, or frame-rate State reads in composition vs layout/draw, and it's not yet clear whether the cause is parameter stability or deferred reads. Router skill — deep fixes live in compose-stability-diagnostics and compose-state-deferred-reads. See also nostr-performance-review for Umbra-specific findings already catalogued (feed/relay, not generic Compose).
+description: Router for Compose recomposition/jank investigations (compiler reports, Layout Inspector counts) when the cause isn't yet known.
 ---
 
 # Compose recomposition performance

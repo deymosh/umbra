@@ -1,6 +1,6 @@
 ---
 name: kotlin-coroutines-structured-concurrency
-description: Use when writing or reviewing Kotlin code that stores CoroutineScope, launches from init/non-suspending APIs, calls runBlocking, or catches broad exceptions around suspend calls. Technique-layer skill — but read the "In Umbra" section FIRST: Umbra's @Singleton repositories all store a CoroutineScope by established convention, which looks like this skill's central anti-pattern but is a deliberate, consistent, existing architecture — don't flag it as a bug without reading that section.
+description: Stored CoroutineScopes, launches from init, runBlocking, broad catches around suspend calls. Read its 'In Umbra' section first.
 ---
 
 # Kotlin coroutines: structured concurrency
