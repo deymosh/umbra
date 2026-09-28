@@ -12,8 +12,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.umbra.app.ui.components.ConfirmDialog
+import com.umbra.app.ui.theme.MonoStyle
+import com.umbra.app.ui.theme.UmbraTheme
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
@@ -39,7 +46,7 @@ import com.umbra.app.domain.relay.RelayIssueKind
 import com.umbra.app.domain.relay.RelayRequestInfo
 import com.umbra.app.domain.relay.groupByPurpose
 import com.umbra.app.ui.components.ExternalUrlWarningDialog
-import com.umbra.app.ui.components.EmptyState
+import com.umbra.app.ui.components.InlineEmptyText
 import com.umbra.app.ui.components.ChipBadge
 import com.umbra.app.ui.components.LoadingSpinner
 import com.umbra.app.ui.components.SectionHeader
@@ -62,7 +69,23 @@ fun RelayDetailsScreen(
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     var pendingExternalUrl by remember { mutableStateOf<String?>(null) }
+    var confirmDelete by remember { mutableStateOf(false) }
     val relay = state.relays.firstOrNull { it.id == relayId }
+
+    if (confirmDelete && relay != null) {
+        ConfirmDialog(
+            title = stringResource(R.string.relay_delete_confirm_title),
+            message = stringResource(R.string.relay_delete_confirm_message),
+            confirmLabel = stringResource(R.string.delete),
+            isDestructive = true,
+            onConfirm = {
+                confirmDelete = false
+                viewModel.deleteRelay(relay.id)
+                navController.popBackStack()
+            },
+            onDismiss = { confirmDelete = false }
+        )
+    }
 
     pendingExternalUrl?.let { url ->
         ExternalUrlWarningDialog(
@@ -118,25 +141,25 @@ fun RelayDetailsScreen(
                             .navigationBarsPadding()
                             .padding(horizontal = 16.dp, vertical = 16.dp)
                     ) {
-                        Button(
-                            onClick = { viewModel.startEditingRelay(relayItem) },
-                            modifier = Modifier.weight(1f)
+                        // Deleting is deliberate: a quiet outlined button behind a confirmation, never
+                        // an equal-weight filled twin of Edit.
+                        OutlinedButton(
+                            onClick = { confirmDelete = true },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
                         ) {
-                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(stringResource(R.string.edit))
-                        }
-                        Button(
-                            onClick = {
-                                viewModel.deleteRelay(relayItem.id)
-                                navController.popBackStack()
-                            },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(stringResource(R.string.delete))
+                        }
+                        Button(
+                            onClick = { viewModel.startEditingRelay(relayItem) },
+                            modifier = Modifier.weight(1f).height(48.dp)
+                        ) {
+                            Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(stringResource(R.string.edit))
                         }
                     }
                 }
@@ -206,17 +229,17 @@ fun RelayDetailsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp)
-                .padding(top = 16.dp),
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.surfaceContainer
                 ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -226,7 +249,7 @@ fun RelayDetailsScreen(
                                 Text(relayDisplayName(relay, relayInfo), style = MaterialTheme.typography.titleMedium)
                                 Text(
                                     text = relay.url,
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MonoStyle,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -246,12 +269,8 @@ fun RelayDetailsScreen(
 
                     if (refreshResult != null) {
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (refreshResult) {
-                                MaterialTheme.colorScheme.tertiaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.errorContainer
-                            },
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.surfaceContainer,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -263,11 +282,7 @@ fun RelayDetailsScreen(
                                     imageVector = if (refreshResult) Icons.Default.Check else Icons.Default.Info,
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
-                                    tint = if (refreshResult) {
-                                        MaterialTheme.colorScheme.onTertiaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.onErrorContainer
-                                    }
+                                    tint = if (refreshResult) UmbraTheme.colors.secure else MaterialTheme.colorScheme.error
                                 )
                                 Text(
                                     text = if (refreshResult) {
@@ -276,11 +291,7 @@ fun RelayDetailsScreen(
                                         stringResource(R.string.relay_info_refresh_error)
                                     },
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = if (refreshResult) {
-                                        MaterialTheme.colorScheme.onTertiaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.onErrorContainer
-                                    }
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }
@@ -290,11 +301,11 @@ fun RelayDetailsScreen(
                         relayInfo != null -> {
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant
+                                shape = MaterialTheme.shapes.large,
+                                color = MaterialTheme.colorScheme.surfaceContainer
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(14.dp),
+                                    modifier = Modifier.padding(16.dp),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     if (!relayInfo.banner.isNullOrBlank()) {
@@ -304,7 +315,7 @@ fun RelayDetailsScreen(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .height(110.dp)
-                                                .clip(RoundedCornerShape(10.dp))
+                                                .clip(MaterialTheme.shapes.medium)
                                         )
                                     }
 
@@ -390,17 +401,13 @@ fun RelayDetailsScreen(
                                     if (requirements.isNotEmpty()) {
                                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             requirements.forEach { req ->
-                                                Surface(
-                                                    shape = RoundedCornerShape(4.dp),
-                                                    color = MaterialTheme.colorScheme.errorContainer
-                                                ) {
-                                                    Text(
-                                                        text = req,
-                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.onErrorContainer
-                                                    )
-                                                }
+                                                // A requirement limits what Umbra can do there
+                                                // (auth, payment, PoW) — cautionary, not an error.
+                                                ChipBadge(
+                                                    text = req,
+                                                    backgroundColor = UmbraTheme.colors.caution.copy(alpha = 0.14f),
+                                                    textColor = UmbraTheme.colors.caution
+                                                )
                                             }
                                         }
                                     }
@@ -433,21 +440,15 @@ fun RelayDetailsScreen(
                                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                                             ) {
                                                 relayInfo.supportedNips.sorted().forEach { nip ->
-                                                    Surface(
-                                                        shape = RoundedCornerShape(6.dp),
-                                                        color = MaterialTheme.colorScheme.surface,
-                                                        border = androidx.compose.foundation.BorderStroke(
-                                                            width = 1.dp,
-                                                            color = MaterialTheme.colorScheme.outlineVariant
-                                                        )
-                                                    ) {
-                                                        Text(
-                                                            text = "$nip",
-                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            color = MaterialTheme.colorScheme.onSurface
-                                                        )
-                                                    }
+                                                    Text(
+                                                        text = "$nip",
+                                                        style = MonoStyle,
+                                                        color = MaterialTheme.colorScheme.onSurface,
+                                                        modifier = Modifier
+                                                            .clip(MaterialTheme.shapes.extraSmall)
+                                                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                                    )
                                                 }
                                             }
                                         }
@@ -527,33 +528,43 @@ fun RelayDetailsScreen(
                     SectionEmpty(text = stringResource(R.string.relay_diag_no_issues))
                 } else {
                     val timeFormatter = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // A log, so it reads like one: time in mono, a coloured status dot, the message.
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.large)
+                            .background(MaterialTheme.colorScheme.surfaceContainer)
+                            .padding(vertical = 6.dp)
+                    ) {
                         relayIssues.forEach { issue ->
-                            val bgColor = when (issue.kind) {
-                                RelayIssueKind.CONNECTING -> RELAY_MESSAGE_CONNECTING_BG
-                                RelayIssueKind.CONNECTED -> RELAY_MESSAGE_CONNECTED_BG
-                                RelayIssueKind.AUTH -> RELAY_MESSAGE_AUTH_BG
-                                else -> MaterialTheme.colorScheme.surfaceVariant
-                            }
-                            val rawTextColor = when (issue.kind) {
-                                RelayIssueKind.CONNECTING -> RELAY_MESSAGE_CONNECTING_FG
-                                RelayIssueKind.CONNECTED -> RELAY_MESSAGE_CONNECTED_FG
-                                RelayIssueKind.AUTH -> RELAY_MESSAGE_AUTH_FG
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp),
-                                color = bgColor
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(top = 5.dp)
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(relayIssueColor(issue.kind))
+                                )
+                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Text(
-                                        text = stringResource(R.string.relay_diag_issue_header, issue.kind.name, timeFormatter.format(Date(issue.timestampMs))),
-                                        style = MaterialTheme.typography.labelSmall,
+                                        text = stringResource(
+                                            R.string.relay_diag_issue_header,
+                                            issue.kind.displayName(),
+                                            timeFormatter.format(Date(issue.timestampMs))
+                                        ),
+                                        style = MaterialTheme.typography.labelMedium,
                                         color = relayIssueColor(issue.kind)
                                     )
-                                    Text(issue.rawMessage, style = MaterialTheme.typography.labelSmall, color = rawTextColor)
+                                    Text(
+                                        issue.rawMessage,
+                                        style = MonoStyle,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
                         }
@@ -575,18 +586,36 @@ fun RelayDetailsScreen(
 
 @Composable
 private fun RelayCapabilityChip(label: String, enabled: Boolean) {
-    ChipBadge(
-        text = if (enabled) "$label ON" else "$label OFF",
-        backgroundColor = if (enabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-        textColor = if (enabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    val tint = if (enabled) UmbraTheme.colors.secure else MaterialTheme.colorScheme.onSurfaceVariant
+    val description = stringResource(
+        if (enabled) R.string.relay_capability_on_cd else R.string.relay_capability_off_cd,
+        label
     )
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .semantics(mergeDescendants = true) { contentDescription = description }
+            .padding(start = 8.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(
+            imageVector = if (enabled) Icons.Default.Check else Icons.Default.Remove,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(14.dp)
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 @Composable
 private fun relayIssueColor(kind: RelayIssueKind) = when (kind) {
-    RelayIssueKind.RATE_LIMIT,
-    RelayIssueKind.SUBSCRIPTION_LIMIT,
-    RelayIssueKind.DUPLICATE_SUBSCRIPTION -> MaterialTheme.colorScheme.tertiary
     RelayIssueKind.BLOCKED,
     RelayIssueKind.NETWORK,
     RelayIssueKind.TLS,
@@ -596,41 +625,27 @@ private fun relayIssueColor(kind: RelayIssueKind) = when (kind) {
     RelayIssueKind.NEGENTROPY_UNSUPPORTED,
     RelayIssueKind.TOR_CIRCUITS_LIKELY_DEAD,
     RelayIssueKind.AUTO_DISABLED -> MaterialTheme.colorScheme.error
-    // AUTH is "asking for auth," not a failure — same amber semantic PENDING_AMBER already
-    // represents elsewhere in the app (NIP-05-pending, Tor-starting), not the error role.
-    RelayIssueKind.AUTH -> RELAY_MESSAGE_AUTH_FG
-    RelayIssueKind.CONNECTING -> RELAY_MESSAGE_CONNECTING_FG
+    // Limits and auth are "the relay wants something", not failures.
+    RelayIssueKind.RATE_LIMIT,
+    RelayIssueKind.SUBSCRIPTION_LIMIT,
+    RelayIssueKind.DUPLICATE_SUBSCRIPTION,
+    RelayIssueKind.AUTH,
+    RelayIssueKind.CONNECTING -> UmbraTheme.colors.caution
     RelayIssueKind.CONNECTED,
-    RelayIssueKind.TOR_CIRCUITS_RECOVERED -> RELAY_MESSAGE_CONNECTED_FG
+    RelayIssueKind.TOR_CIRCUITS_RECOVERED -> UmbraTheme.colors.secure
     RelayIssueKind.NOTICE,
-    RelayIssueKind.UNKNOWN -> MaterialTheme.colorScheme.primary
+    RelayIssueKind.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
-// Fixed background/foreground pairs for the "connecting"/"connected"/"auth" relay-message
-// semantics — deliberately not reused Material tertiary/error roles, which vary per user-selected
-// theme palette (see AppTheme.kt) and don't reliably read as blue/green/amber in every palette.
-// Same "fixed regardless of the active palette" precedent as PENDING_AMBER
-// (UserIdentityBadge.kt/FeedScreen.kt) and the fixed chip colors in RelaySubscriptionComponents.kt.
-private val RELAY_MESSAGE_CONNECTING_BG = Color(0xFF1A3A5C)
-private val RELAY_MESSAGE_CONNECTING_FG = Color(0xFF64B5F6)
-private val RELAY_MESSAGE_CONNECTED_BG = Color(0xFF1B3B22)
-private val RELAY_MESSAGE_CONNECTED_FG = Color(0xFF66BB6A)
-// Matches PENDING_AMBER's exact hex (UserIdentityBadge.kt/NostrImageComponents.kt) so this reads
-// as the same "pending/in-progress, not an error" visual language used elsewhere in the app.
-private val RELAY_MESSAGE_AUTH_BG = Color(0xFF4A3B12)
-private val RELAY_MESSAGE_AUTH_FG = Color(0xFFF9A825)
+/** "TOR_CIRCUITS_LIKELY_DEAD" → "Tor circuits likely dead": readable, still greppable. */
+private fun RelayIssueKind.displayName(): String =
+    name.lowercase().replace('_', ' ').replace("tor ", "Tor ").replaceFirstChar { it.uppercase() }
 
 @Composable
 private fun SectionEmpty(text: String) {
-    EmptyState(
-        title = text,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(100.dp)
-    )
+    InlineEmptyText(text)
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Nip11InfoBadgeRow(
     label: String,
@@ -638,51 +653,29 @@ private fun Nip11InfoBadgeRow(
     mono: Boolean = false,
     onClick: (() -> Unit)? = null
 ) {
+    // A plain key/value line: muted label column, value in mono for keys, link-coloured when it
+    // opens something (always behind ExternalUrlWarningDialog).
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Top
     ) {
-        Surface(
-            modifier = Modifier
-                .width(94.dp)
-                .defaultMinSize(minHeight = 30.dp),
-            shape = RoundedCornerShape(6.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer
-        ) {
-            Text(
-                text = label,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-        }
-
-        val valueModifier = if (onClick != null) {
-            Modifier.clickable(onClick = onClick)
-        } else {
-            Modifier
-        }
-
-        Surface(
-            shape = RoundedCornerShape(6.dp),
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
-            modifier = valueModifier
-                .weight(1f)
-                .defaultMinSize(minHeight = 30.dp)
-        ) {
-            Text(
-                text = if (mono) value.take(16) + if (value.length > 16) "..." else "" else value,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
-                style = if (mono) {
-                    MaterialTheme.typography.labelSmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
-                } else {
-                    MaterialTheme.typography.labelSmall
-                },
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                maxLines = if (mono) 1 else 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(96.dp)
+        )
+        Text(
+            text = value,
+            style = if (mono) MonoStyle else MaterialTheme.typography.bodySmall,
+            color = if (onClick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            maxLines = if (mono) 1 else 2,
+            overflow = if (mono) TextOverflow.MiddleEllipsis else TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
     }
 }

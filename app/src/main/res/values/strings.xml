@@ -113,10 +113,10 @@
     <string name="filter_follows_only_chip">Follows only</string>
 
     <string name="relay_config_title">Configure Relays</string>
-    <string name="relay_publish_lists_action">Publish relay list changes</string>
+    <string name="relay_publish_lists_action">Publish changes</string>
     <string name="relay_detail_title">Relay details</string>
     <string name="relay_detail_not_found">Relay not found</string>
-    <string name="relay_anonymous_inbox_dm_disabled">Anonymous mode: Inbox and DM relay roles are disabled. Only Outbox can remain enabled.</string>
+    <string name="relay_anonymous_inbox_dm_disabled">Browsing without signing in: only Outbox relays can be used. Sign in to read your inbox and DMs.</string>
     <string name="add_relay">Add relay</string>
     <string name="no_relays_configured">No relays configured</string>
     <string name="relay_onion">Onion</string>
@@ -575,4 +575,8 @@
     <string name="stay_in_umbra">Stay private</string>
     <string name="thread_reply_hint">Reply to %1$s…</string>
     <string name="settings_group_feed">Feed and look</string>
+    <string name="relay_delete_confirm_title">Remove this relay?</string>
+    <string name="relay_delete_confirm_message">Umbra will stop reading from and publishing to it. You can add it again later.</string>
+    <string name="relay_capability_on_cd">%1$s on</string>
+    <string name="relay_capability_off_cd">%1$s off</string>
 </resources>

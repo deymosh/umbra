@@ -29,6 +29,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.umbra.app.R
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.material.icons.outlined.Info
 import com.umbra.app.ui.theme.MonoStyle
 import com.umbra.app.ui.theme.UmbraTheme
 import com.umbra.app.domain.nip01.Event
@@ -93,23 +98,6 @@ fun RelayConfigScreen(
             navigationIcon = {
                 UmbraTopAppBarDefaults.BackNavigationIcon(onClick = { navController.popBackStack() })
             },
-            actions = {
-                if (hasUnpublishedChanges || state.isPublishing) {
-                    IconButton(
-                        onClick = { viewModel.publishRelayLists() },
-                        enabled = hasUnpublishedChanges && !state.isPublishing
-                    ) {
-                        if (state.isPublishing) {
-                            LoadingSpinner(size = 20.dp, strokeWidth = 2.dp)
-                        } else {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Send,
-                                contentDescription = stringResource(R.string.relay_publish_lists_action)
-                            )
-                        }
-                    }
-                }
-            }
         )
 
         // Error message
@@ -118,6 +106,33 @@ fun RelayConfigScreen(
                 message = state.errorMessage!!.resolve(context),
                 onDismiss = { viewModel.clearError() }
             )
+        }
+
+        // In the page flow (it used to be emitted after this Column, which drew it over the top
+        // app bar instead).
+        if (state.isAnonymousSession) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Info,
+                    contentDescription = null,
+                    tint = UmbraTheme.colors.caution,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = stringResource(R.string.relay_anonymous_inbox_dm_disabled),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         // Relays list — relayBuckets/relayConnectionStates/telemetrySnapshot are computed in
@@ -147,10 +162,10 @@ fun RelayConfigScreen(
         val indexEmpty = stringResource(R.string.relay_section_index_relays_empty)
         val discoveredEmpty = stringResource(R.string.relay_section_discovered_empty)
 
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
@@ -375,22 +390,34 @@ fun RelayConfigScreen(
                 }
             }
         }
-    }
 
-    if (state.isAnonymousSession) {
-        Surface(
-            tonalElevation = 0.dp,
-            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f),
+        // Relay-list edits are local until published (signed via Amber): say so plainly with
+        // one clear action instead of a lone icon in the top bar.
+        androidx.compose.animation.AnimatedVisibility(
+            visible = hasUnpublishedChanges || state.isPublishing,
+            enter = fadeIn() + slideInVertically { it },
+            exit = fadeOut() + slideOutVertically { it },
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp)
         ) {
-            Text(
-                text = stringResource(R.string.relay_anonymous_inbox_dm_disabled),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
-            )
+            Button(
+                onClick = { viewModel.publishRelayLists() },
+                enabled = !state.isPublishing,
+                modifier = Modifier.height(52.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = UmbraTheme.colors.corona),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
+            ) {
+                if (state.isPublishing) {
+                    LoadingSpinner(size = 18.dp, strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                } else {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(stringResource(R.string.relay_publish_lists_action), style = MaterialTheme.typography.titleSmall)
+            }
+        }
         }
     }
 

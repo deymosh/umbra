@@ -5,17 +5,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.umbra.app.R
@@ -28,6 +25,21 @@ import com.umbra.app.domain.relay.SubscriptionType
 import com.umbra.app.ui.components.TimeFormatter
 import com.umbra.app.ui.components.truncatePublicKey
 import kotlin.OptIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AlternateEmail
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Tag
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.umbra.app.ui.theme.MonoStyle
+import com.umbra.app.ui.theme.UmbraTheme
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SubscriptionCard(
@@ -35,15 +47,9 @@ internal fun SubscriptionCard(
     showRelayUrl: Boolean = false,
     currentUserPubkey: String? = null
 ) {
-    OutlinedCard(
-        colors = CardDefaults.outlinedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        border = androidx.compose.foundation.BorderStroke(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant
-        ),
-        shape = RoundedCornerShape(8.dp),
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = MaterialTheme.shapes.medium,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -62,8 +68,8 @@ internal fun SubscriptionCard(
                     SelectionContainer {
                         Text(
                             text = req.subscriptionId,
-                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
-                            color = MaterialTheme.colorScheme.primary,
+                            style = MonoStyle,
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -72,10 +78,9 @@ internal fun SubscriptionCard(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(text = req.type.icon, style = MaterialTheme.typography.labelSmall)
                         Text(
                             text = stringResource(subscriptionTypeLabelRes(req.type)),
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -83,10 +88,10 @@ internal fun SubscriptionCard(
                     }
                 }
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    SubscriptionStatChip(
+                    Text(
                         text = stringResource(R.string.relay_subscription_events, req.receivedEventCount),
-                        background = MaterialTheme.colorScheme.tertiaryContainer,
-                        foreground = MaterialTheme.colorScheme.onTertiaryContainer
+                        style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     // Surfaces sentAtMillis/lastEventAtMillis, which existed on RelayRequestInfo
                     // but were only ever used for sort order, never actually shown — useful for
@@ -106,8 +111,8 @@ internal fun SubscriptionCard(
             if (showRelayUrl) {
                 Text(
                     text = formatRelayUrl(req.relayUrl),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
+                    style = MonoStyle,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -122,11 +127,8 @@ internal fun SubscriptionCard(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant,
-                            shape = RoundedCornerShape(6.dp)
-                        )
+                        .clip(MaterialTheme.shapes.small)
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
                         .padding(8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
@@ -179,7 +181,7 @@ private fun FilterChipRow(
             Text(
                 text = stringResource(R.string.relay_subscription_filter_index, index + 1),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         FlowRow(
@@ -193,16 +195,14 @@ private fun FilterChipRow(
                     currentUserPubkey != null &&
                     filter.authors.first().equals(currentUserPubkey, ignoreCase = true)
                 SubscriptionStatChip(
-                    text = "👤 " + if (isSelf) you else pluralStringResource(R.plurals.relay_filter_authors, filter.authors.size, filter.authors.size),
-                    background = MaterialTheme.colorScheme.secondaryContainer,
-                    foreground = MaterialTheme.colorScheme.onSecondaryContainer
+                    text = if (isSelf) you else pluralStringResource(R.plurals.relay_filter_authors, filter.authors.size, filter.authors.size),
+                    icon = Icons.Outlined.Person
                 )
             }
             if (filter.ids.isNotEmpty()) {
                 SubscriptionStatChip(
-                    text = "🆔 " + pluralStringResource(R.plurals.relay_filter_ids, filter.ids.size, filter.ids.size),
-                    background = ID_CHIP_COLOR,
-                    foreground = Color.White
+                    text = pluralStringResource(R.plurals.relay_filter_ids, filter.ids.size, filter.ids.size),
+                    icon = Icons.Outlined.Tag
                 )
             }
             // #p ("tagged"/mentioned pubkeys) gets author-style treatment (count, or "You" when
@@ -217,9 +217,8 @@ private fun FilterChipRow(
                     // authors=[me] filter and a #p=[me] filter render as the identical chip, even
                     // though they mean opposite things (things I wrote vs. things that mention me).
                     SubscriptionStatChip(
-                        text = "👤 " + if (isSelf) taggedYou else stringResource(R.string.relay_filter_tagged, taggedPubkeys.size),
-                        background = MaterialTheme.colorScheme.secondaryContainer,
-                        foreground = MaterialTheme.colorScheme.onSecondaryContainer
+                        text = if (isSelf) taggedYou else stringResource(R.string.relay_filter_tagged, taggedPubkeys.size),
+                        icon = Icons.Outlined.AlternateEmail
                     )
                 }
             }
@@ -231,63 +230,35 @@ private fun FilterChipRow(
                 } else {
                     "#$tag ×${values.size}"
                 }
-                SubscriptionStatChip(
-                    text = text,
-                    background = MaterialTheme.colorScheme.tertiaryContainer,
-                    foreground = MaterialTheme.colorScheme.onTertiaryContainer
-                )
+                SubscriptionStatChip(text = text)
             }
             filter.since?.let {
                 SubscriptionStatChip(
                     text = stringResource(R.string.relay_filter_since, TimeFormatter.formatRelativeTime(it)),
-                    background = TIME_SINCE_CHIP_COLOR,
-                    foreground = Color.White
+                    icon = Icons.Outlined.Schedule
                 )
             }
             filter.until?.let {
                 SubscriptionStatChip(
                     text = stringResource(R.string.relay_filter_until, TimeFormatter.formatRelativeTime(it)),
-                    background = TIME_UNTIL_CHIP_COLOR,
-                    foreground = Color.White
+                    icon = Icons.Outlined.History
                 )
             }
             if (filter.limit > 0) {
                 SubscriptionStatChip(
                     text = stringResource(R.string.relay_filter_limit, filter.limit),
-                    background = LIMIT_CHIP_COLOR,
-                    foreground = Color.White
+                    icon = Icons.Outlined.FilterList
                 )
             }
             filter.search?.takeIf { it.isNotBlank() }?.let { search ->
                 SubscriptionStatChip(
-                    text = "🔍 " + summarizeFilterSegment(search, 20),
-                    background = MaterialTheme.colorScheme.primaryContainer,
-                    foreground = MaterialTheme.colorScheme.onPrimaryContainer
+                    text = summarizeFilterSegment(search, 20),
+                    icon = Icons.Outlined.Search
                 )
             }
         }
     }
 }
-
-// since/until/limit get their own fixed accent colors (rather than reusing surfaceVariant for
-// all three, which made them blend together and each other's presence easy to miss) — same
-// "specific meaning needs its own hue, M3's container roles ran out" precedent as the amber used
-// for Nip05VerificationState.Pending elsewhere in this app (see UserIdentityBadge.kt).
-// Desaturated versions of the original teal/deep-purple — same hue family (still readable at a
-// glance as "since" vs "until") but toned down so they don't compete for attention with limit/
-// deletion/ids next to them.
-private val TIME_SINCE_CHIP_COLOR = Color(0xFF4C7A73)
-private val TIME_UNTIL_CHIP_COLOR = Color(0xFF6F5FA3)
-// A muted amber instead of a saturated orange — reads as "this caps the result set" without
-// shouting over the neighboring since/until chips.
-private val LIMIT_CHIP_COLOR = Color(0xFF9E6B00)
-// Deletion (kind 5) previously fell through KindChip's `else` branch into surfaceVariant, which
-// in the light theme is a near-white gray — easy to miss next to the fixed-color since/until/
-// limit chips. Same fixed-color treatment as those, with a gray dark enough for white text.
-private val DELETION_CHIP_COLOR = Color(0xFF616161)
-// ids previously used generic surfaceVariant too, same low-visibility problem deletion had —
-// same fixed-color treatment, a muted slate blue to stay distinct from the since/until/limit hues.
-private val ID_CHIP_COLOR = Color(0xFF3F6B94)
 
 // Coarse categories purely for KindChip coloring at a glance — not a protocol taxonomy, just
 // "posts you'd see in a feed" / "lists/settings" / "DM-ish" vs. everything else. A `zaps` bucket
@@ -310,50 +281,65 @@ private val KIND_CHIP_DM_KINDS = setOf(
     Event.KIND_CHAT_MESSAGE, Event.KIND_GROUP_CHAT_THREADED_REPLY, Event.KIND_GROUP_THREAD_REPLY
 )
 
+/**
+ * Chips stay neutral; meaning comes from a small leading mark. Kinds get a category dot (posts,
+ * lists, DMs, deletions) instead of a different fill each, so a busy subscription reads as one
+ * calm row rather than a rainbow.
+ */
 @Composable
 private fun KindChip(kind: Int) {
     val label = remember(kind) { KindNames.labelFor(kind) }
-    val (background, foreground) = when (kind) {
-        Event.KIND_EVENT_DELETION -> DELETION_CHIP_COLOR to Color.White
-        in KIND_CHIP_POST_KINDS -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
-        in KIND_CHIP_LIST_KINDS -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-        in KIND_CHIP_DM_KINDS -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
-        else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+    val dot = when (kind) {
+        Event.KIND_EVENT_DELETION -> MaterialTheme.colorScheme.error
+        in KIND_CHIP_POST_KINDS -> MaterialTheme.colorScheme.primary
+        in KIND_CHIP_LIST_KINDS -> UmbraTheme.colors.secure
+        in KIND_CHIP_DM_KINDS -> UmbraTheme.colors.zap
+        else -> MaterialTheme.colorScheme.outline
     }
-    Surface(shape = RoundedCornerShape(50), color = background) {
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = foreground,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+    ChipShell {
+        Box(Modifier.size(6.dp).clip(CircleShape).background(dot))
+        ChipText(label)
     }
 }
 
 @Composable
 private fun SubscriptionStatChip(
     text: String,
-    background: androidx.compose.ui.graphics.Color,
-    foreground: androidx.compose.ui.graphics.Color
+    icon: ImageVector? = null
 ) {
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = background
-    ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = foreground,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+    ChipShell {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(13.dp))
+        }
+        ChipText(text)
     }
+}
+
+@Composable
+private fun ChipShell(content: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .padding(horizontal = 9.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        content = content
+    )
+}
+
+@Composable
+private fun ChipText(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+    )
 }
 
 private fun summarizeFilterSegment(value: String, maxChars: Int = 40): String {
     val compact = value.replace('\n', ' ').trim()
-    return if (compact.length <= maxChars) compact else compact.take(maxChars) + "..."
+    return if (compact.length <= maxChars) compact else compact.take(maxChars) + "…"
 }
