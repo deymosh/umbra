@@ -3,10 +3,13 @@ package com.umbra.app.ui.components
 import android.content.Context
 import android.content.Intent
 import androidx.core.net.toUri
+import com.umbra.app.domain.util.TrackingTokenSanitizer
 import java.util.Locale
 
 internal fun launchExternalUrl(context: Context, rawUrl: String): Boolean {
-    val normalizedUrl = normalizeAndValidateExternalUrl(rawUrl) ?: return false
+    // Tracking parameters are stripped from every link the user opens, not only from links they
+    // post — the destination site shouldn't learn where the click came from.
+    val normalizedUrl = normalizeAndValidateExternalUrl(rawUrl)?.let(::cleanWebUrl) ?: return false
     val uri = normalizedUrl.toUri()
     val scheme = uri.scheme?.lowercase(Locale.ROOT)
 
@@ -66,4 +69,11 @@ internal fun launchPaymentUri(context: Context, rawUri: String): Boolean {
         context.startActivity(intent)
         true
     }.getOrDefault(false)
+}
+
+/** [url] with tracking parameters removed when it's an http(s) link; anything else unchanged. */
+internal fun cleanWebUrl(url: String): String {
+    val scheme = url.substringBefore(':', "").lowercase(Locale.ROOT)
+    if (scheme != "http" && scheme != "https") return url
+    return runCatching { TrackingTokenSanitizer.sanitizeUrl(url) }.getOrDefault(url)
 }

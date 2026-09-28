@@ -36,7 +36,8 @@ class NetworkUsageSnapshotTest {
                 lifetimeBytes = 1_540 * MB
             ),
             onNavigateBack = {},
-            onReset = {}
+            onReset = {},
+            activity = com.umbra.app.domain.usecase.OwnActivity(notes = 214, reactions = 1_380, reposts = 97)
         )
     }
 

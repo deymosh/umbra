@@ -4,6 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.LocalFireDepartment
+import androidx.compose.material3.Switch
+import androidx.compose.runtime.collectAsState
+import com.umbra.app.ui.auth.rememberPrivacyLogout
 import androidx.compose.material.icons.outlined.DataUsage
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.CloudUpload
@@ -23,7 +27,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.navigation.NavController
 import com.umbra.app.BuildConfig
@@ -31,18 +34,14 @@ import com.umbra.app.R
 import com.umbra.app.ui.Screen
 import com.umbra.app.ui.auth.LoginViewModel
 import com.umbra.app.ui.components.MenuItemRow
-import com.umbra.app.ui.components.PrivacyLogoutProgressDialog
 import com.umbra.app.ui.components.UmbraTopAppBar
 import com.umbra.app.ui.components.UmbraTopAppBarDefaults
 import kotlin.OptIn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.umbra.app.util.logging.UmbraLog
 
-private val settingsScreenLogger = UmbraLog.tag("SettingsScreen")
 
 /**
  * Settings screen main menu (NIP-01 compliant client configuration)
@@ -50,12 +49,8 @@ private val settingsScreenLogger = UmbraLog.tag("SettingsScreen")
  */
 @Composable
 fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel) {
-    val scope = rememberCoroutineScope()
-    var isLoggingOut by remember { mutableStateOf(false) }
-
-    if (isLoggingOut) {
-        PrivacyLogoutProgressDialog()
-    }
+    val logout = rememberPrivacyLogout(navController, loginViewModel)
+    val panicWipeEnabled by loginViewModel.panicWipeEnabled.collectAsState()
 
     SettingsContent(
         onBack = {
@@ -67,25 +62,9 @@ fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel)
             }
         },
         onOpen = { route -> navController.navigate(route) },
-        onLogout = {
-            if (isLoggingOut) return@SettingsContent
-            scope.launch {
-                try {
-                    isLoggingOut = true
-                    loginViewModel.logout()
-                } catch (e: Exception) {
-                    // A failed logout must not be silently indistinguishable
-                    // from a successful one — still proceed to the login screen
-                    // below since there's no in-app state left to usefully retry
-                    // from, but at least record that it happened.
-                    settingsScreenLogger.e(e) { "Logout failed" }
-                }
-                isLoggingOut = false
-                navController.navigate(Screen.Login.route) {
-                    popUpTo(0) { inclusive = true }
-                }
-            }
-        }
+        onLogout = logout,
+        panicWipeEnabled = panicWipeEnabled,
+        onPanicWipeChange = loginViewModel::setPanicWipeEnabled
     )
 }
 
@@ -95,7 +74,9 @@ fun SettingsContent(
     onBack: () -> Unit,
     onOpen: (route: String) -> Unit,
     onLogout: () -> Unit,
-    versionName: String = BuildConfig.VERSION_NAME
+    versionName: String = BuildConfig.VERSION_NAME,
+    panicWipeEnabled: Boolean = false,
+    onPanicWipeChange: (Boolean) -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -200,6 +181,13 @@ fun SettingsContent(
 
             item {
                 SettingsGroup(title = stringResource(R.string.settings_account_security)) {
+                    MenuItemRow(
+                        icon = Icons.Outlined.LocalFireDepartment,
+                        title = stringResource(R.string.settings_panic_wipe_title),
+                        subtitle = stringResource(R.string.settings_panic_wipe_subtitle),
+                        onClick = { onPanicWipeChange(!panicWipeEnabled) },
+                        trailing = { Switch(checked = panicWipeEnabled, onCheckedChange = null) }
+                    )
                     MenuItemRow(
                         icon = Icons.AutoMirrored.Outlined.Logout,
                         title = stringResource(R.string.settings_logout),

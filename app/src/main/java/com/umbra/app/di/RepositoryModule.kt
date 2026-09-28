@@ -23,6 +23,7 @@ import com.umbra.app.data.repository.ResourceUsageRepositoryImpl
 import com.umbra.app.data.repository.TorStatusRepositoryImpl
 import com.umbra.app.data.repository.UserRepositoryImpl
 import com.umbra.app.data.repository.DraftRepositoryImpl
+import com.umbra.app.data.repository.ReadLaterRepositoryImpl
 import com.umbra.app.data.repository.LightningRepositoryImpl
 import com.umbra.app.data.repository.NetworkUsageRepositoryImpl
 import com.umbra.app.data.repository.Nip05RepositoryImpl
@@ -45,6 +46,7 @@ import com.umbra.app.domain.repository.ResourceUsageRepository
 import com.umbra.app.domain.repository.TorStatusRepository
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.repository.DraftRepository
+import com.umbra.app.domain.repository.ReadLaterRepository
 import com.umbra.app.domain.repository.LightningRepository
 import com.umbra.app.domain.repository.NetworkUsageRepository
 import com.umbra.app.domain.repository.Nip05Repository
@@ -124,6 +126,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindDraftRepository(impl: DraftRepositoryImpl): DraftRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindReadLaterRepository(impl: ReadLaterRepositoryImpl): ReadLaterRepository
 
     @Binds
     @Singleton

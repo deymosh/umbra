@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.Image
 import com.umbra.app.ui.theme.MonoStyle
 import com.umbra.app.ui.components.truncatePublicKey
@@ -48,6 +49,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
@@ -95,7 +97,9 @@ internal fun FeedTopBar(
     userRepository: UserRepository? = null,
     // Null hides the bell (anonymous sessions have no notifications).
     onNotifications: (() -> Unit)? = null,
-    hasUnreadNotifications: Boolean = false
+    hasUnreadNotifications: Boolean = false,
+    // Non-null only when the user turned on panic wipe in Settings.
+    onWordmarkLongPress: (() -> Unit)? = null
 ) {
     UmbraTopAppBar(
         navigationIcon = {
@@ -117,7 +121,15 @@ internal fun FeedTopBar(
             // and this is the one place the brand gets to speak.
             Text(
                 text = stringResource(R.string.app_name).lowercase(),
-                modifier = Modifier.padding(start = 8.dp),
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .then(
+                        if (onWordmarkLongPress != null) {
+                            Modifier.combinedClickable(onClick = {}, onLongClick = onWordmarkLongPress)
+                        } else {
+                            Modifier
+                        }
+                    ),
                 style = MaterialTheme.typography.displaySmall.copy(fontSize = 30.sp, lineHeight = 32.sp),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1
@@ -237,7 +249,8 @@ internal fun FeedDrawerContent(
     onFilters: () -> Unit,
     onSettings: () -> Unit,
     onLogout: () -> Unit,
-    userRepository: UserRepository? = null
+    userRepository: UserRepository? = null,
+    onReadLater: (() -> Unit)? = null
 ) {
     ModalDrawerSheet(
         drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -282,6 +295,7 @@ internal fun FeedDrawerContent(
             if (!currentPubkey.isNullOrBlank()) {
                 DrawerItem(Icons.Outlined.Person, stringResource(R.string.menu_profile), onProfile)
             }
+            onReadLater?.let { DrawerItem(Icons.Outlined.BookmarkBorder, stringResource(R.string.read_later_title), it) }
             DrawerItem(Icons.Outlined.Hub, stringResource(R.string.menu_relays), onRelays)
             DrawerItem(Icons.Outlined.Tune, stringResource(R.string.menu_feed_filters), onFilters)
             DrawerItem(Icons.Outlined.Settings, stringResource(R.string.menu_settings), onSettings)

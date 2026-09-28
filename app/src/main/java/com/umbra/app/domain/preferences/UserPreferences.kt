@@ -55,4 +55,9 @@ interface UserPreferences {
     fun getNotificationsSeenAtFlow(): StateFlow<Long> = kotlinx.coroutines.flow.MutableStateFlow(0L)
 
     fun markNotificationsSeen(epochSeconds: Long) {}
+
+    /** Opt-in: long-pressing the Umbra wordmark wipes everything immediately. Off by default. */
+    fun getPanicWipeEnabledFlow(): StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    fun setPanicWipeEnabled(enabled: Boolean) {}
 }

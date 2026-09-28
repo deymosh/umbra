@@ -2,6 +2,7 @@ package com.umbra.app.ui.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.update
 import com.umbra.app.R
 import com.umbra.app.domain.nip55.AmberSignerGateway
@@ -39,6 +40,10 @@ class LoginViewModel @Inject constructor(
     companion object {
         private const val TAG = "UmbraLogin"
     }
+
+    val panicWipeEnabled: StateFlow<Boolean> = userPreferences.getPanicWipeEnabledFlow()
+
+    fun setPanicWipeEnabled(enabled: Boolean) = userPreferences.setPanicWipeEnabled(enabled)
 
     private val logger = UmbraLog.tag(TAG)
 
@@ -226,6 +231,8 @@ class LoginViewModel @Inject constructor(
         _authState.update { it.copy(isLoading = true, errorMessage = null) }
         try {
             logoutUseCase()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.e(e) { "Logout failed" }
         } finally {

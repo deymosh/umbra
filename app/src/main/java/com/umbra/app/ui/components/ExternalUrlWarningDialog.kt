@@ -14,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,9 +53,11 @@ fun ExternalUrlWarningDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                // The destination, shown in full in mono so a lookalike domain is easy to spot.
+                // The destination, shown in full in mono so a lookalike domain is easy to spot —
+                // already cleaned of tracking parameters, exactly as it will be opened.
+                val cleaned = remember(url) { cleanWebUrl(url) }
                 Text(
-                    text = url,
+                    text = cleaned,
                     style = MonoStyle,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 4,
@@ -64,6 +67,13 @@ fun ExternalUrlWarningDialog(
                         .background(MaterialTheme.colorScheme.surfaceContainerLowest, MaterialTheme.shapes.small)
                         .padding(12.dp)
                 )
+                if (cleaned != url) {
+                    Text(
+                        text = stringResource(R.string.external_url_tracking_removed),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = UmbraTheme.colors.secure
+                    )
+                }
             }
         },
         // The safe choice is the prominent one; leaving Tor is the quiet, deliberate one.

@@ -42,6 +42,7 @@ import androidx.navigation.NavController
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.umbra.app.R
+import com.umbra.app.ui.auth.rememberPrivacyLogout
 import com.umbra.app.ui.notifications.UnreadNotificationsViewModel
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip25.ReactionEmoji
@@ -53,7 +54,6 @@ import com.umbra.app.ui.components.EmptyState
 import androidx.compose.foundation.border
 import com.umbra.app.ui.components.ErrorBanner
 import com.umbra.app.ui.components.NotesTimelineContainer
-import com.umbra.app.ui.components.PrivacyLogoutProgressDialog
 import com.umbra.app.ui.components.buildThreadDepthByEventId
 import com.umbra.app.ui.components.notesFeedSection
 import com.umbra.app.ui.components.QuickActionBottomBar
@@ -66,9 +66,7 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.snapshotFlow
-import com.umbra.app.util.logging.UmbraLog
 
-private val feedScreenLogger = UmbraLog.tag("FeedScreen")
 
 private data class FeedSearchPayload(
     val query: String,
@@ -159,7 +157,8 @@ fun FeedScreen(
     // the user had appeared to vanish even though the backstack entry itself was preserved.
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var searchVisible by rememberSaveable { mutableStateOf(false) }
-    var isLoggingOut by remember { mutableStateOf(false) }
+    val logout = rememberPrivacyLogout(navController, loginViewModel, onFinished = { scope.launch { drawerState.close() } })
+    val panicWipeEnabled by loginViewModel.panicWipeEnabled.collectAsStateWithLifecycle()
     // Permanently stable (remember with no keys) — `feedState`/`currentNavController` are
     // delegated State reads, so referencing them *inside* these lambda bodies (rather than
     // capturing a snapshot via a remember key) always sees the latest value without needing a
@@ -265,9 +264,6 @@ fun FeedScreen(
     // Amber sign round trips go through the single app-wide launcher (AppSessionEffects) now —
     // no per-screen launcher needed here.
 
-    if (isLoggingOut) {
-        PrivacyLogoutProgressDialog()
-    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -287,6 +283,10 @@ fun FeedScreen(
                     navController.navigate(Screen.RelayConfig.route)
                     scope.launch { drawerState.close() }
                 },
+                onReadLater = {
+                    navController.navigate(Screen.ReadLater.route)
+                    scope.launch { drawerState.close() }
+                },
                 onFilters = {
                     navController.navigate(Screen.FeedConfig.route)
                     scope.launch { drawerState.close() }
@@ -297,29 +297,7 @@ fun FeedScreen(
                     }
                     scope.launch { drawerState.close() }
                 },
-                onLogout = {
-                    if (!isLoggingOut) {
-                        scope.launch {
-                            try {
-                                isLoggingOut = true
-                                loginViewModel.logout()
-                            } catch (e: Exception) {
-                                // Logout failing (e.g. a database wipe leaving stale key
-                                // material behind) must not be silently indistinguishable
-                                // from success — still proceed to the login screen below
-                                // since there's no in-app state left to usefully retry from,
-                                // but at least record that it happened.
-                                feedScreenLogger.e(e) { "Logout failed" }
-                            }
-                            isLoggingOut = false
-                            navController.navigate(Screen.Login.route) {
-                                popUpTo(0) { inclusive = true }
-                                launchSingleTop = true
-                            }
-                            drawerState.close()
-                        }
-                    }
-                }
+                onLogout = logout
             )
         }
     ) {
@@ -343,6 +321,7 @@ fun FeedScreen(
                     { navController.navigate(Screen.Notifications.route) }
                 },
                 hasUnreadNotifications = hasUnreadNotifications,
+                onWordmarkLongPress = if (panicWipeEnabled) logout else null,
                 onToggleSearch = {
                     val nowVisible = !searchVisible
                     searchVisible = nowVisible

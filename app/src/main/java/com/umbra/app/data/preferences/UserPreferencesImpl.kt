@@ -18,6 +18,7 @@ class UserPreferencesImpl @Inject constructor(
 
     private val encryptedPreferences = SecurePreferences(context, "user_prefs")
     private val pubkeyFlow = MutableStateFlow(getPublicKey())
+    private val panicWipeEnabled = MutableStateFlow(encryptedPreferences.getString(KEY_PANIC_WIPE) == "1")
     private val notificationsSeenAt = MutableStateFlow(
         encryptedPreferences.getString(KEY_NOTIFICATIONS_SEEN_AT)?.toLongOrNull() ?: 0L
     )
@@ -55,6 +56,7 @@ class UserPreferencesImpl @Inject constructor(
         encryptedPreferences.clear()
         pubkeyFlow.value = null
         notificationsSeenAt.value = 0L
+        panicWipeEnabled.value = false
     }
 
     override fun getPublicKeyFlow(): StateFlow<String?> = pubkeyFlow.asStateFlow()
@@ -67,7 +69,15 @@ class UserPreferencesImpl @Inject constructor(
         notificationsSeenAt.value = epochSeconds
     }
 
+    override fun getPanicWipeEnabledFlow(): StateFlow<Boolean> = panicWipeEnabled.asStateFlow()
+
+    override fun setPanicWipeEnabled(enabled: Boolean) {
+        encryptedPreferences.putString(KEY_PANIC_WIPE, if (enabled) "1" else "0")
+        panicWipeEnabled.value = enabled
+    }
+
     private companion object {
+        const val KEY_PANIC_WIPE = "panic_wipe_enabled"
         const val KEY_NOTIFICATIONS_SEEN_AT = "notifications_seen_at"
     }
 }

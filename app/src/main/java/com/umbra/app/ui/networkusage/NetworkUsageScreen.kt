@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import com.umbra.app.R
 import com.umbra.app.domain.model.NetworkUsageSnapshot
 import com.umbra.app.domain.model.RelayTraffic
+import com.umbra.app.domain.usecase.OwnActivity
 import com.umbra.app.ui.components.ConfirmDialog
 import com.umbra.app.ui.components.LoadingSpinner
 import com.umbra.app.ui.components.SettingsGroup
@@ -55,8 +56,9 @@ import java.util.Locale
 @Composable
 fun NetworkUsageScreen(viewModel: NetworkUsageViewModel, onNavigateBack: () -> Unit) {
     val usage by viewModel.usage.collectAsState()
+    val activity by viewModel.activity.collectAsState()
     var confirmReset by remember { mutableStateOf(false) }
-    NetworkUsageContent(usage = usage, onNavigateBack = onNavigateBack, onReset = { confirmReset = true })
+    NetworkUsageContent(usage = usage, activity = activity, onNavigateBack = onNavigateBack, onReset = { confirmReset = true })
     if (confirmReset) {
         ConfirmDialog(
             title = stringResource(R.string.network_usage_reset_title),
@@ -73,7 +75,12 @@ fun NetworkUsageScreen(viewModel: NetworkUsageViewModel, onNavigateBack: () -> U
 }
 
 @Composable
-internal fun NetworkUsageContent(usage: NetworkUsageSnapshot?, onNavigateBack: () -> Unit, onReset: () -> Unit) {
+internal fun NetworkUsageContent(
+    usage: NetworkUsageSnapshot?,
+    onNavigateBack: () -> Unit,
+    onReset: () -> Unit,
+    activity: OwnActivity? = null
+) {
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         UmbraTopAppBar(
             title = { Text(stringResource(R.string.network_usage_title)) },
@@ -92,6 +99,17 @@ internal fun NetworkUsageContent(usage: NetworkUsageSnapshot?, onNavigateBack: (
                     BreakdownRow(stringResource(R.string.network_usage_media), usage.mediaBytesReceived, total, UmbraTheme.colors.zap, true)
                     BreakdownRow(stringResource(R.string.network_usage_other_http), usage.otherHttpBytesReceived, total, UmbraTheme.colors.secure, true)
                     BreakdownRow(stringResource(R.string.network_usage_uploads), usage.httpBytesSent, total, MaterialTheme.colorScheme.outline, false)
+                }
+            }
+            if (activity != null) {
+                item(key = "activity", contentType = "group") {
+                    SettingsGroup(title = stringResource(R.string.network_usage_activity)) {
+                        Row(Modifier.fillMaxWidth().padding(vertical = 14.dp)) {
+                            ActivityStat(activity.notes, stringResource(R.string.network_usage_activity_notes), Modifier.weight(1f))
+                            ActivityStat(activity.reactions, stringResource(R.string.network_usage_activity_reactions), Modifier.weight(1f))
+                            ActivityStat(activity.reposts, stringResource(R.string.network_usage_activity_reposts), Modifier.weight(1f))
+                        }
+                    }
                 }
             }
             item(key = "relays-title", contentType = "title") {
@@ -164,6 +182,14 @@ private fun UsageHero(usage: NetworkUsageSnapshot) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp)
         )
+    }
+}
+
+@Composable
+private fun ActivityStat(value: Int, label: String, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value.toString(), style = MonoStyle.copy(fontSize = 22.sp, fontWeight = FontWeight.Medium), color = MaterialTheme.colorScheme.onSurface)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

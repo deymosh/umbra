@@ -66,6 +66,9 @@ import com.umbra.app.ui.components.computeTextRenderMetrics
 import com.umbra.app.ui.components.launchExternalUrl
 import com.umbra.app.ui.components.launchLightningInvoice
 import com.umbra.app.ui.hashtag.LocalHashtagNavigator
+import com.umbra.app.ui.readlater.LocalReadLater
+import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.BookmarkRemove
 import com.umbra.app.ui.zap.LocalZapLauncher
 import com.umbra.app.ui.zap.ZapTarget
 import com.umbra.app.ui.components.resolveEventReference
@@ -105,7 +108,18 @@ private fun eventActionItems(
     val copiedJsonToast = stringResource(R.string.share_copy_event_json_toast)
     val json = remember(target.id) { getEventJson() }
 
+    val readLater = LocalReadLater.current
     return buildList {
+        if (readLater != null) {
+            val saved = readLater.isSaved(target.id)
+            add(
+                ActionItem(
+                    icon = if (saved) Icons.Default.BookmarkRemove else Icons.Default.BookmarkAdd,
+                    label = stringResource(if (saved) R.string.read_later_remove else R.string.read_later_add),
+                    onClick = { readLater.toggle(target) }
+                )
+            )
+        }
         add(
             ActionItem(
                 icon = Icons.Default.PushPin,
