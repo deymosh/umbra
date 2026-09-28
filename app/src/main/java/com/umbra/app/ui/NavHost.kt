@@ -47,6 +47,8 @@ import com.umbra.app.ui.components.BroadcastBanner
 import com.umbra.app.ui.composer.ComposerScreen
 import com.umbra.app.ui.composer.ComposerViewModel
 import com.umbra.app.ui.zap.ZapHost
+import com.umbra.app.ui.networkusage.NetworkUsageScreen
+import com.umbra.app.ui.networkusage.NetworkUsageViewModel
 import com.umbra.app.ui.notifications.NotificationsScreen
 import com.umbra.app.ui.notifications.NotificationsViewModel
 import com.umbra.app.ui.auth.LoginScreen
@@ -92,6 +94,7 @@ sealed class Screen(val route: String) {
     }
     object Settings      : Screen("settings")
     object Notifications : Screen("notifications")
+    object NetworkUsage  : Screen("network_usage")
     // Wraps RelayConfig/RelayDetails/ActiveSubscriptions (see the nested navigation() graph
     // below) so the three share one RelayConfigViewModel instance instead of each getting its
     // own screen-scoped one. Never navigated to directly — entered via RelayConfig, its start
@@ -368,6 +371,10 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
                 onOpenThread = { navController.navigate(Screen.Thread.forEvent(it)) },
                 onOpenProfile = { navController.navigate(Screen.Profile.forPubkey(it)) }
             )
+        }
+        composable(Screen.NetworkUsage.route) {
+            val networkUsageViewModel: NetworkUsageViewModel = hiltViewModel()
+            NetworkUsageScreen(viewModel = networkUsageViewModel, onNavigateBack = { navController.popBackStack() })
         }
         composable(Screen.Settings.route) {
             val loginViewModel: LoginViewModel = hiltViewModel()

@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DataUsage
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Code
@@ -125,7 +126,13 @@ fun SettingsContent(
                         icon = Icons.Outlined.CloudUpload,
                         title = stringResource(R.string.settings_configure_blossom_servers_title),
                         subtitle = stringResource(R.string.settings_configure_blossom_servers_subtitle),
-                        onClick = { onOpen(Screen.BlossomServers.route) },
+                        onClick = { onOpen(Screen.BlossomServers.route) }
+                    )
+                    MenuItemRow(
+                        icon = Icons.Outlined.DataUsage,
+                        title = stringResource(R.string.network_usage_title),
+                        subtitle = stringResource(R.string.settings_network_usage_subtitle),
+                        onClick = { onOpen(Screen.NetworkUsage.route) },
                         showDivider = false
                     )
                 }

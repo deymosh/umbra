@@ -639,4 +639,19 @@
     <string name="notifications_verb_reaction">reacted to your note</string>
     <string name="notifications_verb_repost">reposted your note</string>
     <string name="notifications_verb_zap">zapped %1$s sats</string>
+    <string name="network_usage_title">Network usage</string>
+    <string name="settings_network_usage_subtitle">What went through Tor, per relay</string>
+    <string name="network_usage_this_session">This session · started %1$s ago</string>
+    <string name="network_usage_lifetime">%1$s since last reset</string>
+    <string name="network_usage_breakdown">Breakdown</string>
+    <string name="network_usage_relays">Relays</string>
+    <string name="network_usage_media">Images &amp; video</string>
+    <string name="network_usage_other_http">Profiles, relay info &amp; lookups</string>
+    <string name="network_usage_uploads">Uploads</string>
+    <string name="network_usage_per_relay">Per relay</string>
+    <string name="network_usage_relay_detail">↓ %1$s · %2$d msgs   ↑ %3$s · %4$d msgs</string>
+    <string name="network_usage_privacy_note">Counted on this device only. Per-relay numbers reset when Umbra closes; only the total is kept.</string>
+    <string name="network_usage_reset">Reset counters</string>
+    <string name="network_usage_reset_title">Reset network usage?</string>
+    <string name="network_usage_reset_message">This clears this session\'s counters and the running total.</string>
 </resources>
