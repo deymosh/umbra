@@ -13,7 +13,7 @@ Umbra is a Nostr client for Android. Its defining constraints are that **all net
 The moderation constraint: muting, NSFW hiding, and feed content filters exist as ordinary user-owned `FeedFilter` state (`domain/feed/FeedFilter.kt`/`FilterDefaults.kt`), editable and fully removable from `FeedConfigScreen`. Defaults exist for a clean out-of-box experience (a starter set of excluded noise hashtags/tags, NSFW hidden by default) but every one of them is a normal editable entry, not a hardcoded app-side rule — a reviewer should flag any new content-hiding logic that isn't built the same way.
 
 Stack: Kotlin 2.4.10 · Jetpack Compose · MVVM + Clean Architecture · Hilt · Room · OkHttp 5.4.0 · Media3 1.11.0 · Coil 3.5.0 · kotlinx.serialization · BouncyCastle 1.85.2
-Build: AGP 9.3.1 · Gradle 9.x · JDK 17 · compileSdk 37 · minSdk 26 · jvmTarget 17
+Build: AGP 9.3.1 · Gradle 9.x · JDK 21 (Gradle runtime) · compileSdk 37 · minSdk 26 · jvmTarget 17
 
 ---
 
@@ -607,7 +607,7 @@ ui/
 | `SharedFlow<SideEffect>` for navigation | ViewModels never call startActivity directly |
 | `@UnstableApi` isolated at lowest level | Prevents annotation propagating up call chain |
 | `DownloadManager` forbidden | Downloads must go through TOR proxy via OkHttp |
-| `jvmTarget = "17"` | Must match JDK 17 and compileSdk 37 — do not downgrade to 1.8 |
+| `jvmTarget = "17"` | Bytecode target; Gradle itself runs on JDK 21 (required by the Paparazzi plugin), app bytecode stays 17 — do not downgrade to 1.8 |
 | AGP 9.3+ required | Needed for compileSdk 37 and Gradle 9.x compatibility |
 | User events encrypted archive only | Historical rule, superseded by "single encrypted database" above — there is no public database left to accidentally put them in |
 | `DefaultRelays` in `domain/relay/DefaultRelays.kt` | Bootstrap relay list is a domain concern, not tied to any entity |

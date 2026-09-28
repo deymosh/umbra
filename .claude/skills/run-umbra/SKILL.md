@@ -17,7 +17,7 @@ initiative just because a change touches UI code.
 
 ## Prerequisites
 
-- JDK 17, Android SDK with `platform-tools` and an emulator image (this repo
+- JDK 21, Android SDK with `platform-tools` and an emulator image (this repo
   already assumes these — see root `CLAUDE.md`).
 - **`driver.sh` itself is written for Git Bash on Windows** (`emulator.exe`,
   `%LOCALAPPDATA%\Android\Sdk`) — that's where the maintainer's actual AVD lives,

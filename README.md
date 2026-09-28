@@ -71,7 +71,7 @@ Signature verification uses BIP-340 Schnorr on secp256k1 via BouncyCastle. Event
 - Android 8.0+ (API 26)
 - Orbot installed and running
 - Amber (optional) for signing; read-only mode works without it
-- JDK 17 and Android SDK 37 (for local development)
+- JDK 21 and Android SDK 37 (for local development)
 
 ---
 
@@ -82,15 +82,15 @@ git clone https://github.com/deymosh/umbra.git
 cd umbra
 ```
 
-**Linux, no local JDK/Android SDK yet:** run the bundled toolchain installer — it downloads a repo-local JDK 17 + Android SDK cmdline-tools into `toolchain/` (gitignored, never touches a system-wide install) and writes `local.properties` for you. Safe to re-run; already-installed pieces are skipped.
+**Linux, no local JDK/Android SDK yet:** run the bundled toolchain installer — it downloads a repo-local JDK 21 + Android SDK cmdline-tools into `toolchain/` (gitignored, never touches a system-wide install) and writes `local.properties` for you. Safe to re-run; already-installed pieces are skipped.
 ```bash
 scripts/install-toolchain.sh
-export JAVA_HOME="$(pwd)/toolchain/jdk-17"
+export JAVA_HOME="$(pwd)/toolchain/jdk-21"
 export PATH="$JAVA_HOME/bin:$PATH"
 ./gradlew installDebug
 ```
 
-**Unix/macOS/Linux with an existing JDK 17 + Android SDK:**
+**Unix/macOS/Linux with an existing JDK 21 + Android SDK:**
 ```bash
 echo "sdk.dir=/path/to/Android/Sdk" > local.properties
 ./gradlew installDebug
@@ -108,9 +108,9 @@ For faster iterative Kotlin compile during development:
 .\gradlew.bat compileDebugKotlin  # Windows
 ```
 
-If Java isn't on `PATH` on Windows, point the shell at the JDK 17 installation before invoking Gradle:
+If Java isn't on `PATH` on Windows, point the shell at the JDK 21 installation before invoking Gradle:
 ```powershell
-$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-17.0.18.8-hotspot"
+$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21-hotspot"
 $env:Path = $env:Path + ";$env:JAVA_HOME\bin"
 ```
 
@@ -118,7 +118,7 @@ $env:Path = $env:Path + ";$env:JAVA_HOME\bin"
 
 ## Build (developer)
 
-Requires JDK 17 and Android SDK 37. Use the included Gradle wrapper; do not rely on a system Gradle installation.
+Requires JDK 21 and Android SDK 37. Use the included Gradle wrapper; do not rely on a system Gradle installation.
 
 ---
 

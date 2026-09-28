@@ -11,7 +11,7 @@ The moderation constraint means: muting, NSFW hiding, and feed content filters (
 Single-module Gradle project (`:app`), package `com.umbra.app`.
 
 Stack: Kotlin 2.4.10 · Jetpack Compose · MVVM + Clean Architecture · Hilt · Room · OkHttp · Media3 · Coil 3 · kotlinx.serialization · BouncyCastle (BIP-340 Schnorr).
-Build: AGP 9.3+ · Gradle 9.x · JDK 17 · compileSdk 37 · minSdk 26 · jvmTarget 17.
+Build: AGP 9.3+ · Gradle 9.x · JDK 21 (Gradle runtime; Paparazzi needs it) · compileSdk 37 · minSdk 26 · jvmTarget 17.
 
 **Before making any change, read [AUDIT.md](../AUDIT.md).** It is the master reference for security, architecture, Room, performance, and UI rules, and takes precedence over anything below. [CONTRIBUTING.md](../CONTRIBUTING.md) covers workflow/PR expectations. [.github/agents/umbra.agent.md](../.github/agents/umbra.agent.md) is GitHub Copilot's agent config for this repo — a parallel restatement of AUDIT.md's rules in that tool's own format, not additional required reading for Claude Code. This file, AUDIT.md, and the skills under `.claude/skills/` are self-sufficient; don't treat umbra.agent.md as a dependency.
 
@@ -21,12 +21,12 @@ The maintainer's primary dev machine is Windows; this Claude Code sandbox and CI
 
 **Linux (this sandbox, CI):**
 
-If `java`/the Android SDK aren't already on `PATH`, run `scripts/install-toolchain.sh` once — it installs a repo-local JDK 17 + Android SDK cmdline-tools under `toolchain/` (gitignored, never touches a system-wide install) and regenerates `local.properties` to point at it. Re-running is safe; already-installed pieces are skipped. Linux x86_64/aarch64 only — see the script's own header comment.
+If `java`/the Android SDK aren't already on `PATH`, run `scripts/install-toolchain.sh` once — it installs a repo-local JDK 21 + Android SDK cmdline-tools under `toolchain/` (gitignored, never touches a system-wide install) and regenerates `local.properties` to point at it. Re-running is safe; already-installed pieces are skipped. Linux x86_64/aarch64 only — see the script's own header comment.
 
 ```bash
 # One-time setup (skip if JAVA_HOME/SDK are already configured)
 scripts/install-toolchain.sh
-export JAVA_HOME="$(pwd)/toolchain/jdk-17"
+export JAVA_HOME="$(pwd)/toolchain/jdk-21"
 export PATH="$JAVA_HOME/bin:$PATH"
 
 # Fast iterative compile check (use this most often while editing)
@@ -49,6 +49,10 @@ export PATH="$JAVA_HOME/bin:$PATH"
 
 # Assemble debug APK without installing
 ./gradlew assembleDebug
+
+# UI snapshots (Paparazzi, no device needed) — see docs/UI_SNAPSHOTS.md
+./gradlew recordPaparazziDebug   # (re)write goldens in app/src/test/snapshots/images/
+./gradlew verifyPaparazziDebug   # fail on visual diffs against the goldens
 ```
 
 **Windows:**
@@ -63,9 +67,9 @@ export PATH="$JAVA_HOME/bin:$PATH"
 .\gradlew.bat assembleDebug
 ```
 
-If `java` isn't on PATH, JDK 17 must be set explicitly:
+If `java` isn't on PATH, JDK 21 must be set explicitly:
 ```powershell
-$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-17.0.18.8-hotspot"
+$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21-hotspot"
 $env:Path = $env:Path + ";$env:JAVA_HOME\bin"
 ```
 

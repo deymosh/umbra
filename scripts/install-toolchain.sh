@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Installs a JDK 17 and the Android SDK cmdline-tools into <repo>/toolchain/,
+# Installs a JDK 21 and the Android SDK cmdline-tools into <repo>/toolchain/,
 # entirely local to this checkout (gitignored, never touches a system-wide
 # install). Re-run anytime; already-installed pieces are skipped.
 #
 # Linux x86_64/aarch64 only (matches the CI runner and this dev container).
-# Windows/macOS dev machines are expected to use a system-installed JDK 17 +
+# Windows/macOS dev machines are expected to use a system-installed JDK 21 +
 # Android Studio's SDK manager instead, per the project's normal workflow.
 set -euo pipefail
 
 REPO_ROOT="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
 TOOLCHAIN_DIR="$REPO_ROOT/toolchain"
-JDK_DIR="$TOOLCHAIN_DIR/jdk-17"
+JDK_DIR="$TOOLCHAIN_DIR/jdk-21"
 SDK_DIR="$TOOLCHAIN_DIR/android-sdk"
 
 OS="$(uname -s)"
@@ -27,14 +27,16 @@ esac
 
 mkdir -p "$TOOLCHAIN_DIR"
 
-# --- JDK 17 (Eclipse Temurin, via Adoptium's "latest GA" API) ---
+# --- JDK 21 (Eclipse Temurin, via Adoptium's "latest GA" API) ---
+# Gradle itself runs on 21 (the Paparazzi snapshot plugin requires it); app bytecode
+# still targets jvmTarget 17 via the Kotlin/Java compile options.
 if [ -x "$JDK_DIR/bin/java" ]; then
   echo "JDK already present at $JDK_DIR — skipping download"
 else
-  echo "Downloading Temurin 17 ($JDK_ARCH)..."
+  echo "Downloading Temurin 21 ($JDK_ARCH)..."
   TMP_TAR="$TOOLCHAIN_DIR/jdk.tar.gz"
   curl -fL -o "$TMP_TAR" \
-    "https://api.adoptium.net/v3/binary/latest/17/ga/linux/${JDK_ARCH}/jdk/hotspot/normal/eclipse"
+    "https://api.adoptium.net/v3/binary/latest/21/ga/linux/${JDK_ARCH}/jdk/hotspot/normal/eclipse"
 
   TMP_EXTRACT="$TOOLCHAIN_DIR/.jdk-extract"
   rm -rf "$TMP_EXTRACT"
