@@ -1,8 +1,19 @@
+<div align="center">
+
 # Umbra
 
-**Privacy-first, censorship-resistant Nostr client for Android — all traffic routed through TOR. No exceptions. Moderation is always yours to control.**
+**Privacy-first, censorship-resistant Nostr client for Android — all traffic
+routed through TOR. No exceptions. Moderation is always yours to control.**
 
-Umbra connects to the Nostr network exclusively via Orbot's SOCKS5 proxy. If Tor isn't running, the app makes no network connections — no fallback, no plaintext leaks.
+[![CI](https://github.com/deymosh/umbra/actions/workflows/android-ci.yml/badge.svg)](https://github.com/deymosh/umbra/actions/workflows/android-ci.yml)
+[![latest release](https://img.shields.io/github/v/release/deymosh/umbra?sort=semver&label=release)](https://github.com/deymosh/umbra/releases/latest)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+</div>
+
+Umbra connects to the Nostr network exclusively via Orbot's SOCKS5 proxy. If
+Tor isn't running, the app makes no network connections — no fallback, no
+plaintext leaks.
 
 ---
 
@@ -11,12 +22,14 @@ Umbra connects to the Nostr network exclusively via Orbot's SOCKS5 proxy. If Tor
 - [Why](#why)
 - [Features](#features)
 - [How it works](#how-it-works)
+- [Stack](#stack)
+- [Repository layout](#repository-layout)
 - [Requirements](#requirements)
 - [Quick start](#quick-start)
 - [Build (developer)](#build-developer)
 - [NIPs supported](#nips-supported)
 - [Contributing & security](#contributing--security)
-- [License](#license)
+- [Privacy & legal](#privacy--legal)
 
 ---
 
@@ -32,23 +45,31 @@ Privacy and censorship resistance are what Nostr is for, and Umbra doesn't compr
 
 ## Features
 
+**Feed & reading**
+
 - **Feed** — chronological notes and picture posts (NIP-68) with images, video, hashtags, mentions, replies, reposts, reactions, and thread support
 - **Threads & comments** — full reply trees for notes, plus NIP-22 comments rendered and composed for anything that isn't a plain note
-- **Composer** — replies, quotes, mentions, media attachments, a "mark as sensitive" toggle, and drafts that survive leaving the screen
-- **Zaps** — NIP-57 zaps signed by your NIP-55 signer and paid in your own wallet; NIP-A3 payment targets offered when the recipient publishes them
+- **Hashtag feeds, bookmarks and read later** — follow a tag, save notes to your NIP-51 bookmark list, or keep a private on-device reading queue
 - **Notifications** — replies, mentions, reactions, reposts and zaps grouped per note, with an unread marker
 - **Profiles** — notes, replies, pictures, pinned notes, counters (NIP-45 COUNT where relays support it) and NIP-05 verification state
-- **Profile editing** — update your own name, about, website, NIP-05, and LUD-16, published via your signer
-- **Hashtag feeds, bookmarks and read later** — follow a tag, save notes to your NIP-51 bookmark list, or keep a private on-device reading queue
-- **Mute list & feed filters** — mute/unmute users with a dedicated review UI (NIP-51), plus editable feed filters (NSFW, excluded hashtags/tags/content) with sensible-but-removable defaults — moderation is always user-controlled, never enforced by the app
 - **Search** — search events by content, author, or profile name (NIP-50 relay search)
+
+**Posting, profile & media**
+
+- **Composer** — replies, quotes, mentions, media attachments, a "mark as sensitive" toggle, and drafts that survive leaving the screen
+- **Profile editing** — update your own name, about, website, NIP-05, and LUD-16, published via your signer
+- **Zaps** — NIP-57 zaps signed by your NIP-55 signer and paid in your own wallet; NIP-A3 payment targets offered when the recipient publishes them
+- **Blossom media uploads** — profile/banner and composer media upload path via NIP-B7/Blossom with upload server selection, fallback retrieval, and EXIF stripping before upload
+- **Media metadata** — NIP-92 `imeta` generation for uploads, and alt text, aspect ratio, blurhash and extensionless-media detection when rendering
+
+**Privacy & control**
+
+- **Signing** — any installed NIP-55 signer app (Amber suggested); `nsec` never touches Umbra
+- **Anonymous mode** — read-only usage without providing identity
 - **Relays** — connect to clearnet and .onion relays, always routed through TOR; per-relay details, subscriptions, logs and what each relay stores for you
 - **Transparency** — per-relay network usage, app resource usage, and an on-device database inspector
 - **Privacy extras** — tracking parameters stripped from opened links, and an optional panic wipe
-- **Signing** — any installed NIP-55 signer app (Amber suggested); `nsec` never touches Umbra
-- **Anonymous mode** — read-only usage without providing identity
-- **Blossom media uploads** — profile/banner and composer media upload path via NIP-B7/Blossom with upload server selection, fallback retrieval, and EXIF stripping before upload
-- **Media metadata** — NIP-92 `imeta` generation for uploads, and alt text, aspect ratio, blurhash and extensionless-media detection when rendering
+- **Mute list & feed filters** — mute/unmute users with a dedicated review UI (NIP-51), plus editable feed filters (NSFW, excluded hashtags/tags/content) with sensible-but-removable defaults — moderation is always user-controlled, never enforced by the app
 - **NIP-17 / NIP-44 groundwork** — relay-list domain model and partial DM/privacy transport scaffolding is present, though the full encrypted messaging UI is still planned
 
 ---
@@ -73,23 +94,55 @@ Signature verification uses BIP-340 Schnorr on secp256k1 via BouncyCastle. Event
 
 ---
 
+## Repository layout
+
+```
+umbra/
+├── app/                        # the Android app — single Gradle module, com.umbra.app
+│   └── src/main/java/com/umbra/app/
+│       ├── domain/             #   pure Kotlin: models, use cases, repository interfaces,
+│       │                       #   and one package per NIP (domain/nip01, nip05, …)
+│       ├── data/               #   implements domain interfaces: SQLCipher Room, relay
+│       │                       #   client, in-memory event cache, Amber connector
+│       ├── ui/                 #   Compose screens, viewmodels, reusable components
+│       ├── di/                 #   Hilt modules — incl. the single Tor-proxied OkHttp client
+│       └── util/
+├── docs/                       # NIP coverage detail & roadmap · UI snapshots · release checklist
+├── scripts/                    # toolchain installer (Linux: repo-local JDK 21 + Android SDK)
+└── .github/workflows/          # android-ci.yml · android-release.yml
+```
+
+---
+
 ## Requirements
+
+For everyday use:
 
 - Android 8.0+ (API 26)
 - Orbot installed and running
 - A NIP-55 signer such as Amber (optional) for signing; read-only mode works without it
-- JDK 21 and Android SDK 37 (for local development)
+
+For building from source:
+
+- JDK 21 and Android SDK 37
 
 ---
 
 ## Quick start
+
+**Install the app:** grab the APK from the
+[latest release](https://github.com/deymosh/umbra/releases/latest) and install
+it on your device (Android 8.0+). Install [Orbot](https://guardianproject.info/apps/orbot/)
+and make sure it's running — without Tor, Umbra stays offline by design.
+
+**Build from source:**
 
 ```bash
 git clone https://github.com/deymosh/umbra.git
 cd umbra
 ```
 
-**Linux, no local JDK/Android SDK yet:** run the bundled toolchain installer — it downloads a repo-local JDK 21 + Android SDK cmdline-tools into `toolchain/` (gitignored, never touches a system-wide install) and writes `local.properties` for you. Safe to re-run; already-installed pieces are skipped.
+Linux, no local JDK/Android SDK yet: run the bundled toolchain installer — it downloads a repo-local JDK 21 + Android SDK cmdline-tools into `toolchain/` (gitignored, never touches a system-wide install) and writes `local.properties` for you. Safe to re-run; already-installed pieces are skipped.
 ```bash
 scripts/install-toolchain.sh
 export JAVA_HOME="$(pwd)/toolchain/jdk-21"
@@ -97,13 +150,13 @@ export PATH="$JAVA_HOME/bin:$PATH"
 ./gradlew installDebug
 ```
 
-**Unix/macOS/Linux with an existing JDK 21 + Android SDK:**
+Unix/macOS/Linux with an existing JDK 21 + Android SDK:
 ```bash
 echo "sdk.dir=/path/to/Android/Sdk" > local.properties
 ./gradlew installDebug
 ```
 
-**Windows:**
+Windows:
 ```powershell
 echo "sdk.dir=C:\path\to\Android\Sdk" > local.properties
 .\gradlew.bat installDebug
@@ -166,6 +219,8 @@ Requires JDK 21 and Android SDK 37. Use the included Gradle wrapper; do not rely
 | NIP-A4 | Public Messages | 🕒 Pending | Kind-24 builder/parser only; not subscribed to, rendered, or composed |
 | NIP-B7 | Blossom media server protocol | ✅ Implemented | Upload/list/delete/mirror fallback support is visible in the upload and profile media flows |
 | NIP-C7 | Chats | 🕒 Pending | Kind-9 builder/parser only; no chat UI |
+
+Detailed per-NIP notes live in [docs/nip-social-coverage.md](docs/nip-social-coverage.md); what's coming next is prioritized in [docs/nip-priority-roadmap.md](docs/nip-priority-roadmap.md).
 
 ---
 
