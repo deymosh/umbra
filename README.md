@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/logo.svg" alt="Umbra" width="112" height="112">
+
 # Umbra
 
 **Privacy-first, censorship-resistant Nostr client for Android — all traffic
