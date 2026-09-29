@@ -4,15 +4,18 @@ on:
   push:
     branches:
       - master
-    paths-ignore:
+    paths-ignore: &docs-only
       - "**/*.md"
       - "LICENSE"
+      - "docs/**"
+      - ".claude/**"
+      - ".github/agents/**"
+      - ".github/workflows/android-release.yml"
+      - ".github/workflows/claude-issue-analysis.yml"
   pull_request:
     branches:
       - master
-    paths-ignore:
-      - "**/*.md"
-      - "LICENSE"
+    paths-ignore: *docs-only
   workflow_dispatch:
 
 permissions:
@@ -23,8 +26,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
+  build:
+    # Lint, the unit/snapshot suite and the R8-minified benchmark build are independent, so each
+    # runs on its own runner in parallel instead of serially in one Gradle daemon. The critical
+    # path becomes compile + the slowest of the three, rather than compile + all three.
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Lint
+            task: lintDebug
+          - name: Unit tests & snapshots
+            # verifyRoborazziDebug runs the whole unit-test suite and also fails on any UI
+            # snapshot that differs from its committed golden in app/src/test/snapshots/
+            # (docs/UI_SNAPSHOTS.md).
+            task: verifyRoborazziDebug
+          - name: Benchmark APK
+            # Release-shaped (R8 minified) build; catches keep-rule gaps a debug build never hits.
+            # Its lint-vital pass is a fatal-only subset of what the Lint job already checks, so
+            # it's skipped here (the release workflow still runs it).
+            task: assembleBenchmark -x lintVitalBenchmark
 
     steps:
       - name: Checkout repository
@@ -39,16 +64,21 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Ensure Gradle wrapper is executable
-        run: chmod +x gradlew
+      - name: ${{ matrix.name }}
+        # Hosted runners have 16 GB; the checked-in 2 GB heap is sized for dev machines and
+        # leaves lint/R8 GC-bound here.
+        run: ./gradlew ${{ matrix.task }} "-Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g -XX:+UseParallelGC -Dfile.encoding=UTF-8"
 
-      - name: Lint, Test, and Assemble
-        # verifyRoborazziDebug runs the whole unit-test suite and also fails on any UI snapshot
-        # that differs from its committed golden in app/src/test/snapshots/ (docs/UI_SNAPSHOTS.md).
-        run: ./gradlew --continue lintDebug verifyRoborazziDebug assembleBenchmark
+      - name: Upload lint report
+        if: failure() && matrix.task == 'lintDebug'
+        uses: actions/upload-artifact@v7
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
 
       - name: Upload snapshot diffs
-        if: failure()
+        if: failure() && matrix.task == 'verifyRoborazziDebug'
         uses: actions/upload-artifact@v7
         with:
           name: roborazzi-diffs
@@ -61,6 +91,7 @@ jobs:
         # file, which assembleBenchmark's one-APK, no-flavor/no-split output already satisfies.
         # The artifact's name becomes the file's own name (app-benchmark.apk) since archive:
         # false ignores the `name` input entirely — there's no separate name to set here.
+        if: startsWith(matrix.task, 'assembleBenchmark')
         uses: actions/upload-artifact@v7
         with:
           path: app/build/outputs/apk/benchmark/*.apk

@@ -37,9 +37,6 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Ensure Gradle wrapper is executable
-        run: chmod +x gradlew
-
       - name: Detect release mode
         id: release_mode
         shell: bash
@@ -53,7 +50,7 @@ jobs:
           fi
 
       - name: Build release APK
-        run: ./gradlew clean assembleRelease
+        run: ./gradlew assembleRelease
 
       - name: Sign APK
         uses: r0adkll/sign-android-release@v1
