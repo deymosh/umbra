@@ -180,7 +180,10 @@ class UserRepositoryImpl @Inject constructor(
                     profile.website != existing.website ||
                     profile.banner != existing.banner ||
                     profile.lud06 != existing.lud06 ||
-                    profile.lud16 != existing.lud16
+                    profile.lud16 != existing.lud16 ||
+                    // NIP-30 emoji tags live in the event, not the content, and can change on
+                    // their own even when every content field matches — keep the newer copy.
+                    profile.customEmojis != existing.customEmojis
 
                 if (!hasNewerData || !changed) {
                     return@launch

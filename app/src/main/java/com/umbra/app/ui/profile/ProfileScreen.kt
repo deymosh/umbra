@@ -67,6 +67,8 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.LinkAnnotation
@@ -91,6 +93,7 @@ import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.ui.Screen
 import com.umbra.app.ui.common.resolve
+import com.umbra.app.ui.components.CustomEmojiText
 import com.umbra.app.ui.components.EmptyState
 import com.umbra.app.ui.components.ErrorBanner
 import com.umbra.app.ui.components.ExternalUrlWarningDialog
@@ -99,6 +102,8 @@ import com.umbra.app.domain.nip05.Nip05VerificationState
 import com.umbra.app.ui.components.HASHTAG_REGEX
 import com.umbra.app.ui.components.URL_REGEX
 import com.umbra.app.ui.components.buildThreadDepthByEventId
+import com.umbra.app.ui.components.customEmojiInlineContentId
+import com.umbra.app.ui.components.rememberCustomEmojiInlineContent
 import com.umbra.app.ui.components.notesFeedSection
 import com.umbra.app.ui.components.normalizeExternalUrl
 import com.umbra.app.ui.components.QuickActionBottomBar
@@ -904,8 +909,9 @@ internal fun ProfileHero(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
+                    CustomEmojiText(
                         text = profile?.getUserDisplayName() ?: pubkey.truncatePublicKey(),
+                        customEmojis = profile?.customEmojis.orEmpty(),
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 2,
@@ -934,8 +940,8 @@ internal fun ProfileHero(
             }
 
             if (!profile?.about.isNullOrBlank()) {
-                HashtagAwareBio(
-                    text = profile.about,
+                ProfileBio(
+                    profile = profile,
                     modifier = Modifier.fillMaxWidth(),
                     onUrlClick = onBioUrlClick
                 )
@@ -1278,8 +1284,9 @@ private fun FollowListRow(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Text(
+            CustomEmojiText(
                 text = profile?.getUserDisplayName() ?: pubkey.truncatePublicKey(8, 8),
+                customEmojis = profile?.customEmojis.orEmpty(),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
@@ -1367,19 +1374,31 @@ private fun IdentityTagRow(
 private fun HashtagAwareBio(
     modifier: Modifier = Modifier,
     text: String,
-    onUrlClick: (String) -> Unit
+    onUrlClick: (String) -> Unit,
+    // NIP-30: the profile event's own emoji tags (shortcode → URL). A `:shortcode:` here that
+    // matches one renders as an inline image at line height; unmatched ones stay literal text.
+    customEmojis: Map<String, String> = emptyMap()
 ) {
-    val matches = (URL_REGEX.findAll(text) + HASHTAG_REGEX.findAll(text))
+    val emojiInlineContent = rememberEmojisInlineContent(customEmojis, text)
+    val matches = (URL_REGEX.findAll(text) + HASHTAG_REGEX.findAll(text) + PROFILE_EMOJI_SPLIT_REGEX.findAll(text))
         .sortedBy { it.range.first }
 
     val annotated = buildAnnotatedString {
         var cursor = 0
         for (match in matches) {
+            if (match.range.first < cursor) continue
             if (match.range.first > cursor) {
                 append(text.substring(cursor, match.range.first))
             }
 
             val token = match.value
+            val emojiShortcode = PROFILE_EMOJI_SPLIT_REGEX.matchEntire(token)
+                ?.groupValues?.getOrNull(1)
+            if (emojiShortcode != null && customEmojis.containsKey(emojiShortcode)) {
+                appendInlineContent(customEmojiInlineContentId(emojiShortcode), ":$emojiShortcode:")
+                cursor = match.range.last + 1
+                continue
+            }
             if (URL_REGEX.matches(token)) {
                 val normalized = normalizeExternalUrl(token)
                 withLink(
@@ -1411,12 +1430,50 @@ private fun HashtagAwareBio(
             style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
             maxLines = if (expanded) Int.MAX_VALUE else 5,
             overflow = TextOverflow.Ellipsis,
+            inlineContent = emojiInlineContent,
             onTextLayout = { if (!expanded) overflows = it.hasVisualOverflow }
         )
         if (overflows || expanded) {
             ShowMoreLessToggle(isExpanded = expanded, onToggle = { expanded = !expanded })
         }
     }
+}
+
+private val PROFILE_EMOJI_SPLIT_REGEX = Regex(":([A-Za-z0-9_+-]+):")
+
+/** Inline-content map for [emotes] actually present in [text] — see HashtagAwareBio. */
+@Composable
+private fun rememberEmojisInlineContent(
+    customEmojis: Map<String, String>,
+    text: String
+): Map<String, InlineTextContent> {
+    val context = LocalContext.current
+    val used = remember(customEmojis, text) {
+        customEmojis
+            .filter { (shortcode, url) ->
+                (url.startsWith("https://") || url.startsWith("http://")) && text.contains(":$shortcode:")
+            }
+            .mapValues { (shortcode, url) -> CustomEmoji(shortcode = shortcode, url = url) }
+    }
+    return rememberCustomEmojiInlineContent(used) { shortcode ->
+        context.getString(R.string.custom_emoji_content_description, shortcode)
+    }
+}
+
+@Composable
+internal fun ProfileBio(
+    profile: UserProfile?,
+    modifier: Modifier = Modifier,
+    onUrlClick: (String) -> Unit
+) {
+    // about is nullable in UserProfile but guarded by the caller's isNullOrBlank check, so text
+    // is non-null here — pass "unsafe" call through a defaulted empty string for the compiler.
+    HashtagAwareBio(
+        text = profile?.about.orEmpty(),
+        modifier = modifier,
+        onUrlClick = onUrlClick,
+        customEmojis = profile?.customEmojis.orEmpty()
+    )
 }
 
 

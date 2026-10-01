@@ -35,6 +35,7 @@ data class NoteWithProfile(
     @ColumnInfo(name = "authorAbout")        val authorAbout: String?,
     @ColumnInfo(name = "authorNip05")        val authorNip05: String?,
     @ColumnInfo(name = "authorNip05VerificationState") val authorNip05VerificationState: String?,
+    @ColumnInfo(name = "authorCustomEmojis") val authorCustomEmojis: List<com.umbra.app.domain.nip30.CustomEmoji> = emptyList(),
 
     // ── Engagement counts (aggregated via event_tags → events JOIN) ───────────
 

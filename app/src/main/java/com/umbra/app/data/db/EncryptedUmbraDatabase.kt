@@ -25,6 +25,7 @@ import com.umbra.app.data.db.entities.UserProfileEntity
         FeedFilterEntity::class,
         ReactionEmojiEntity::class
     ],
+    // Beta policy: schema changes keep version 1 and need a reinstall; no migrations yet.
     version = 1,
     exportSchema = false
 )

@@ -972,7 +972,7 @@ class EventRepositoryImpl @Inject constructor(
                     // SharedFlow delivery landing while that specific screen is alive — the same
                     // durability guarantee kind:10002/10050 already get above.
                     runCatching {
-                        userRepository.saveProfile(UserProfile.fromJSON(event.pubkey, event.content, event.createdAt))
+                        userRepository.saveProfile(UserProfile.fromJSON(event.pubkey, event.content, event.createdAt, event.tags))
                     }
                 }
 
