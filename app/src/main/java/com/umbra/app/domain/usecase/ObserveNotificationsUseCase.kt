@@ -8,24 +8,26 @@ import com.umbra.app.domain.repository.LightningRepository
 import com.umbra.app.domain.repository.MuteListRepository
 import com.umbra.app.domain.repository.UserRepository
 import javax.inject.Inject
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.transformLatest
 
 /**
  * The signed-in user's grouped notifications, with their own mute list applied.
  *
- * `EventCrypto` is referenced directly rather than injected: it is an object in
- * `domain.crypto` (pure JVM, BouncyCastle), so domain code may use it without a data/ dependency,
- * and it owns the single BIP-340 verifier this groupNotifications call needs for zap-receipt
- * validation's injected signature check.
+ * `EventCrypto` (package `domain.crypto`, pure JVM) is the BIP-340 verifier zap-receipt
+ * validation needs for the zap request's signature.
  *
- * The signed-in user's own LNURL-pay `nostrPubkey` is resolved once per process (in-memory
- * cache) so zap receipts can be checked against the spec's MUST-level receipt-signer rule. It
- * is resolved off the collector thread, never per emission, and any failure (no lud16/lud06,
- * unreachable endpoint) just passes null — validation then falls back to the offline checks
- * without blocking or dropping any notification.
+ * Zap receipts are also checked against the signed-in user's own LNURL-pay `nostrPubkey` (the
+ * spec's receipt-signer rule). That lookup goes over the network, so it never gates an emission:
+ * notifications are grouped with no expected signer first, and regrouped once the lookup
+ * succeeds. It is redone only when the user's lightning address changes; a failed lookup keeps
+ * the offline checks rather than dropping anything.
  */
 class ObserveNotificationsUseCase @Inject constructor(
     private val eventRepository: EventRepository,
@@ -33,16 +35,10 @@ class ObserveNotificationsUseCase @Inject constructor(
     private val userRepository: UserRepository,
     private val lightningRepository: LightningRepository
 ) {
-    /** pubkey of the LNURL-pay endpoint the signed-in user's receipts must be signed by. */
-    @Volatile
-    private var cachedReceiptSigner: String? = null
-    private var signerResolved = false
-
     operator fun invoke(pubkey: String?): Flow<List<NotificationGroup>> {
         if (pubkey.isNullOrBlank()) return flowOf(emptyList())
         val mutes = muteListRepository.getMuteList(pubkey).map { it?.mutedPubkeys.orEmpty().map(String::lowercase).toSet() }
-        return combine(eventRepository.observeInbox(pubkey), mutes) { events, muted ->
-            val signer = resolveReceiptSigner(pubkey)
+        return combine(eventRepository.observeInbox(pubkey), mutes, receiptSigner(pubkey)) { events, muted, signer ->
             groupNotifications(
                 events,
                 muted,
@@ -52,16 +48,20 @@ class ObserveNotificationsUseCase @Inject constructor(
         }
     }
 
-    /** Once-per-process lookup: cache the result (including failure) for all later emissions. */
-    private suspend fun resolveReceiptSigner(pubkey: String): String? {
-        if (signerResolved) return cachedReceiptSigner
-        val signer = runCatching {
-            val profile = userRepository.getProfile(pubkey)
-            val candidate = profile?.lud16?.takeIf { it.isNotBlank() } ?: profile?.lud06?.takeIf { it.isNotBlank() }
-            candidate?.let { lightningRepository.resolvePayInfo(it).getOrNull()?.nostrPubkey }
-        }.getOrNull()
-        cachedReceiptSigner = signer
-        signerResolved = true
-        return signer
-    }
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun receiptSigner(pubkey: String): Flow<String?> =
+        userRepository.observeProfile(pubkey)
+            .map { profile -> profile?.lud16?.takeIf { it.isNotBlank() } ?: profile?.lud06?.takeIf { it.isNotBlank() } }
+            .distinctUntilChanged()
+            .transformLatest { address ->
+                emit(null)
+                if (address != null) {
+                    val signer = runCatching { lightningRepository.resolvePayInfo(address).getOrNull()?.nostrPubkey }
+                        .getOrNull()
+                    if (signer != null) emit(signer)
+                }
+            }
+            // observeProfile may stay silent until the profile is cached; never hold back the inbox.
+            .onStart { emit(null) }
+            .distinctUntilChanged()
 }
