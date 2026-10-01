@@ -154,10 +154,12 @@ class ThreadViewModel @Inject constructor(
 
     fun likeEvent(event: Event, content: String = "+", emoji: CustomEmoji? = null): Boolean {
         if (!userPreferences.canSignWithAmber()) return false
-        requestSignEvent(
-            eventJson = NostrEventBuilder.reaction(event, content, emoji),
-            currentUserHex = userPreferences.getPublicKey()
-        )
+        viewModelScope.launch {
+            requestSignEvent(
+                eventJson = NostrEventBuilder.reaction(event, content, emoji, relayHint(event.id)),
+                currentUserHex = userPreferences.getPublicKey()
+            )
+        }
         return true
     }
 
@@ -171,11 +173,21 @@ class ThreadViewModel @Inject constructor(
 
     fun repostEvent(event: Event) {
         if (!userPreferences.canSignWithAmber()) return
-        requestSignEvent(
-            eventJson = NostrEventBuilder.repost(event),
-            currentUserHex = userPreferences.getPublicKey()
-        )
+        viewModelScope.launch {
+            requestSignEvent(
+                eventJson = NostrEventBuilder.repost(event, relayHint(event.id)),
+                currentUserHex = userPreferences.getPublicKey()
+            )
+        }
     }
+
+    /**
+     * Relay hint for reaction/repost tag relay slots: the first relay the target was seen on,
+     * empty when unknown (the tags stay valid per NIP-18/NIP-25 either way). Suspends rather than
+     * blocking, so callers build the event inside a coroutine.
+     */
+    private suspend fun relayHint(eventId: String): String =
+        eventRepository.getEventRelays(eventId).firstOrNull() ?: ""
 
     fun deleteEvent(event: Event) {
         val currentUserPubkey = userPreferences.getPublicKey()?.lowercase() ?: return
