@@ -106,8 +106,9 @@ fun NoteAuthorLine(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(
+            CustomEmojiText(
                 text = displayName,
+                customEmojis = userProfile?.customEmojis.orEmpty(),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,

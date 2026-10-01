@@ -34,6 +34,21 @@ internal object SnapshotFixtures {
         lud16 = "alice@getalby.com",
         nip05VerificationState = Nip05VerificationState.Verified
     )
+
+    /** NIP-30: a profile whose display name and bio carry `:shortcode:` emoji from its own tags. */
+    val aliceEmoji = UserProfile(
+        pubkey = ALICE,
+        name = "alice",
+        displayName = "Alice :umbra:",
+        nip05 = "alice@umbra.social",
+        about = "Cryptographer :moon:. Night-sky photographer. Chasing totality. :umbra:",
+        website = "https://alice.example",
+        nip05VerificationState = Nip05VerificationState.Verified,
+        customEmojis = mapOf(
+            "umbra" to "https://example.com/umbra.png",
+            "moon" to "https://example.com/moon.png"
+        )
+    )
     val bob = UserProfile(pubkey = BOB, name = "bob", displayName = "Bob Kade", nip05 = "_@kade.dev")
     val carol = UserProfile(pubkey = CAROL, name = "carol")
 

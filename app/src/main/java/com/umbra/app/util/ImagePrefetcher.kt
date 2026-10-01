@@ -28,7 +28,7 @@ class ImagePrefetcher @Inject constructor(
     private val imageLoader: ImageLoader,
     @ApplicationContext private val context: Context,
     private val mediaLoadPriorityGate: MediaLoadPriorityGate
-) {
+) : AvatarPrefetcher {
     private val TAG = "ImagePrefetcher"
     private val logger = UmbraLog.tag(TAG)
 
@@ -93,7 +93,7 @@ class ImagePrefetcher @Inject constructor(
         }
     }
 
-    fun prefetchAsync(url: String, scopeTag: String = "default") {
+    override fun prefetchAsync(url: String, scopeTag: String) {
         if (url.isBlank() || mediaLoadPriorityGate.isInteractiveLoadActive) return
         val key = "$scopeTag::$url"
 

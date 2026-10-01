@@ -646,10 +646,20 @@ class UmbraNostrClient @Inject constructor(
         if (isThrottled(relayUrl)) return false
         if (isReqUnsupported(relayUrl)) return false
         if (requiresSearchFilter(relayUrl) && filters.none { !it.search.isNullOrBlank() }) return false
-        if (!subscriptions.hasChanged(relayUrl, channelId, filters)) return false
+        // Check and reserve are one atomic step per (relay, channel), so two concurrent
+        // applyChannel calls can't both send the same REQ. If the send throws, the reservation is
+        // rolled back so a later retry isn't wrongly suppressed.
+        if (!subscriptions.tryReserve(relayUrl, channelId, filters)) return false
         val subId = subscriptions.getOrCreateSubId(relayUrl, channelId, rejectsSubIdReuse(relayUrl))
-        subscribe(relayUrl, subId, filters)
-        subscriptions.recordSent(relayUrl, channelId, filters)
+        var sent = false
+        try {
+            subscribe(relayUrl, subId, filters)
+            sent = true
+        } finally {
+            if (!sent) {
+                subscriptions.rollbackReservation(relayUrl, channelId, filters)
+            }
+        }
         return true
     }
 
