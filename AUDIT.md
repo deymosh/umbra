@@ -52,6 +52,13 @@ Every network request without exception — HTTP, WebSocket, image loading (Coil
 - `npub` (public key) stored only in `SecurePreferences` (Android Keystore + AES/GCM)
 - `SecurePreferences` uses per-instance key alias: `"umbra_prefs_${name}"`
 - Signing is exclusively through `AmberSignerGateway` — no in-app Schnorr signing of user events
+- **Narrow, explicitly-approved exception — NIP-42 throwaway relay AUTH (`RelayAuthMode`):** in-app
+  BIP-340 Schnorr signing is permitted ONLY for kind-22242 relay AUTH events, ONLY with a random
+  per-connection throwaway key held in memory (never persisted, never logged, never reused across
+  connections), implemented in the single file `data/crypto/ThrowawayAuthSigner.kt` behind the
+  user-owned `RelayAuthMode` setting (Settings "Sign in to other relays"; own relays keep the
+  external-signer path always). Every user-authored event still goes exclusively through the
+  external signer gateway
 - `ANONYMOUS_PUBKEY` = 64 zeros — read-only sentinel, not a real keypair
 - `canSignWithAmber()` is the only gate for any write action (publish, react, repost)
 - No keypair generation for anonymous mode
@@ -64,7 +71,9 @@ Every network request without exception — HTTP, WebSocket, image loading (Coil
 **What to flag:**
 - Any string matching `[0-9a-f]{64}` used as a default or fallback key
 - Any `nsec` literal or variable name in production code outside the allowed files above
-- Any signing logic outside `AmberSignerGateway`
+- Any signing logic outside `AmberSignerGateway` — with the single exception above, also flag: any
+  OTHER use of `ThrowawayAuthSignerImpl` (the throwaway AUTH signer), any persistence or logging of
+  its throwaway keys, or any event kind other than 22242 signed with it
 - Any `SharedPreferences` (unencrypted) storing keys or pubkeys
 
 ### 1.3 Log scrubbing

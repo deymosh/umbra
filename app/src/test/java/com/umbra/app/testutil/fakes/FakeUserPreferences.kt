@@ -1,6 +1,7 @@
 package com.umbra.app.testutil.fakes
 
 import com.umbra.app.domain.preferences.UserPreferences
+import com.umbra.app.domain.relay.RelayAuthMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -14,10 +15,12 @@ import kotlinx.coroutines.flow.StateFlow
  */
 internal class FakeUserPreferences(
     initialPubkey: String? = null,
-    private val throwOnClearAll: Boolean = false
+    private val throwOnClearAll: Boolean = false,
+    initialRelayAuthMode: RelayAuthMode = RelayAuthMode.THROWAWAY_KEY
 ) : UserPreferences {
     private val flow = MutableStateFlow(initialPubkey)
     var clearAllCalls: Int = 0
+    private val relayAuthMode = MutableStateFlow(initialRelayAuthMode)
 
     override fun savePublicKey(pubkey: String) {
         flow.value = pubkey
@@ -39,4 +42,11 @@ internal class FakeUserPreferences(
     }
 
     override fun getPublicKeyFlow(): StateFlow<String?> = flow
+
+
+    override fun getRelayAuthModeFlow(): StateFlow<RelayAuthMode> = relayAuthMode
+
+    override fun setRelayAuthMode(mode: RelayAuthMode) {
+        relayAuthMode.value = mode
+    }
 }

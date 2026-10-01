@@ -37,7 +37,7 @@ class RelayWebSocketListenerTest {
 
     @Test
     fun `given a burst of EVENT frames when delivered then all arrive on eventFlow in send order`() = runBlocking {
-        val client = UmbraNostrClient(OkHttpClient(), OrBotConnectivityCheck())
+        val client = UmbraNostrClient(OkHttpClient(), OrBotConnectivityCheck(), com.umbra.app.data.crypto.ThrowawayAuthSignerImpl())
         val listenerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val listener = RelayWebSocketListener(
             relayUrl = "wss://relay.example",

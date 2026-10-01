@@ -28,7 +28,11 @@ class UmbraNostrClientTest {
 
     private val testRelayUrl = "wss://relay.invalid"
 
-    private fun subject() = UmbraNostrClient(OkHttpClient(), OrBotConnectivityCheck())
+    private fun subject() = UmbraNostrClient(
+        OkHttpClient(),
+        OrBotConnectivityCheck(),
+        com.umbra.app.data.crypto.ThrowawayAuthSignerImpl()
+    )
 
     private fun switchingProtocolsResponse(): Response {
         val request = Request.Builder().url("https://relay.invalid").build()

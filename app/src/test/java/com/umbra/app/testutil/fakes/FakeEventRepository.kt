@@ -48,6 +48,7 @@ internal class FakeEventRepository(
     val disconnectRelayCalls: MutableList<String> = mutableListOf()
     val clearedBackfillAnchorPubkeys: MutableList<String> = mutableListOf()
     val connectToRelayHintsCalls: MutableList<List<String>> = mutableListOf()
+    val publishedAuthEvents: MutableMap<String, Event> = mutableMapOf()
 
     data class LoadOlderCall(
         val channelId: String,
@@ -133,7 +134,10 @@ internal class FakeEventRepository(
         disconnectRelayCalls += relayUrl
     }
     override suspend fun publishEvent(event: Event): Result<Set<String>> = Result.success(emptySet())
-    override suspend fun publishAuthEvent(relayUrl: String, event: Event): Result<Unit> = Result.success(Unit)
+    override suspend fun publishAuthEvent(relayUrl: String, event: Event): Result<Unit> {
+        publishedAuthEvents[relayUrl] = event
+        return Result.success(Unit)
+    }
     override fun observeRelayRequests(): Flow<List<RelayRequestInfo>> = flowOf(emptyList())
     override fun observeRelayIssues(): Flow<RelayIssue> = emptyFlow()
     override fun observeConnectedRelayUrls(): Flow<Set<String>> = flowOf(emptySet())

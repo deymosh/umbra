@@ -8,6 +8,9 @@ import androidx.compose.material.icons.Icons
 import android.content.ActivityNotFoundException
 import androidx.compose.material.icons.outlined.BatterySaver
 import androidx.compose.material.icons.outlined.LocalFireDepartment
+import androidx.compose.material.icons.outlined.VpnKey
+import com.umbra.app.domain.relay.RelayAuthMode
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.Switch
 import com.umbra.app.ui.auth.rememberPrivacyLogout
 import androidx.compose.material.icons.outlined.DataUsage
@@ -57,6 +60,7 @@ import com.umbra.app.util.BatteryOptimizationHelper
 fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel) {
     val logout = rememberPrivacyLogout(navController, loginViewModel)
     val panicWipeEnabled by loginViewModel.panicWipeEnabled.collectAsStateWithLifecycle()
+    val relayAuthMode by loginViewModel.relayAuthMode.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var unrestricted by remember {
         mutableStateOf(BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context))
@@ -79,6 +83,8 @@ fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel)
         onLogout = logout,
         panicWipeEnabled = panicWipeEnabled,
         onPanicWipeChange = loginViewModel::setPanicWipeEnabled,
+        relayAuthMode = relayAuthMode,
+        onRelayAuthModeChange = loginViewModel::setRelayAuthMode,
         backgroundUnrestricted = unrestricted,
         onBackgroundActivityClick = {
             try {
@@ -104,9 +110,12 @@ fun SettingsContent(
     versionName: String = BuildConfig.VERSION_NAME,
     panicWipeEnabled: Boolean = false,
     onPanicWipeChange: (Boolean) -> Unit = {},
+    relayAuthMode: RelayAuthMode = RelayAuthMode.THROWAWAY_KEY,
+    onRelayAuthModeChange: (RelayAuthMode) -> Unit = {},
     backgroundUnrestricted: Boolean = true,
     onBackgroundActivityClick: () -> Unit = {}
 ) {
+    var showRelayAuthModeDialog by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -155,6 +164,18 @@ fun SettingsContent(
                             }
                         ),
                         onClick = onBackgroundActivityClick,
+                        showDivider = false
+                    )
+                }
+            }
+
+            item {
+                SettingsGroup(title = stringResource(R.string.settings_privacy)) {
+                    MenuItemRow(
+                        icon = Icons.Outlined.VpnKey,
+                        title = stringResource(R.string.settings_relay_auth_title),
+                        subtitle = stringResource(relayAuthMode.labelRes()),
+                        onClick = { showRelayAuthModeDialog = true },
                         showDivider = false
                     )
                 }
@@ -256,6 +277,67 @@ fun SettingsContent(
             }
         }
     }
+
+    if (showRelayAuthModeDialog) {
+        RelayAuthModePickerDialog(
+            current = relayAuthMode,
+            onSelect = { mode ->
+                showRelayAuthModeDialog = false
+                onRelayAuthModeChange(mode)
+            },
+            onDismiss = { showRelayAuthModeDialog = false }
+        )
+    }
+}
+
+/**
+ * Selection dialog for the relay-AUTH policy the user owns — how/whether the app signs NIP-42
+ * AUTH to relays the user did not configure. See RelayAuthMode/RelayAuthDecision in domain/relay.
+ */
+@Composable
+internal fun RelayAuthModePickerDialog(
+    current: RelayAuthMode,
+    onSelect: (RelayAuthMode) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        title = { Text(stringResource(R.string.settings_relay_auth_title)) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = stringResource(R.string.settings_relay_auth_explainer),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                RelayAuthMode.entries.forEach { mode ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .clickable { onSelect(mode) },
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = mode == current,
+                            onClick = { onSelect(mode) }
+                        )
+                        Text(
+                            text = stringResource(mode.labelRes()),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        }
+    )
 }
 
 /**
@@ -290,4 +372,10 @@ private fun SettingInfoItem(
     if (showDivider) {
         HorizontalDivider(modifier = Modifier.padding(start = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
     }
+}
+
+private fun RelayAuthMode.labelRes(): Int = when (this) {
+    RelayAuthMode.THROWAWAY_KEY -> R.string.settings_relay_auth_option_throwaway
+    RelayAuthMode.OWN_KEY -> R.string.settings_relay_auth_option_own_key
+    RelayAuthMode.NEVER -> R.string.settings_relay_auth_option_never
 }

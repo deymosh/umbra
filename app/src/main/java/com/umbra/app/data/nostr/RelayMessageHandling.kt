@@ -6,6 +6,7 @@ import com.umbra.app.domain.nip67.EoseSignal
 import com.umbra.app.domain.nip67.parseEoseCompleteness
 import com.umbra.app.domain.nip45.RelayCountResult
 import com.umbra.app.domain.nip77.NegSignal
+import com.umbra.app.domain.relay.AuthTrigger
 import com.umbra.app.domain.relay.RelayIssueKind
 import com.umbra.app.domain.relay.RelayPublishResult
 import com.umbra.app.domain.util.JsonUtils
@@ -48,6 +49,12 @@ internal fun UmbraNostrClient.onWebSocketOpen(relayUrl: String, webSocket: WebSo
         return
     }
     logger.d { "WebSocket opened for ${scrubUrlForLogs(relayUrl)}: ${response.code}" }
+    // Fresh throwaway AUTH key for this connection, replacing any key left over from a previous
+    // one — per-connection lifetime is the policy contract (never persisted, discarded on close).
+    // Relays that don't answer AUTH never get to use these keys; generating one lazily at open
+    // keeps the map bounded by connected-relay count.
+    throwawayAuthSigner.discardKeyForRelay(relayUrl)
+    throwawayAuthSigner.ensureKeyForRelay(relayUrl)
     // A fresh socket has no memory of anything previously sent to the old one — clear before
     // anything downstream (relayOpenedFlow collectors, including a channel reapply) could
     // possibly call applyChannel() for this relay, so that reapply is guaranteed to actually
@@ -221,11 +228,15 @@ private fun UmbraNostrClient.handleOkMessage(relayUrl: String, jsonArray: JsonAr
         if (isAuthRequired) {
             val storedChallenge = storedAuthChallenges[relayUrl]
             if (!storedChallenge.isNullOrBlank()) {
+                // The relay rejected one of OUR publishes with auth-required — trigger is
+                // PUBLISH_REJECTED, not CHALLENGE: the policy distinguishes them because a
+                // rejected publish already exposed the user's real pubkey on that event.
                 emitRelayIssue(
                     relayUrl = relayUrl,
                     kind = RelayIssueKind.AUTH,
                     message = storedChallenge,
-                    isAuthChallenge = true
+                    isAuthChallenge = true,
+                    authTrigger = AuthTrigger.PUBLISH_REJECTED
                 )
                 return
             }
@@ -248,11 +259,14 @@ private fun UmbraNostrClient.handleClosedMessage(relayUrl: String, jsonArray: Js
     if (isAuthRequired) {
         val storedChallenge = storedAuthChallenges[relayUrl]
         if (!storedChallenge.isNullOrBlank()) {
+            // A REQ was closed with auth-required — trigger is REQ_REJECTED, not CHALLENGE:
+            // non-own relays only answer when the relay actually refused something we asked for.
             emitRelayIssue(
                 relayUrl = relayUrl,
                 kind = RelayIssueKind.AUTH,
                 message = storedChallenge,
-                isAuthChallenge = true
+                isAuthChallenge = true,
+                authTrigger = AuthTrigger.REQ_REJECTED
             )
             return
         }
@@ -306,7 +320,8 @@ private fun UmbraNostrClient.handleAuthMessage(relayUrl: String, jsonArray: Json
         relayUrl = relayUrl,
         kind = RelayIssueKind.AUTH,
         message = challenge,
-        isAuthChallenge = true
+        isAuthChallenge = true,
+        authTrigger = AuthTrigger.CHALLENGE
     )
 }
 
@@ -353,6 +368,8 @@ internal fun UmbraNostrClient.onWebSocketClosed(relayUrl: String, webSocket: Web
     }
     // Challenge is only valid for the lifetime of the connection (NIP-42)
     storedAuthChallenges.remove(relayUrl)
+    // Same lifetime rule for this connection's throwaway AUTH key (see AUDIT.md 1.2 allowance)
+    throwawayAuthSigner.discardKeyForRelay(relayUrl)
 
     val intentionalClose = intentionalDisconnects.remove(relayUrl)
     if (!intentionalClose && removedCurrentSocket) {
@@ -369,6 +386,8 @@ internal fun UmbraNostrClient.onWebSocketFailure(relayUrl: String, webSocket: We
     if (removedCurrentSocket) {
         activeRelayUrls.remove(relayUrl)
         publishConnectedRelaySnapshot()
+        // Same lifetime rule as onWebSocketClosed — this connection is over (see AUDIT.md 1.2)
+        throwawayAuthSigner.discardKeyForRelay(relayUrl)
     }
 
     val intentionalClose = intentionalDisconnects.remove(relayUrl)

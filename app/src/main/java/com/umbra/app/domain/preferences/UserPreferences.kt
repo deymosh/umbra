@@ -1,11 +1,24 @@
 package com.umbra.app.domain.preferences
 
+import com.umbra.app.domain.relay.RelayAuthMode
 import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Domain contract for user preferences/auth session state.
  */
 interface UserPreferences {
+
+    /**
+     * How the app signs NIP-42 relay AUTH events against relays the user did not configure
+     * (discovered/unknown relays). Own relays always use the real key via the external signer,
+     * regardless of this setting. Defaults to [RelayAuthMode.THROWAWAY_KEY].
+     */
+    fun getRelayAuthMode(): RelayAuthMode = getRelayAuthModeFlow().value
+
+    fun getRelayAuthModeFlow(): StateFlow<RelayAuthMode> =
+        kotlinx.coroutines.flow.MutableStateFlow(RelayAuthMode.THROWAWAY_KEY)
+
+    fun setRelayAuthMode(mode: RelayAuthMode) {}
 
     companion object {
         const val ANONYMOUS_PUBKEY = "0000000000000000000000000000000000000000000000000000000000000000"
