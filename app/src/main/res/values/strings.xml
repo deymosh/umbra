@@ -646,6 +646,9 @@
     <string name="notifications_verb_zap">zapped %1$s sats</string>
     <string name="network_usage_title">Network usage</string>
     <string name="settings_network_usage_subtitle">What went through Tor, per relay</string>
+    <string name="settings_background_activity_title">Background activity</string>
+    <string name="settings_background_activity_unrestricted">Unrestricted. Relay connections and loaded notes stay alive in the background</string>
+    <string name="settings_background_activity_restricted">Restricted by battery optimization. Tap to let Umbra stay connected in the background</string>
     <string name="network_usage_this_session">This session · started %1$s ago</string>
     <string name="network_usage_lifetime">%1$s since last reset</string>
     <string name="network_usage_breakdown">Breakdown</string>

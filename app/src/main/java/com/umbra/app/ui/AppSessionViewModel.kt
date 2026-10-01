@@ -3,6 +3,7 @@ package com.umbra.app.ui
 import android.content.Intent
 import androidx.lifecycle.ViewModel
 import com.umbra.app.data.amber.AmberRequestCoordinator
+import com.umbra.app.domain.nostr.NostrSessionController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
@@ -19,11 +20,14 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class AppSessionViewModel @Inject constructor(
-    private val requestCoordinator: AmberRequestCoordinator
+    private val requestCoordinator: AmberRequestCoordinator,
+    private val nostrSessionController: NostrSessionController
 ) : ViewModel() {
     fun registerLauncher(launcher: (Intent) -> Unit) = requestCoordinator.registerLauncher(launcher)
 
     fun unregisterLauncher(launcher: (Intent) -> Unit) = requestCoordinator.unregisterLauncher(launcher)
 
     fun deliverResult(data: Intent?) = requestCoordinator.deliverResult(data)
+
+    fun onAppForegrounded() = nostrSessionController.onAppForegrounded()
 }

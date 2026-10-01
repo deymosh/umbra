@@ -1,7 +1,6 @@
 package com.umbra.app
 
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -16,7 +15,6 @@ import com.umbra.app.ui.components.LocalImageLoadGate
 import com.umbra.app.ui.components.LocalMediaLoadPriorityGate
 import com.umbra.app.ui.theme.UmbraTheme
 import com.umbra.app.ui.theme.toUmbraThemeOption
-import com.umbra.app.util.BatteryOptimizationHelper
 import com.umbra.app.util.ImageLoadGate
 import com.umbra.app.util.MediaLoadPriorityGate
 import dagger.hilt.android.AndroidEntryPoint
@@ -40,7 +38,6 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         )
-        requestBatteryOptimizationExemptionOnce()
         // NIP-21: nostr: URI deep link, if this activity was launched from one (see the VIEW
         // intent-filter in AndroidManifest.xml) — resolved once the app finishes its normal
         // Tor/login bootstrap and lands on the feed, see UmbraNavHost.
@@ -55,23 +52,6 @@ class MainActivity : ComponentActivity() {
                     UmbraNavHost(deepLinkUri = deepLinkUri)
                 }
             }
-        }
-    }
-
-    /**
-     * Asks the OS, once per install, to stop applying battery-optimization/App-Standby
-     * restrictions to Umbra — see BatteryOptimizationHelper.kt for why this (not a foreground
-     * service) is the mitigation this project opted into. Best-effort: silently no-ops if the
-     * device has no activity handling this system settings action, or if already exempt.
-     */
-    private fun requestBatteryOptimizationExemptionOnce() {
-        if (BatteryOptimizationHelper.isIgnoringBatteryOptimizations(this)) return
-        if (BatteryOptimizationHelper.hasPromptedBefore(this)) return
-        BatteryOptimizationHelper.markPrompted(this)
-        try {
-            startActivity(BatteryOptimizationHelper.createExemptionRequestIntent(this))
-        } catch (_: ActivityNotFoundException) {
-            // No system settings screen for this action on this device/ROM — nothing to do.
         }
     }
 }

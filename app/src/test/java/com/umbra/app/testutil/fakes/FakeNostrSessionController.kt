@@ -7,6 +7,8 @@ class FakeNostrSessionController : NostrSessionController {
         private set
     var stopCalls = 0
         private set
+    var appForegroundedCalls = 0
+        private set
 
     override fun start() {
         startCalls++
@@ -14,5 +16,9 @@ class FakeNostrSessionController : NostrSessionController {
 
     override fun stop() {
         stopCalls++
+    }
+
+    override fun onAppForegrounded() {
+        appForegroundedCalls++
     }
 }
