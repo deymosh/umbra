@@ -207,4 +207,62 @@ class RelaySubscriptionRegistryTest {
 
         assertTrue(registry.subscriptionsForChannel(channel).isEmpty())
     }
+
+    @Test
+    fun `given two concurrent apply paths when both tryReserve identical filters then only the first wins and sends`() {
+        val registry = RelaySubscriptionRegistry()
+
+        val firstWon = registry.tryReserve(relay, channel, filtersA)
+        val secondWon = registry.tryReserve(relay, channel, filtersA)
+
+        assertTrue(firstWon)
+        assertFalse(secondWon)
+        assertFalse(registry.hasChanged(relay, channel, filtersA))
+    }
+
+    @Test
+    fun `given a reservation when its send throws and rolls back then a later retry reserves again`() {
+        val registry = RelaySubscriptionRegistry()
+
+        assertTrue(registry.tryReserve(relay, channel, filtersA))
+        registry.rollbackReservation(relay, channel, filtersA)
+        assertTrue(registry.hasChanged(relay, channel, filtersA))
+
+        assertTrue(registry.tryReserve(relay, channel, filtersA))
+        registry.commitSent(relay, channel, filtersA)
+        assertFalse(registry.hasChanged(relay, channel, filtersA))
+    }
+
+    @Test
+    fun `given reservations for different filters when racing then each is measured against the current value not a stale one`() {
+        val registry = RelaySubscriptionRegistry()
+
+        assertTrue(registry.tryReserve(relay, channel, filtersA))
+        // A competing caller with different filters still gets to win — it replaces A, and a
+        // third caller asking for A now measures against B and wins too.
+        assertTrue(registry.tryReserve(relay, channel, filtersB))
+        assertTrue(registry.tryReserve(relay, channel, filtersA))
+    }
+
+    @Test
+    fun `given a rollback of an already-replaced fingerprint when called then the newer value is left alone`() {
+        val registry = RelaySubscriptionRegistry()
+
+        assertTrue(registry.tryReserve(relay, channel, filtersA))
+        assertTrue(registry.tryReserve(relay, channel, filtersB))
+        registry.rollbackReservation(relay, channel, filtersA)
+
+        assertFalse(registry.hasChanged(relay, channel, filtersB))
+        assertTrue(registry.hasChanged(relay, channel, filtersA))
+    }
+
+    @Test
+    fun `given reservation state when forgetRelay is called then reservations are cleared with it`() {
+        val registry = RelaySubscriptionRegistry()
+
+        assertTrue(registry.tryReserve(relay, channel, filtersA))
+        registry.forgetRelay(relay)
+
+        assertTrue(registry.hasChanged(relay, channel, filtersA))
+    }
 }
