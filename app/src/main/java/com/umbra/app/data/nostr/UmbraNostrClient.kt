@@ -475,7 +475,7 @@ class UmbraNostrClient @Inject constructor(
     /** Every outgoing frame goes through here, so traffic accounting has one choke point. */
     private fun sendFrame(relayUrl: String, webSocket: WebSocket, payload: String): Boolean {
         val sent = webSocket.send(payload)
-        if (sent) trafficMeter.recordRelaySent(relayUrl, payload.toByteArray(Charsets.UTF_8).size)
+        if (sent) trafficMeter.recordRelaySent(relayUrl, utf8ByteLength(payload))
         return sent
     }
 
