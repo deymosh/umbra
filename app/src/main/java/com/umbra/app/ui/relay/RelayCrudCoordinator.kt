@@ -161,7 +161,11 @@ internal class RelayCrudCoordinator(
                         relayListDirty = true,
                         dmRelayListDirty = true,
                         searchListDirty = true,
-                        indexListDirty = true
+                        indexListDirty = true,
+                        outboxInboxListRevision = it.outboxInboxListRevision + 1,
+                        dmListRevision = it.dmListRevision + 1,
+                        searchListRevision = it.searchListRevision + 1,
+                        indexListRevision = it.indexListRevision + 1
                     )
                 }
             } catch (e: CancellationException) {
@@ -186,13 +190,13 @@ internal class RelayCrudCoordinator(
                 relayRoleMutexes.computeIfAbsent(relayId) { Mutex() }.withLock {
                     removeRelayUseCase(relayId)
                 }
-                // Pruned only once the removal above has fully completed and the lock is
-                // released — relayRoleMutexes otherwise grows one entry per distinct
-                // relay id ever toggled, for this coordinator's whole lifetime. A caller that
-                // races in for this now-deleted id right after this line gets a fresh, unlocked
-                // Mutex from computeIfAbsent and no-ops harmlessly once updateRelayRole's own
-                // getRelayById lookup finds nothing, same as any other unknown relayId.
-                relayRoleMutexes.remove(relayId)
+                // relayRoleMutexes entries for deleted relay ids are deliberately NOT pruned
+                // here (this used to call .remove(relayId)): pruning lets two racing callers
+                // acquire different Mutex instances for the same relay id, splitting the
+                // serialization the per-id locking exists for. The map stays bounded by the
+                // number of distinct relay ids ever seen this session, so the retention cost
+                // is trivial; a caller racing in for a now-deleted id still no-ops harmlessly
+                // once updateRelayRole's own getRelayById lookup finds nothing.
                 // Same conservative all-four-dirty marking as saveRelay — the deleted relay may
                 // have held any combination of roles.
                 state.update {
@@ -203,7 +207,11 @@ internal class RelayCrudCoordinator(
                         relayListDirty = true,
                         dmRelayListDirty = true,
                         searchListDirty = true,
-                        indexListDirty = true
+                        indexListDirty = true,
+                        outboxInboxListRevision = it.outboxInboxListRevision + 1,
+                        dmListRevision = it.dmListRevision + 1,
+                        searchListRevision = it.searchListRevision + 1,
+                        indexListRevision = it.indexListRevision + 1
                     )
                 }
             } catch (e: CancellationException) {
@@ -242,10 +250,22 @@ internal class RelayCrudCoordinator(
 
         state.update {
             when (role) {
-                RelayRole.OUTBOX, RelayRole.INBOX -> it.copy(relayListDirty = true)
-                RelayRole.DM -> it.copy(dmRelayListDirty = true)
-                RelayRole.SEARCH -> it.copy(searchListDirty = true)
-                RelayRole.INDEX -> it.copy(indexListDirty = true)
+                RelayRole.OUTBOX, RelayRole.INBOX -> it.copy(
+                    relayListDirty = true,
+                    outboxInboxListRevision = it.outboxInboxListRevision + 1
+                )
+                RelayRole.DM -> it.copy(
+                    dmRelayListDirty = true,
+                    dmListRevision = it.dmListRevision + 1
+                )
+                RelayRole.SEARCH -> it.copy(
+                    searchListDirty = true,
+                    searchListRevision = it.searchListRevision + 1
+                )
+                RelayRole.INDEX -> it.copy(
+                    indexListDirty = true,
+                    indexListRevision = it.indexListRevision + 1
+                )
             }
         }
 
@@ -261,7 +281,12 @@ internal class RelayCrudCoordinator(
     }
 
     fun setOutboxEnabled(relayId: String, enabled: Boolean) {
-        state.update { it.copy(relayListDirty = true) }
+        state.update {
+            it.copy(
+                relayListDirty = true,
+                outboxInboxListRevision = it.outboxInboxListRevision + 1
+            )
+        }
         updateRelayRole(relayId) { relay ->
             relay.copy(
                 isWriteActive = enabled,
@@ -278,7 +303,12 @@ internal class RelayCrudCoordinator(
             return
         }
 
-        state.update { it.copy(relayListDirty = true) }
+        state.update {
+            it.copy(
+                relayListDirty = true,
+                outboxInboxListRevision = it.outboxInboxListRevision + 1
+            )
+        }
         updateRelayRole(relayId) { relay ->
             relay.copy(
                 isReadActive = enabled,
@@ -306,7 +336,12 @@ internal class RelayCrudCoordinator(
             // Only mark the published DM relay list as needing re-publish once the relay
             // actually changes below — a rejected/no-op enable must never claim the DM list
             // now differs from what's published, since it doesn't.
-            state.update { it.copy(dmRelayListDirty = true) }
+            state.update {
+                it.copy(
+                    dmRelayListDirty = true,
+                    dmListRevision = it.dmListRevision + 1
+                )
+            }
             relay.copy(
                 isDmActive = enabled,
                 dmRequiresAuth = if (enabled) true else false,
@@ -316,7 +351,12 @@ internal class RelayCrudCoordinator(
     }
 
     fun setSearchEnabled(relayId: String, enabled: Boolean) {
-        state.update { it.copy(searchListDirty = true) }
+        state.update {
+            it.copy(
+                searchListDirty = true,
+                searchListRevision = it.searchListRevision + 1
+            )
+        }
         updateRelayRole(relayId) { relay ->
             relay.copy(
                 isSearchActive = enabled,
@@ -326,7 +366,12 @@ internal class RelayCrudCoordinator(
     }
 
     fun setIndexEnabled(relayId: String, enabled: Boolean) {
-        state.update { it.copy(indexListDirty = true) }
+        state.update {
+            it.copy(
+                indexListDirty = true,
+                indexListRevision = it.indexListRevision + 1
+            )
+        }
         updateRelayRole(relayId) { relay ->
             relay.copy(
                 isIndexActive = enabled,

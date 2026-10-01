@@ -32,11 +32,12 @@ import com.umbra.app.domain.usecase.RemoveRelayUseCase
 import com.umbra.app.domain.usecase.UpdateRelayUseCase
 import com.umbra.app.ui.common.UiMessage
 import com.umbra.app.util.coroutines.runCatchingCancellable
+import com.umbra.app.util.coroutines.throttleLatest
+import com.umbra.app.util.coroutines.throttleLatestBatch
 import com.umbra.app.util.logging.UmbraLog
 import androidx.compose.runtime.Immutable
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,10 +45,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
 enum class RelayRole {
@@ -116,6 +114,17 @@ data class RelayConfigState(
     val dmRelayListDirty: Boolean = false,
     val searchListDirty: Boolean = false,
     val indexListDirty: Boolean = false,
+    // Bumped *in the same state.update* as each paired *ListDirty flag above, by every
+    // dirtying site (saveRelay/deleteRelay mark all four; the individual set*Enabled/
+    // removeRelayRole setters mark one). RelayListPublishingCoordinator snapshots a kind's
+    // revision before signing and only clears that kind's dirty flag if the revision is
+    // unchanged afterwards — the sign round trip suspends for unbounded user interaction, and
+    // the version check is what keeps an edit made during that window from being republished
+    // as stale (or, worse, silently dropped) once the sign completes.
+    val outboxInboxListRevision: Long = 0L,
+    val dmListRevision: Long = 0L,
+    val searchListRevision: Long = 0L,
+    val indexListRevision: Long = 0L,
     val isPublishing: Boolean = false,
     // Derived from relays/connectedRelayUrls/relayIssues/relayRequests by
     // observeDerivedRelayState() on Dispatchers.Default — see that function's doc comment for
@@ -316,39 +325,10 @@ class RelayConfigViewModel @Inject constructor(
     }
 
     private fun observeRelays() {
-        var pendingRelays: List<Relay>? = null
-        val pendingRelaysMutex = Mutex()
-        // Deliver the first snapshot the instant it's collected — only throttle bursts after
-        // that. Matches observeRelayRequests()'s reasoning: this ViewModel is screen-scoped, so
-        // withholding even the first emission for a whole flush window would mean the relay list
-        // rendered empty for RELAY_LIST_FLUSH_INTERVAL_MS on every fresh open.
-        var deliveredFirst = false
-
         viewModelScope.launch {
-            getAllRelaysUseCase().collect { relays ->
-                val deliverNow = pendingRelaysMutex.withLock {
-                    if (deliveredFirst) {
-                        pendingRelays = relays
-                        false
-                    } else {
-                        deliveredFirst = true
-                        true
-                    }
-                }
-                if (deliverNow) {
-                    applyRelaysSnapshot(relays)
-                }
-            }
-        }
-
-        viewModelScope.launch {
-            while (isActive) {
-                delay(RELAY_LIST_FLUSH_INTERVAL_MS)
-                val snapshot = pendingRelaysMutex.withLock {
-                    pendingRelays?.also { pendingRelays = null }
-                } ?: continue
-                applyRelaysSnapshot(snapshot)
-            }
+            getAllRelaysUseCase()
+                .throttleLatest(RELAY_LIST_FLUSH_INTERVAL_MS)
+                .collect { relays -> applyRelaysSnapshot(relays) }
         }
     }
 
@@ -396,73 +376,26 @@ class RelayConfigViewModel @Inject constructor(
     }
 
     private fun observeRelayRequests() {
-        var pendingRequests: List<RelayRequestInfo>? = null
-        val pendingRequestsMutex = Mutex()
-        // This ViewModel is screen-scoped (a fresh instance per hiltViewModel() call at each of
-        // RelayConfigScreen/RelayDetailsScreen/ActiveSubscriptionsScreen's nav destinations), so
-        // observeRelayRequests() restarts from scratch on every screen open. Throttling every
-        // emission — including the first — meant the screen rendered relayRequests = emptyList()
-        // for up to RELAY_REQUESTS_FLUSH_INTERVAL_MS, then had the full (possibly large) snapshot
-        // pop in all at once: a blank flash followed by its own layout hitch, worse than just
-        // showing the real list from the start. Deliver the first snapshot the instant it's
-        // collected (typically immediately, since this is a hot StateFlow that replays its
-        // current value to new subscribers) and only throttle bursts after that.
-        var deliveredFirst = false
-
         viewModelScope.launch {
-            eventRepository.observeRelayRequests().collect { requests ->
-                val deliverNow = pendingRequestsMutex.withLock {
-                    if (deliveredFirst) {
-                        pendingRequests = requests
-                        false
-                    } else {
-                        deliveredFirst = true
-                        true
-                    }
-                }
-                if (deliverNow) {
+            eventRepository.observeRelayRequests()
+                .throttleLatest(RELAY_REQUESTS_FLUSH_INTERVAL_MS)
+                .collect { requests ->
                     _state.update { it.copy(relayRequests = requests) }
                 }
-            }
-        }
-
-        viewModelScope.launch {
-            while (isActive) {
-                delay(RELAY_REQUESTS_FLUSH_INTERVAL_MS)
-                val snapshot = pendingRequestsMutex.withLock {
-                    pendingRequests?.also { pendingRequests = null }
-                } ?: continue
-                _state.update { it.copy(relayRequests = snapshot) }
-            }
         }
     }
 
     private fun observeRelayIssues() {
-        val pendingIssues = mutableListOf<RelayIssue>()
-        val pendingIssuesMutex = Mutex()
-
         viewModelScope.launch {
-            eventRepository.observeRelayIssues().collect { issue ->
-                pendingIssuesMutex.withLock { pendingIssues += issue }
-            }
-        }
-
-        viewModelScope.launch {
-            while (isActive) {
-                delay(RELAY_ISSUE_FLUSH_INTERVAL_MS)
-                val batch = pendingIssuesMutex.withLock {
-                    if (pendingIssues.isEmpty()) {
-                        null
-                    } else {
-                        pendingIssues.toList().also { pendingIssues.clear() }
+            eventRepository.observeRelayIssues()
+                .throttleLatestBatch(RELAY_ISSUE_FLUSH_INTERVAL_MS)
+                .collect { batch ->
+                    _state.update { state ->
+                        state.copy(
+                            relayIssues = appendBoundedRelayIssues(state.relayIssues, batch, MAX_ISSUES_PER_RELAY)
+                        )
                     }
-                } ?: continue
-                _state.update { state ->
-                    state.copy(
-                        relayIssues = appendBoundedRelayIssues(state.relayIssues, batch, MAX_ISSUES_PER_RELAY)
-                    )
                 }
-            }
         }
     }
 
