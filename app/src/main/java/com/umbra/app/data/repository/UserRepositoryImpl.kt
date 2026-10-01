@@ -19,7 +19,7 @@ import com.umbra.app.domain.repository.RelayRepository
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.repository.Nip05Repository
 import com.umbra.app.domain.util.thresholdMillisBefore
-import com.umbra.app.util.ImagePrefetcher
+import com.umbra.app.util.AvatarPrefetcher
 import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.logging.UmbraLog
 import java.util.concurrent.ConcurrentHashMap
@@ -63,7 +63,7 @@ class UserRepositoryImpl @Inject constructor(
     private val userPreferences: UserPreferences,
     private val relayRepository: RelayRepository,
     private val nip05Repository: Nip05Repository,
-    private val imagePrefetcher: ImagePrefetcher
+    private val imagePrefetcher: AvatarPrefetcher
 ) : UserRepository {
     companion object {
         private const val TAG = "UmbraUserRepo"
@@ -199,7 +199,7 @@ class UserRepositoryImpl @Inject constructor(
             if (pictureUrl != null) {
                 try {
                     // Fire-and-forget prefetch; ImagePrefetcher handles Tor readiness and concurrency
-                    imagePrefetcher.prefetchAsync(pictureUrl)
+                    imagePrefetcher.prefetchAsync(pictureUrl, scopeTag = "profile")
                 } catch (e: Exception) {
                     logger.d { "Avatar prefetch scheduling failed: ${scrubThrowableMessageForLogs(e)}" }
                 }
