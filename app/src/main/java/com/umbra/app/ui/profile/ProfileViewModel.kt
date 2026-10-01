@@ -60,6 +60,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import com.umbra.app.ui.common.ImmutableListSnapshot
 import com.umbra.app.ui.common.ImmutableMapSnapshot
@@ -572,7 +573,7 @@ class ProfileViewModel @Inject constructor(
     fun likeEvent(event: Event, content: String = "+", emoji: CustomEmoji? = null): Boolean {
         if (!userPreferences.canSignWithAmber()) return false
         requestSignEvent(
-            eventJson = NostrEventBuilder.reaction(event, content, emoji),
+            eventJson = NostrEventBuilder.reaction(event, content, emoji, relayHint(event.id)),
             currentUserHex = userPreferences.getPublicKey()
         )
         return true
@@ -589,9 +590,17 @@ class ProfileViewModel @Inject constructor(
     fun repostEvent(event: Event) {
         if (!userPreferences.canSignWithAmber()) return
         requestSignEvent(
-            eventJson = NostrEventBuilder.repost(event),
+            eventJson = NostrEventBuilder.repost(event, relayHint(event.id)),
             currentUserHex = userPreferences.getPublicKey()
         )
+    }
+
+    /**
+     * Relay hint for reaction/repost tag relay slots: the first relay the target was seen on;
+     * empty when unknown. Blocking is fine here — the backing lookup is an in-memory map hit.
+     */
+    private fun relayHint(eventId: String): String = runBlocking {
+        eventRepository.getEventRelays(eventId).firstOrNull() ?: ""
     }
 
     fun requestSignEvent(eventJson: String, currentUserHex: String? = null) {

@@ -49,6 +49,7 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.Immutable
 import com.umbra.app.domain.util.JsonUtils
@@ -155,7 +156,7 @@ class ThreadViewModel @Inject constructor(
     fun likeEvent(event: Event, content: String = "+", emoji: CustomEmoji? = null): Boolean {
         if (!userPreferences.canSignWithAmber()) return false
         requestSignEvent(
-            eventJson = NostrEventBuilder.reaction(event, content, emoji),
+            eventJson = NostrEventBuilder.reaction(event, content, emoji, relayHint(event.id)),
             currentUserHex = userPreferences.getPublicKey()
         )
         return true
@@ -172,9 +173,18 @@ class ThreadViewModel @Inject constructor(
     fun repostEvent(event: Event) {
         if (!userPreferences.canSignWithAmber()) return
         requestSignEvent(
-            eventJson = NostrEventBuilder.repost(event),
+            eventJson = NostrEventBuilder.repost(event, relayHint(event.id)),
             currentUserHex = userPreferences.getPublicKey()
         )
+    }
+
+    /**
+     * Relay hint for reaction/repost tag relay slots: the first relay the target was seen on;
+     * empty when unknown. Blocking lookup is acceptable because the cache read is a mutex-guarded
+     * in-memory map hit (same shape as Amber's own blocking sign intent setup on the caller path).
+     */
+    private fun relayHint(eventId: String): String = runBlocking {
+        eventRepository.getEventRelays(eventId).firstOrNull() ?: ""
     }
 
     fun deleteEvent(event: Event) {

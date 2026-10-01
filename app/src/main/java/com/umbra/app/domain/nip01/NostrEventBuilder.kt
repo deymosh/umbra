@@ -36,21 +36,41 @@ object NostrEventBuilder {
      * shape (`["emoji", shortcode, url]`) is spec-identical to NIP-30's, so CustomEmoji is reused
      * rather than introducing a NIP-25-specific type.
      */
-    fun reaction(targetEvent: Event, content: String = "+", emoji: CustomEmoji? = null): String = buildUnsignedJson(
+    fun reaction(
+        targetEvent: Event,
+        content: String = "+",
+        emoji: CustomEmoji? = null,
+        relayHint: String = ""
+    ): String = buildUnsignedJson(
         kind = Event.KIND_REACTION,
         tags = buildList {
-            add(listOf("e", targetEvent.id))
-            add(listOf("p", targetEvent.pubkey))
+            add(listOf("e", targetEvent.id, relayHint, targetEvent.pubkey))
+            add(listOf("k", targetEvent.kind.toString()))
+            if (targetEvent.kind in ADDRESSABLE_KIND_RANGE) {
+                add(addressTag(targetEvent, relayHint))
+            }
+            add(listOf("p", targetEvent.pubkey, relayHint))
             emoji?.let { add(listOf("emoji", it.shortcode, it.url)) }
         },
         content = content
     )
 
     /**
-     * NIP-18: Repost (kind 6).
+     * NIP-18: Repost — kind 6 when the target is a kind-1 text note, kind 16 (generic repost)
+     * for every other target kind, with a `k` tag naming the target's kind per spec's
+     * "explicit tags SHOULD be included" for generic reposts.
      * Content is the serialized original event JSON per NIP-18.
+     * @param relayHint A relay the target was seen on, for the `e`/`a` tag's third slot; empty
+     *   when unknown.
      */
-    fun repost(targetEvent: Event): String {
+    fun repost(targetEvent: Event, relayHint: String = ""): String {
+        val isTextNote = targetEvent.kind == Event.KIND_TEXT_NOTE
+        val tags = buildList {
+            if (!isTextNote) add(listOf("k", targetEvent.kind.toString()))
+            if (isAddressable(targetEvent.kind)) add(addressTag(targetEvent, relayHint))
+            add(listOf("e", targetEvent.id, relayHint))
+            add(listOf("p", targetEvent.pubkey))
+        }
         val contentJson = buildJsonObject {
             put("id", targetEvent.id)
             put("pubkey", targetEvent.pubkey)
@@ -68,11 +88,8 @@ object NostrEventBuilder {
         }.toString()
 
         return buildUnsignedJson(
-            kind = Event.KIND_REPOST,
-            tags = listOf(
-                listOf("e", targetEvent.id, ""),
-                listOf("p", targetEvent.pubkey)
-            ),
+            kind = if (isTextNote) Event.KIND_REPOST else Event.KIND_GENERIC_REPOST,
+            tags = tags,
             content = contentJson
         )
     }
@@ -119,6 +136,19 @@ object NostrEventBuilder {
         )
     }
 
+    /**
+     * NIP-01 parameterized-replaceable / addressable kind range (30000-39999) — the kinds an
+     * `a` coordinate tag exists to point at (reposts and reactions on these need it, and
+     * deleteEvent/zapRequest already special-case them).
+     */
+    private val ADDRESSABLE_KIND_RANGE = 30000..39999
+
+    private fun isAddressable(kind: Int): Boolean = kind in ADDRESSABLE_KIND_RANGE
+
+    /** `["a", "<kind>:<pubkey>:<d-tag or empty>", relayHint]` coordinate for an addressable target. */
+    private fun addressTag(target: Event, relayHint: String): List<String> =
+        listOf("a", "${target.kind}:${target.pubkey}:${target.getTagValue("d").orEmpty()}", relayHint)
+
     /** `[contentWarningTag(reason)]` when [sensitiveReason] is non-null, else empty. */
     private fun attachmentTags(sensitiveReason: String?, content: String, emojis: List<CustomEmoji>): List<List<String>> =
         (if (sensitiveReason != null) listOf(contentWarningTag(sensitiveReason)) else emptyList()) +
@@ -156,7 +186,14 @@ object NostrEventBuilder {
         val rootId = replyToEvent.getRootEventId() ?: replyToEvent.id
         val isDirectReplyToRoot = rootId == replyToEvent.id
 
-        val participantPubkeys = (replyToEvent.getTagValues("p") + replyToEvent.pubkey)
+        // NIP-10: the root's author should be notified too, even deep in a thread — clients
+        // commonly keep them only in the root e tag's 4th (pubkey) slot rather than as a p tag.
+        val rootAuthorPubkey = replyToEvent.tags.asSequence()
+            .filter { it.getOrNull(0) == "e" && it.getOrNull(1) == rootId }
+            .mapNotNull { rootTag -> rootTag.getOrNull(4)?.lowercase() }
+            .firstOrNull { it.length == 64 }
+
+        val participantPubkeys = (replyToEvent.getTagValues("p") + replyToEvent.pubkey + listOfNotNull(rootAuthorPubkey))
             .asSequence()
             .map { it.lowercase() }
             .filter { it.length == 64 }
