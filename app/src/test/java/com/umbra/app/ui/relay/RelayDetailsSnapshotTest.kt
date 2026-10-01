@@ -36,7 +36,7 @@ class RelayDetailsSnapshotTest {
             pubkey = SnapshotFixtures.BOB,
             software = "git+https://github.com/hoytech/strfry.git",
             version = "1.0.4",
-            supportedNips = listOf(1, 2, 4, 9, 11, 22, 28, 40, 42, 45, 70, 77),
+            supportedNips = listOf(1, 2, 4, 9, 11, 22, 28, 40, 42, 45, 70, 77, 86),
             maxSubscriptions = 300,
             maxLimitEventCount = 500,
             requiresAuth = false,
@@ -72,7 +72,7 @@ class RelayDetailsSnapshotTest {
                 RelayIssue(relayUrl = relay.url, kind = RelayIssueKind.RATE_LIMIT, rawMessage = "rate-limited: slow down", timestampMs = 1_750_000_030_000L)
             ),
             currentUserPubkey = SnapshotFixtures.BOB,
-            onNavigateBack = {}, onRefreshInfo = {}, onEdit = {}, onDelete = {}, onOpenUrl = {}
+            onNavigateBack = {}, onRefreshInfo = {}, onManageRelay = {}, onOpenUrl = {}
         )
     }
 }

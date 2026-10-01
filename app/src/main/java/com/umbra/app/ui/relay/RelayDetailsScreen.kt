@@ -9,34 +9,28 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -63,6 +57,7 @@ import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import com.umbra.app.R
 import com.umbra.app.domain.nip11.RelayInfo
+import com.umbra.app.domain.nip86.supportsNip86
 import com.umbra.app.domain.relay.Relay
 import com.umbra.app.domain.relay.RelayIssue
 import com.umbra.app.domain.relay.RelayIssueKind
@@ -71,7 +66,6 @@ import com.umbra.app.domain.relay.groupByPurpose
 import com.umbra.app.domain.relay.normalizeRelayUrl
 import java.text.NumberFormat
 import com.umbra.app.ui.components.ChipBadge
-import com.umbra.app.ui.components.ConfirmDialog
 import com.umbra.app.ui.components.ExternalUrlWarningDialog
 import com.umbra.app.ui.components.InlineEmptyText
 import com.umbra.app.ui.components.LoadingSpinner
@@ -99,23 +93,8 @@ fun RelayDetailsScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var pendingExternalUrl by remember { mutableStateOf<String?>(null) }
-    var confirmDelete by remember { mutableStateOf(false) }
     val relay = state.relays.firstOrNull { it.id == relayId }
 
-    if (confirmDelete && relay != null) {
-        ConfirmDialog(
-            title = stringResource(R.string.relay_delete_confirm_title),
-            message = stringResource(R.string.relay_delete_confirm_message),
-            confirmLabel = stringResource(R.string.delete),
-            isDestructive = true,
-            onConfirm = {
-                confirmDelete = false
-                viewModel.deleteRelay(relay.id)
-                navController.popBackStack()
-            },
-            onDismiss = { confirmDelete = false }
-        )
-    }
 
     pendingExternalUrl?.let { url ->
         ExternalUrlWarningDialog(
@@ -176,8 +155,7 @@ fun RelayDetailsScreen(
         currentUserPubkey = state.currentUserPubkey,
         onNavigateBack = { navController.popBackStack() },
         onRefreshInfo = { relay?.let { viewModel.loadRelayInfo(it.url, forceRefresh = true) } },
-        onEdit = { relay?.let(viewModel::startEditingRelay) },
-        onDelete = { confirmDelete = true },
+        onManageRelay = { navController.navigate(Screen.RelayManagement.forRelay(relayId)) },
         onOpenUrl = { pendingExternalUrl = it }
     )
 
@@ -207,8 +185,7 @@ internal fun RelayDetailsContent(
     currentUserPubkey: String?,
     onNavigateBack: () -> Unit,
     onRefreshInfo: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
+    onManageRelay: () -> Unit,
     onOpenUrl: (String) -> Unit
 ) {
     Scaffold(
@@ -228,37 +205,6 @@ internal fun RelayDetailsContent(
                     }
                 }
             )
-        },
-        bottomBar = {
-            if (relay != null) {
-                Surface(color = MaterialTheme.colorScheme.background) {
-                    Column(Modifier.navigationBarsPadding()) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.fillMaxWidth().padding(16.dp)
-                        ) {
-                            // Deleting is deliberate: quiet, behind a confirmation, never an
-                            // equal-weight filled twin of Edit.
-                            OutlinedButton(
-                                onClick = onDelete,
-                                modifier = Modifier.weight(1f).height(48.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f))
-                            ) {
-                                Icon(Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(stringResource(R.string.delete))
-                            }
-                            Button(onClick = onEdit, modifier = Modifier.weight(1f).height(48.dp)) {
-                                Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(stringResource(R.string.edit))
-                            }
-                        }
-                    }
-                }
-            }
         }
     ) { innerPadding ->
         if (relay == null) {
@@ -410,6 +356,11 @@ internal fun RelayDetailsContent(
                         }
                     }
                 }
+                if (supportsNip86(info)) {
+                    item(key = "manage", contentType = "group") {
+                        ManageRelayGroup(onClick = onManageRelay)
+                    }
+                }
             }
 
             item(key = "subs-header", contentType = "header") {
@@ -486,6 +437,40 @@ private fun RelayOwnCountsGroup(counts: RelayOwnCounts) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp)
         )
+    }
+}
+
+/** NIP-86 entry point: one quiet row, shown only when the relay advertises the management API. */
+@Composable
+private fun ManageRelayGroup(onClick: () -> Unit) {
+    SettingsGroup(title = stringResource(R.string.relay_manage_title)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.relay_manage_row),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = stringResource(R.string.relay_manage_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 }
 
