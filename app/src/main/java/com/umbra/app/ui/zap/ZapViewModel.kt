@@ -69,20 +69,23 @@ class ZapViewModel @Inject constructor(
     private val _state = MutableStateFlow(ZapUiState())
     val state: StateFlow<ZapUiState> = _state.asStateFlow()
 
-    private var loadJob: Job? = null
+    // Separate so retrying Lightning never cancels the payment-target collection, and close()
+    // stops both.
+    private var lightningJob: Job? = null
+    private var targetsJob: Job? = null
     private var paytoChannel: String? = null
 
     fun open(target: ZapTarget) {
         if (_state.value.target == target) return
         close()
         _state.update { ZapUiState(target = target) }
-        loadJob = viewModelScope.launch { resolveLightning(target) }
+        lightningJob = viewModelScope.launch { resolveLightning(target) }
         // NIP-A3: the recipient's other payment targets, fetched once and read from cache.
         // Runs independently of the Lightning resolution so a slow or failed endpoint lookup
         // can never hold the targets back.
         val channel = NostrChannels.paymentTargets(target.recipientPubkey)
         paytoChannel = channel
-        loadJob = viewModelScope.launch {
+        targetsJob = viewModelScope.launch {
             eventRepository.subscribeChannel(
                 channel,
                 listOf(EventFilter(authors = setOf(target.recipientPubkey), kinds = setOf(KIND_PAYMENT_TARGETS), limit = 1))
@@ -165,13 +168,15 @@ class ZapViewModel @Inject constructor(
     /** Re-resolve Lightning for the current target from scratch (Try again on an unreachable endpoint). */
     fun reload() {
         val target = _state.value.target ?: return
-        loadJob?.cancel()
-        loadJob = viewModelScope.launch { resolveLightning(target) }
+        lightningJob?.cancel()
+        lightningJob = viewModelScope.launch { resolveLightning(target) }
     }
 
     fun close() {
-        loadJob?.cancel()
-        loadJob = null
+        lightningJob?.cancel()
+        lightningJob = null
+        targetsJob?.cancel()
+        targetsJob = null
         paytoChannel?.let(eventRepository::clearChannel)
         paytoChannel = null
         _state.update { ZapUiState() }

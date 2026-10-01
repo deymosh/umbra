@@ -626,6 +626,7 @@
     <string name="zap_error_invoice">Their wallet didn\'t return an invoice.</string>
     <string name="zap_try_again">Try again</string>
     <string name="zap_pay_with_title">Pay with</string>
+    <string name="zap_other_ways_title">Other ways to pay</string>
     <string name="zap_no_options_title">No way to pay yet</string>
     <string name="zap_no_options_body">%1$s hasn\'t added a Lightning address or other payment options.</string>
     <string name="zap_no_wallet_app">No installed app can open this payment. Copy it instead.</string>

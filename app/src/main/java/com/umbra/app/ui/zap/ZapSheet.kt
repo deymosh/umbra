@@ -63,6 +63,7 @@ import com.umbra.app.R
 import com.umbra.app.domain.nip57.DEFAULT_ZAP_AMOUNTS_SATS
 import com.umbra.app.domain.nipa3.PaymentTarget
 import com.umbra.app.domain.usecase.ZapFailure
+import com.umbra.app.ui.components.EmptyState
 import com.umbra.app.ui.components.ExternalUrlWarningDialog
 import com.umbra.app.ui.components.GroupTextField
 import com.umbra.app.ui.components.LoadingSpinner
@@ -207,13 +208,12 @@ internal fun ZapSheetContent(
             }
         }
 
-        // Payment targets get their own treatment whenever they exist: below the amount picker
-        // when Lightning is also available, alone (with a "Pay with" header) when it isn't.
-        val showTargets = state.paymentTargets.isNotEmpty() && state.phase !is ZapPhase.Ready &&
-            state.phase !is ZapPhase.Working && state.phase !is ZapPhase.InvoiceReady
-        if (showTargets) {
+        // Payment targets always show when they exist: as "other ways" under a working Lightning
+        // flow, or as the only way ("Pay with") when Lightning is missing or unreachable.
+        if (state.paymentTargets.isNotEmpty()) {
+            val lightningAvailable = state.payInfo != null
             Text(
-                text = stringResource(R.string.zap_pay_with_title),
+                text = stringResource(if (lightningAvailable) R.string.zap_other_ways_title else R.string.zap_pay_with_title),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 8.dp)
@@ -397,7 +397,7 @@ private fun InvoiceBlock(bolt11: String, isZap: Boolean, onOpenUri: (String) -> 
 @Composable
 private fun NoPaymentOptions(name: String) {
     // Reuses the shared empty-state component inside the sheet's own padding.
-    com.umbra.app.ui.components.EmptyState(
+    EmptyState(
         modifier = Modifier.padding(vertical = 24.dp),
         title = stringResource(R.string.zap_no_options_title),
         message = stringResource(R.string.zap_no_options_body, name)
