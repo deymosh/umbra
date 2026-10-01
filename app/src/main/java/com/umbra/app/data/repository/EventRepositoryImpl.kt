@@ -57,6 +57,8 @@ import com.umbra.app.util.logging.UmbraLog
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
@@ -238,8 +240,12 @@ class EventRepositoryImpl @Inject constructor(
     // without this, each recompute would re-fire a fresh relay REQ for a target that's genuinely
     // never going to resolve. One attempt per id per session, bounded like seenEventIds below.
     private val repostTargetFetchAttempted: MutableSet<String> = ConcurrentHashMap.newKeySet()
-    // Deduplication: events from multiple relays share IDs — track which we've already processed
-    private val seenEventIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    // Deduplication: events from multiple relays share IDs — track which we've already processed.
+    // Bounded insertion-ordered set (synchronized LinkedHashMap with eldest eviction): a plain
+    // ConcurrentHashMap keyset cleared wholesale at MAX_SEEN_IDS under concurrent flatMapMerge
+    // branches would drop the ids other branches added between the size check and the clear, and
+    // re-ingest them. add() returning false = already seen.
+    private val seenEventIds: MutableSet<String> = BoundedInsertionOrderedSet(MAX_SEEN_IDS)
     // Verification memo: event.id is a hash of the event's full content, so a successful
     // verification for a given id is permanently valid to reuse — unlike seenEventIds above,
     // this is safe to check *before* shouldPersistEvent()'s live mute/filter evaluation, since it
@@ -261,6 +267,9 @@ class EventRepositoryImpl @Inject constructor(
     // (OUTBOX_NOTES/INBOX_NOTES) instead of FEED_NOTES — see OutboxInboxRelaySincePolicy's doc
     // comment. Keyed by (relayUrl, channelId) since it serves two channels, not one.
     private val outboxInboxSinceByRelay = ConcurrentHashMap<Pair<String, String>, Long>()
+    // @Volatile: replaced wholesale on subscribeToEvents' collecting context, read from routing
+    // lambdas that can run on other threads.
+    @Volatile
     private var currentFilters: List<EventFilter> = emptyList()
     private val channelFilters = ConcurrentHashMap<String, List<EventFilter>>()
     // Extra filters layered on top of a channel's own declared filters — e.g. FEED_NOTES' base
@@ -336,10 +345,17 @@ class EventRepositoryImpl @Inject constructor(
     // the right channel's authors, not whichever channel happened to REQ most recently.
     private val authorHydrationLastSentByRelay = ConcurrentHashMap<Pair<String, String>, Set<String>>()
     private val pageRequestFingerprint = ConcurrentHashMap<String, String>()
+    // @Volatile: replaced wholesale (never mutated in place) on activateUserSession()'s caller /
+    // subscribeToEvents' collecting context, read from ingest and routing lambdas running on other
+    // flatMapMerge branches and dispatcher threads.
+    @Volatile
     private var subscriptionNamespace: String = "anon"
     // Session state — set by activateUserSession(), applied to every relay on connect
+    @Volatile
     private var activeUserPubkey: String? = null
+    @Volatile
     private var activeFeedFilter: FeedFilter = DefaultFeedFilters.DEFAULT
+    @Volatile
     private var activeSessionAuthors: Set<String> = emptySet()
     // Precise relay -> authors-it-covers routing, for the subset of activeSessionAuthors whose
     // own outbox is already cached — recomputed whenever the session's follow list changes or a
@@ -964,18 +980,12 @@ class EventRepositoryImpl @Inject constructor(
                     return@flow
                 }
 
-                // Deduplicate: the same event can arrive from several relays simultaneously
+                // Deduplicate: the same event can arrive from several relays simultaneously.
+                // add() evicts the eldest entry itself when at capacity — no separate size
+                // check/clear step that concurrent branches could interleave into.
                 if (!seenEventIds.add(event.id)) {
                     eventIngestCache.recordRelayForSeenEvent(event.id, relayUrl)
                     return@flow
-                }
-
-                // Keep the deduplication set bounded (evict oldest by ID insertion order is not
-                // guaranteed in ConcurrentHashMap, so simply clear at max to prevent OOM)
-                if (seenEventIds.size > MAX_SEEN_IDS) {
-                    seenEventIds.clear()
-                    seenEventIds.add(event.id)
-                    logger.d { "Deduplication set cleared (reached $MAX_SEEN_IDS entries)" }
                 }
 
                 val currentUserPubkey = currentUserArchivePubkey()
@@ -1967,6 +1977,9 @@ class EventRepositoryImpl @Inject constructor(
         logLabel: String
     ) {
         val mutex = channelOverlayMutex.getOrPut(channelId) { Mutex() }
+        // Holding this lock across awaitChannelEoseOrTimeout (up to HISTORY_PAGE_CLOSE_MS) is
+        // intentional: the serialization span covers the base→overlay→base revert, so concurrent
+        // callers for the same channel queue rather than corrupt each other's filter state.
         mutex.withLock {
             val base = channelFilters[channelId]
             if (base.isNullOrEmpty()) return
@@ -2075,10 +2088,10 @@ class EventRepositoryImpl @Inject constructor(
 
             val pageChannelId = "$channelId-page"
 
-            val activePageJob = historyPageJobs[pageChannelId]
-            if (activePageJob?.isActive == true && pageRequestFingerprint[pageChannelId] == requestFingerprint) {
-                return@launch
-            }
+            val isNewRequest =
+                pageRequestFingerprint[pageChannelId] != requestFingerprint ||
+                    historyPageJobs[pageChannelId]?.isActive != true
+            if (!isNewRequest) return@launch
 
             pageRequestFingerprint[pageChannelId] = requestFingerprint
             subscribeChannel(pageChannelId, pageFilters)
@@ -2086,13 +2099,22 @@ class EventRepositoryImpl @Inject constructor(
             // Close the page sub as soon as every relay it was sent to reports EOSE (NIP-01:
             // no more stored events for this REQ) — HISTORY_PAGE_CLOSE_MS is only a backstop for
             // relays that never send EOSE (buggy/non-conformant) or drop the connection.
-            historyPageJobs.remove(pageChannelId)?.cancel()
-            historyPageJobs[pageChannelId] = repoScope.launch {
-                awaitChannelEoseOrTimeout(pageChannelId, HISTORY_PAGE_CLOSE_MS)
-                clearChannel(pageChannelId)
-                historyPageJobs.remove(pageChannelId)
-                pageRequestFingerprint.remove(pageChannelId)
-                logger.d { "Page channel '$pageChannelId' closed (EOSE or timeout)" }
+            //
+            // compute() runs the cancel-and-install atomically per pageChannelId, so two
+            // concurrent loadOlderEvents/scheduling calls can't interleave into each other's
+            // remove-then-put and orphan a still-active job. The job is launched LAZY and
+            // started here, inside the compute lambda — compute is atomic per key, so the
+            // winner's start executes before any competing scheduling call can touch this key
+            // (same reasoning as AtomicJobScheduling.launchIfIdle's start-after-cas ordering).
+            historyPageJobs.compute(pageChannelId) { _, previous: Job? ->
+                previous?.cancel()
+                repoScope.launch(start = CoroutineStart.LAZY) {
+                    awaitChannelEoseOrTimeout(pageChannelId, HISTORY_PAGE_CLOSE_MS)
+                    clearChannel(pageChannelId)
+                    historyPageJobs.remove(pageChannelId, coroutineContext.job)
+                    pageRequestFingerprint.remove(pageChannelId)
+                    logger.d { "Page channel '$pageChannelId' closed (EOSE or timeout)" }
+                }.also { it.start() }
             }
         }
     }
@@ -2135,12 +2157,17 @@ class EventRepositoryImpl @Inject constructor(
 
             subscribeChannel(pageChannelId, pageFilters)
 
-            historyPageJobs.remove(pageChannelId)?.cancel()
-            historyPageJobs[pageChannelId] = repoScope.launch {
-                awaitChannelEoseOrTimeout(pageChannelId, HISTORY_PAGE_CLOSE_MS)
-                clearChannel(pageChannelId)
-                historyPageJobs.remove(pageChannelId)
-                logger.d { "Resync channel '$pageChannelId' closed (EOSE or timeout)" }
+            // Cancel-and-install atomically per pageChannelId — same reasoning as loadOlderEvents'
+            // historyPageJobs.compute() comment above; the job is launched LAZY and started after
+            // compute() returns.
+            historyPageJobs.compute(pageChannelId) { _, previous: Job? ->
+                previous?.cancel()
+                repoScope.launch(start = CoroutineStart.LAZY) {
+                    awaitChannelEoseOrTimeout(pageChannelId, HISTORY_PAGE_CLOSE_MS)
+                    clearChannel(pageChannelId)
+                    historyPageJobs.remove(pageChannelId, coroutineContext.job)
+                    logger.d { "Resync channel '$pageChannelId' closed (EOSE or timeout)" }
+                }.also { it.start() }
             }
         }
     }
@@ -2480,6 +2507,49 @@ class EventRepositoryImpl @Inject constructor(
     // applyIncomingDeletion moved to EventIngestCache.kt — see
     // eventIngestCache.applyIncomingDeletion, called from subscribeToEvents above.
 
+}
+
+/**
+ * Thread-safe, insertion-ordered set bounded at [maxSize]: once full, adding a new element evicts
+ * the eldest (least-recently-inserted) one instead of dropping the caller's add or clearing the
+ * whole set — unlike a ConcurrentHashMap keyset drained by hand at a size threshold, which under
+ * concurrent adders both drops ids other adders inserted between the size check and the clear and
+ * re-exposes them to re-ingest. Every operation is one atomic step under the set's own monitor;
+ * the ingestion path uses only [add]'s return value, so dedup decisions can't interleave.
+ */
+internal class BoundedInsertionOrderedSet<T>(private val maxSize: Int) : AbstractMutableSet<T>() {
+    init {
+        require(maxSize > 0)
+    }
+
+    private val delegate = object : LinkedHashMap<T, Boolean>(16, 0.75f, false) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<T, Boolean>): Boolean =
+            size > maxSize
+    }
+
+    override val size: Int
+        get() = synchronized(this) { delegate.size }
+
+    override fun add(element: T): Boolean = synchronized(this) {
+        val roomWasAvailable = element in delegate
+        delegate[element] = true
+        // LinkedHashMap.put on an existing key does not touch iteration order, so a re-add of an
+        // already-tracked element is a no-op here (matching `Set.add` semantics), not an MRU
+        // refresh — this set is FIFO eviction, not LRU.
+        !roomWasAvailable
+    }
+
+    override fun contains(element: T): Boolean = synchronized(this) { element in delegate }
+
+    override fun remove(element: T): Boolean = synchronized(this) { delegate.remove(element) != null }
+
+    override fun clear() = synchronized(this) { delegate.clear() }
+
+    override fun iterator(): MutableIterator<T> = synchronized(this) {
+        // Iterator over a snapshot copy: iterating outside the monitor stays safe from
+        // ConcurrentModificationException while other adders proceed.
+        ArrayList(delegate.keys).iterator()
+    }
 }
 
 
