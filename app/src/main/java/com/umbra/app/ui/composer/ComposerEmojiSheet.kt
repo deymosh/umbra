@@ -1,5 +1,6 @@
 package com.umbra.app.ui.composer
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +16,6 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,12 +33,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.painter.ColorPainter
 import coil3.compose.AsyncImage
 import com.umbra.app.R
 import com.umbra.app.domain.nip30.CustomEmoji
@@ -50,9 +50,9 @@ import com.umbra.app.ui.components.LocalCustomEmojiGroups
  * the user's own NIP-30 catalog gets its own named sections below it.
  */
 private val COMMON_EMOJIS = listOf(
-    "😀", "😂", "🥲", "😍", "🤔", "🙃", "😴", "😭",
-    "🤝", "👍", "👎", "👏", "🙏", "💪", "🫡", "🤌",
-    "❤️", "🔥", "✨", "⭐", "🎉", "🥳", "🤯", "😅",
+    "😀", "😂", "😊", "😍", "🤔", "🙃", "😴", "😭",
+    "🤝", "👍", "👎", "👏", "🙏", "💪", "😎", "🤗",
+    "❤️", "🔥", "✨", "⭐", "🎉", "😉", "😮", "😅",
     "🚀", "🛠️", "📌", "✅", "❌", "💡", "⚡", "🌈"
 )
 
@@ -92,13 +92,14 @@ internal fun ComposerEmojiContent(
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Text(
             text = stringResource(R.string.composer_emoji_title),
-            style = MaterialTheme.typography.titleMedium
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
         )
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
             singleLine = true,
-            placeholder = { Text(stringResource(R.string.emoji_picker_search_hint)) },
+            placeholder = { Text(stringResource(R.string.reaction_picker_search_hint)) },
             leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
             modifier = Modifier
                 .fillMaxWidth()
@@ -122,6 +123,11 @@ internal fun ComposerEmojiContent(
                 }
             }
         }
+        // Cap the grid at 60% of the window height so a large catalog never pushes the sheet
+        // off-screen. Window size (LocalWindowInfo), not display size (Configuration), bounds it.
+        val maxGridHeight = with(LocalDensity.current) {
+            (LocalWindowInfo.current.containerSize.height.toDp() * 0.6f)
+        }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(52.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -129,7 +135,7 @@ internal fun ComposerEmojiContent(
             contentPadding = PaddingValues(bottom = 16.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.6f).dp)
+                .heightIn(max = maxGridHeight)
         ) {
             sections.forEach { section ->
                 // Full-span header row so the section title sits above its whole tile block.
@@ -195,9 +201,12 @@ private fun EmojiTileEmoji(emoji: EmojiEntry) {
             model = emoji.emoji.url,
             contentDescription = emoji.emoji.shortcode,
             contentScale = ContentScale.Fit,
+            placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceContainerHighest),
+            error = ColorPainter(MaterialTheme.colorScheme.surfaceContainerHighest),
             modifier = Modifier
                 .size(32.dp)
                 .aspectRatio(1f)
+                .clip(MaterialTheme.shapes.small)
         )
     }
 }
