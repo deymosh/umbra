@@ -222,9 +222,13 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     override fun saveDmRelayList(dmRelayList: DmRelayList) {
-        val existing = dmRelayLists[dmRelayList.pubkey]
-        if (existing != null && existing.lastUpdated >= dmRelayList.lastUpdated) return
-        dmRelayLists[dmRelayList.pubkey] = dmRelayList
+        // compute() (not read-then-write) so the staleness check and the map write are one atomic
+        // step per pubkey — same reasoning as saveRelayList below. Only the value that wins the
+        // compute ever triggers side effects.
+        val accepted = dmRelayLists.compute(dmRelayList.pubkey) { _, existing ->
+            if (existing != null && existing.lastUpdated >= dmRelayList.lastUpdated) existing else dmRelayList
+        } === dmRelayList
+        if (!accepted) return
         if (isCurrentUser(dmRelayList.pubkey)) {
             repoScope.launch(Dispatchers.IO) {
                 runCatching { applyDmRelayListToLocalConfig(dmRelayList) }
@@ -241,9 +245,13 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     override fun saveServerList(serverList: UserServerList) {
-        val existing = serverLists[serverList.pubkey]
-        if (existing != null && existing.lastUpdated >= serverList.lastUpdated) return
-        serverLists[serverList.pubkey] = serverList
+        // compute() (not read-then-write) so the staleness check and the map write are one atomic
+        // step per pubkey — same reasoning as saveRelayList below. Only the value that wins the
+        // compute ever logs.
+        val accepted = serverLists.compute(serverList.pubkey) { _, existing ->
+            if (existing != null && existing.lastUpdated >= serverList.lastUpdated) existing else serverList
+        } === serverList
+        if (!accepted) return
         logger.d { "Blossom server list updated (${serverList.servers.size} servers)" }
     }
 
@@ -328,10 +336,20 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     override fun saveSearchRelaysList(list: SearchRelaysList) {
-        // Same staleness guard as saveRelayList/saveDmRelayList.
-        val existing = _searchRelayLists.value[list.ownerPubkey]
-        if (existing != null && existing.updatedAt >= list.updatedAt) return
-        _searchRelayLists.update { it + (list.ownerPubkey to list) }
+        // Same staleness guard as saveRelayList/saveDmRelayList. update() (not read-then-write)
+        // so the staleness check and the map write are one atomic step; only the value that wins
+        // the update ever triggers side effects.
+        var accepted = false
+        _searchRelayLists.update { current ->
+            val existing = current[list.ownerPubkey]
+            if (existing != null && existing.updatedAt >= list.updatedAt) {
+                current
+            } else {
+                accepted = true
+                current + (list.ownerPubkey to list)
+            }
+        }
+        if (!accepted) return
         if (isCurrentUser(list.ownerPubkey)) {
             // Applied as a first-class Relay role (isSearchEnabled/isSearchActive) the same way
             // DM is, so RelayConfigScreen's Search section — driven by the same relay-table Flow
@@ -357,9 +375,18 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     override fun saveIndexRelaysList(list: IndexRelaysList) {
-        val existing = _indexRelayLists.value[list.ownerPubkey]
-        if (existing != null && existing.updatedAt >= list.updatedAt) return
-        _indexRelayLists.update { it + (list.ownerPubkey to list) }
+        // Same staleness guard as saveSearchRelaysList — atomized via update().
+        var accepted = false
+        _indexRelayLists.update { current ->
+            val existing = current[list.ownerPubkey]
+            if (existing != null && existing.updatedAt >= list.updatedAt) {
+                current
+            } else {
+                accepted = true
+                current + (list.ownerPubkey to list)
+            }
+        }
+        if (!accepted) return
         if (isCurrentUser(list.ownerPubkey)) {
             repoScope.launch(Dispatchers.IO) {
                 runCatching { applyIndexRelayListToLocalConfig(list) }
