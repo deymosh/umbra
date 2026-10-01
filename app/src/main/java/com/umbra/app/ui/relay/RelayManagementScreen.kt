@@ -119,6 +119,9 @@ internal fun RelayManagementContent(
     onClearError: () -> Unit,
     onRetry: () -> Unit
 ) {
+    // Banning is deliberate: confirmation before it fires, quiet Cancel as the escape hatch.
+    var pendingBan by remember { mutableStateOf<BanConfirmation?>(null) }
+
     Scaffold(
         topBar = {
             UmbraTopAppBar(
@@ -156,6 +159,7 @@ internal fun RelayManagementContent(
 
                 state.supportedTabs.isNotEmpty() -> RelayManagementTabs(
                     state = state,
+                    onRequestBan = { what, onBan -> pendingBan = BanConfirmation(what, onBan) },
                     onAddPubkey = onAddPubkey,
                     onRemovePubkey = onRemovePubkey,
                     onAllowEvent = onAllowEvent,
@@ -179,11 +183,32 @@ internal fun RelayManagementContent(
             }
         }
     }
+
+    pendingBan?.let { ban ->
+        ConfirmDialog(
+            title = stringResource(R.string.relay_management_confirm_ban_title, ban.what),
+            message = "",
+            confirmLabel = stringResource(R.string.relay_management_confirm_ban),
+            isDestructive = true,
+            onConfirm = {
+                ban.onBan()
+                pendingBan = null
+            },
+            onDismiss = { pendingBan = null }
+        )
+    }
 }
+
+/** A ban action waiting for the user to confirm it. */
+private data class BanConfirmation(
+    val what: String,
+    val onBan: () -> Unit
+)
 
 @Composable
 private fun RelayManagementTabs(
     state: RelayManagementState,
+    onRequestBan: (what: String, onBan: () -> Unit) -> Unit,
     onAddPubkey: (String, String?, Boolean) -> Unit,
     onRemovePubkey: (RelayManagementEntry, Boolean) -> Unit,
     onAllowEvent: (String) -> Unit,
@@ -227,12 +252,14 @@ private fun RelayManagementTabs(
                     is ManagementSection.PeopleList -> PeopleListSection(
                         section = section,
                         lists = state.lists,
+                        onRequestBan = onRequestBan,
                         onAddPubkey = onAddPubkey,
                         onRemovePubkey = onRemovePubkey
                     )
                     is ManagementSection.EventNeedingModeration, is ManagementSection.EventBanned -> EventListSection(
                         section = section,
                         lists = state.lists,
+                        onRequestBan = onRequestBan,
                         onAllowEvent = onAllowEvent,
                         onBanEvent = onBanEvent,
                         onUnbanEvent = onUnbanEvent,
@@ -357,6 +384,7 @@ private fun tabSections(
 private fun PeopleListSection(
     section: ManagementSection.PeopleList,
     lists: RelayManagementLists,
+    onRequestBan: (what: String, onBan: () -> Unit) -> Unit,
     onAddPubkey: (String, String?, Boolean) -> Unit,
     onRemovePubkey: (RelayManagementEntry, Boolean) -> Unit
 ) {
@@ -365,7 +393,11 @@ private fun PeopleListSection(
     ManagementGroup(title = title) {
         IdentifierInput(
             placeholderRes = R.string.relay_management_add_placeholder,
-            onAdd = { value, reason -> onAddPubkey(value, reason, !section.banned) }
+            onAdd = { value, reason ->
+                val toAllowed = !section.banned
+                val applyBan = { onAddPubkey(value, reason, toAllowed) }
+                if (toAllowed) applyBan() else onRequestBan(value.take(12) + "…", applyBan)
+            }
         )
         if (entries.isEmpty()) {
             InlineEmptyText(stringResource(R.string.relay_management_empty_list), Modifier.padding(horizontal = 16.dp))
@@ -385,6 +417,7 @@ private fun PeopleListSection(
 private fun EventListSection(
     section: ManagementSection,
     lists: RelayManagementLists,
+    onRequestBan: (what: String, onBan: () -> Unit) -> Unit,
     onAllowEvent: (String) -> Unit,
     onBanEvent: (String) -> Unit,
     onUnbanEvent: (String) -> Unit,
@@ -411,7 +444,9 @@ private fun EventListSection(
                             modifier = Modifier.weight(1f)
                         )
                         ManagementTextButton(stringResource(R.string.relay_management_allow)) { onAllowEvent(entry.identifier) }
-                        ManagementTextButton(stringResource(R.string.relay_management_ban), destructive = true) { onBanEvent(entry.identifier) }
+                        ManagementTextButton(stringResource(R.string.relay_management_ban), destructive = true) {
+                            onRequestBan(entry.identifier.take(12) + "…") { onBanEvent(entry.identifier) }
+                        }
                     }
                     if (index < entries.lastIndex) {
                         HorizontalDivider(modifier = Modifier.padding(start = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)

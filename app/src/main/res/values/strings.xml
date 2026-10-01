@@ -227,9 +227,6 @@
     <string name="relay_management_description_label">Description</string>
     <string name="relay_management_icon_label">Icon URL</string>
     <string name="relay_management_save">Save</string>
-    <string name="relay_management_unblock">Unblock</string>
-    <string name="relay_management_confirm_remove_title">Remove this entry?</string>
-    <string name="relay_management_confirm_remove">Remove</string>
     <string name="relay_management_confirm_ban_title">Ban this %1$s?</string>
     <string name="relay_management_confirm_ban">Ban</string>
 
@@ -630,8 +627,6 @@
     <string name="stay_in_umbra">Stay private</string>
     <string name="thread_reply_hint">Reply to %1$s…</string>
     <string name="settings_group_feed">Feed and look</string>
-    <string name="relay_delete_confirm_title">Remove this relay?</string>
-    <string name="relay_delete_confirm_message">Umbra will stop reading from and publishing to it. You can add it again later.</string>
     <string name="relay_capability_on_cd">%1$s on</string>
     <string name="relay_capability_off_cd">%1$s off</string>
     <string name="reaction_picker_remove_hint">Long-press an emoji to remove it from this list.</string>
