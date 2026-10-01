@@ -227,7 +227,6 @@
     <string name="relay_management_description_label">Description</string>
     <string name="relay_management_icon_label">Icon URL</string>
     <string name="relay_management_save">Save</string>
-    <string name="relay_management_block">Block</string>
     <string name="relay_management_unblock">Unblock</string>
     <string name="relay_management_confirm_remove_title">Remove this entry?</string>
     <string name="relay_management_confirm_remove">Remove</string>

@@ -497,9 +497,10 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
                 if (relayId != null) {
                     val relayGraphEntry = remember(backStackEntry) { navController.getBackStackEntry(Screen.RelayGraph.route) }
                     val relayConfigViewModel: RelayConfigViewModel = hiltViewModel(relayGraphEntry)
-                    // Bounds-narrowing URL lookup: the state's list has settled by the time the
-                    // user reached the Manage-relay row, so firstOrNull is enough here.
-                    val relayUrl = relayConfigViewModel.state.value.relays.firstOrNull { it.id == relayId }?.url
+                    val relayState by relayConfigViewModel.state.collectAsStateWithLifecycle()
+                    // The relay list has settled by the time the user reaches the Manage-relay
+                    // row, so firstOrNull resolves immediately; nothing renders before then.
+                    val relayUrl = relayState.relays.firstOrNull { it.id == relayId }?.url
                     if (relayUrl != null) {
                         RelayManagementScreen(
                             navController = navController,
