@@ -57,6 +57,8 @@ import com.umbra.app.util.logging.UmbraLog
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
@@ -170,6 +172,19 @@ class EventRepositoryImpl @Inject constructor(
         private const val NEGENTROPY_SYNC_DEBOUNCE_MS = 5_000L
         private const val FEED_SINCE_SECONDS        = 12 * 60 * 60L  // interactions/outbox window
         private const val INITIAL_FEED_WINDOW_SECS  = 12 * 60 * 60L  // first live feed-notes window
+        // Minimum kind-1 notes the in-memory cache must hold before its newest timestamp is
+        // trusted as the feed REQ's `since` — a thin (near-empty, e.g. post-process-death) cache
+        // says nothing about where the real feed window starts.
+        private const val MIN_CACHED_FEED_NOTES_FOR_SINCE = 20
+        // The note kinds the feed subscribes for (its delete-request kind comes in via the
+        // feedKinds superset at each subscription site). trimMemory protects these when shrinking
+        // the in-memory cache so the surviving cache still backs the redial `since` watermark.
+        private val FEED_NOTE_KINDS = setOf(
+            Event.KIND_TEXT_NOTE,
+            Event.KIND_PICTURE,
+            Event.KIND_REPOST,
+            Event.KIND_GENERIC_REPOST
+        )
         private const val HISTORY_PAGE_WINDOW_SECS  = 7 * 24 * 60 * 60L // default "load older" page window
         private const val HISTORY_PAGE_CLOSE_MS     = 15_000L           // auto-close page sub after
         private const val NOTIF_SINCE_SECONDS       = 3  * 24 * 60 * 60L
@@ -225,8 +240,12 @@ class EventRepositoryImpl @Inject constructor(
     // without this, each recompute would re-fire a fresh relay REQ for a target that's genuinely
     // never going to resolve. One attempt per id per session, bounded like seenEventIds below.
     private val repostTargetFetchAttempted: MutableSet<String> = ConcurrentHashMap.newKeySet()
-    // Deduplication: events from multiple relays share IDs — track which we've already processed
-    private val seenEventIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    // Deduplication: events from multiple relays share IDs — track which we've already processed.
+    // Bounded insertion-ordered set (synchronized LinkedHashMap with eldest eviction): a plain
+    // ConcurrentHashMap keyset cleared wholesale at MAX_SEEN_IDS under concurrent flatMapMerge
+    // branches would drop the ids other branches added between the size check and the clear, and
+    // re-ingest them. add() returning false = already seen.
+    private val seenEventIds: MutableSet<String> = BoundedInsertionOrderedSet(MAX_SEEN_IDS)
     // Verification memo: event.id is a hash of the event's full content, so a successful
     // verification for a given id is permanently valid to reuse — unlike seenEventIds above,
     // this is safe to check *before* shouldPersistEvent()'s live mute/filter evaluation, since it
@@ -248,6 +267,9 @@ class EventRepositoryImpl @Inject constructor(
     // (OUTBOX_NOTES/INBOX_NOTES) instead of FEED_NOTES — see OutboxInboxRelaySincePolicy's doc
     // comment. Keyed by (relayUrl, channelId) since it serves two channels, not one.
     private val outboxInboxSinceByRelay = ConcurrentHashMap<Pair<String, String>, Long>()
+    // @Volatile: replaced wholesale on subscribeToEvents' collecting context, read from routing
+    // lambdas that can run on other threads.
+    @Volatile
     private var currentFilters: List<EventFilter> = emptyList()
     private val channelFilters = ConcurrentHashMap<String, List<EventFilter>>()
     // Extra filters layered on top of a channel's own declared filters — e.g. FEED_NOTES' base
@@ -276,6 +298,7 @@ class EventRepositoryImpl @Inject constructor(
             activeFeedFilter = { activeFeedFilter },
             isCurrentUserPubkey = ::isCurrentUserPubkey,
             isPendingEventLookupId = { it in pendingEventLookupIds },
+            isRequestedBySubscription = ::isRequestedByActiveSubscription,
             isPinnedProfileAuthor = { pinnedProfileAuthors.contains(it) },
             isWiping = { isWiping.get() }
         )
@@ -322,10 +345,17 @@ class EventRepositoryImpl @Inject constructor(
     // the right channel's authors, not whichever channel happened to REQ most recently.
     private val authorHydrationLastSentByRelay = ConcurrentHashMap<Pair<String, String>, Set<String>>()
     private val pageRequestFingerprint = ConcurrentHashMap<String, String>()
+    // @Volatile: replaced wholesale (never mutated in place) on activateUserSession()'s caller /
+    // subscribeToEvents' collecting context, read from ingest and routing lambdas running on other
+    // flatMapMerge branches and dispatcher threads.
+    @Volatile
     private var subscriptionNamespace: String = "anon"
     // Session state — set by activateUserSession(), applied to every relay on connect
+    @Volatile
     private var activeUserPubkey: String? = null
+    @Volatile
     private var activeFeedFilter: FeedFilter = DefaultFeedFilters.DEFAULT
+    @Volatile
     private var activeSessionAuthors: Set<String> = emptySet()
     // Precise relay -> authors-it-covers routing, for the subset of activeSessionAuthors whose
     // own outbox is already cached — recomputed whenever the session's follow list changes or a
@@ -691,7 +721,7 @@ class EventRepositoryImpl @Inject constructor(
         // ever showed up if its *target* note happened to already be visible (fetched purely as
         // an engagement-count signal via BuildEngagementFiltersUseCase, never rendered as its own
         // feed item). See selectHybridFeedNotes/buildIndexedNoteViews for the unwrap+dedup step.
-        val feedKinds = setOf(Event.KIND_TEXT_NOTE, Event.KIND_PICTURE, Event.KIND_EVENT_DELETION, Event.KIND_REPOST, Event.KIND_GENERIC_REPOST)
+        val feedKinds = FEED_NOTE_KINDS + Event.KIND_EVENT_DELETION
         // Profile kinds: metadata of logged user.
         val profileKinds = setOf(Event.KIND_METADATA)
         // User social graph kinds (replaceable): follows, mute list, relay list, search/index
@@ -942,7 +972,7 @@ class EventRepositoryImpl @Inject constructor(
                     // SharedFlow delivery landing while that specific screen is alive — the same
                     // durability guarantee kind:10002/10050 already get above.
                     runCatching {
-                        userRepository.saveProfile(UserProfile.fromJSON(event.pubkey, event.content, event.createdAt))
+                        userRepository.saveProfile(UserProfile.fromJSON(event.pubkey, event.content, event.createdAt, event.tags))
                     }
                 }
 
@@ -950,18 +980,12 @@ class EventRepositoryImpl @Inject constructor(
                     return@flow
                 }
 
-                // Deduplicate: the same event can arrive from several relays simultaneously
+                // Deduplicate: the same event can arrive from several relays simultaneously.
+                // add() evicts the eldest entry itself when at capacity — no separate size
+                // check/clear step that concurrent branches could interleave into.
                 if (!seenEventIds.add(event.id)) {
                     eventIngestCache.recordRelayForSeenEvent(event.id, relayUrl)
                     return@flow
-                }
-
-                // Keep the deduplication set bounded (evict oldest by ID insertion order is not
-                // guaranteed in ConcurrentHashMap, so simply clear at max to prevent OOM)
-                if (seenEventIds.size > MAX_SEEN_IDS) {
-                    seenEventIds.clear()
-                    seenEventIds.add(event.id)
-                    logger.d { "Deduplication set cleared (reached $MAX_SEEN_IDS entries)" }
                 }
 
                 val currentUserPubkey = currentUserArchivePubkey()
@@ -1144,6 +1168,20 @@ class EventRepositoryImpl @Inject constructor(
         val overlay = channelOverlays[channelId]
         val base = channelFilters[channelId].orEmpty()
         return if (overlay.isNullOrEmpty()) base else base + overlay
+    }
+
+    /**
+     * Whether any live channel (base filters or backfill overlay) names [event]'s kind and
+     * matches its ids/authors/tags. Only kind-scoped filters count: a kind-less filter is a broad
+     * query, not an explicit request for this particular kind. Checked only for kinds outside
+     * USEFUL_PERSISTED_KINDS (see EventIngestCache.shouldPersistEvent), so the scan over the
+     * few dozen live channels stays off the hot path for ordinary feed traffic.
+     */
+    private fun isRequestedByActiveSubscription(event: Event): Boolean {
+        fun List<EventFilter>.requests(event: Event) =
+            any { it.kinds.isNotEmpty() && it.matchesTagsAndIds(event) }
+        return channelFilters.values.any { it.requests(event) } ||
+            channelOverlays.values.any { it.requests(event) }
     }
 
     override fun clearChannel(channelId: String) {
@@ -1419,6 +1457,43 @@ class EventRepositoryImpl @Inject constructor(
             listOfNotNull(cached, encrypted).maxByOrNull { it.createdAt }
         }
 
+    override suspend fun fetchAddressableEvent(
+        kind: Int,
+        pubkey: String,
+        identifier: String,
+        relayHints: List<String>,
+        timeoutMs: Long
+    ): Event? {
+        getLatestAddressableEvent(kind, pubkey, identifier)?.let { return it }
+        if (!NostrValidation.is64HexValid(pubkey)) return null
+        val channel = NostrChannels.addressLookup(kind, pubkey, identifier)
+        subscribeChannel(
+            channel,
+            listOf(
+                EventFilter(
+                    kinds = setOf(kind),
+                    authors = setOf(pubkey.lowercase()),
+                    tagFilters = mapOf("d" to setOf(identifier)),
+                    limit = 1
+                )
+            )
+        )
+        try {
+            // Polled for the same reason as fetchEventById's hinted path: a hint relay dialed
+            // here is rarely connected yet, so an EOSE-driven return would resolve before it
+            // was ever asked.
+            connectToRelayHints(relayHints)
+            withTimeoutOrNull(timeoutMs) {
+                while (getLatestAddressableEvent(kind, pubkey, identifier) == null) {
+                    delay(EVENT_LOOKUP_HINT_POLL_INTERVAL_MS)
+                }
+            }
+            return getLatestAddressableEvent(kind, pubkey, identifier)
+        } finally {
+            clearChannel(channel)
+        }
+    }
+
     override suspend fun getEventsByIds(ids: List<String>): List<Event> =
         withContext(Dispatchers.IO) {
             val cached = eventIngestCache.getCachedByIds(ids)
@@ -1547,11 +1622,19 @@ class EventRepositoryImpl @Inject constructor(
 
     override suspend fun trimMemory(aggressive: Boolean): Unit = withContext(Dispatchers.IO) {
         val target = if (aggressive) MAX_IN_MEMORY_EVENT_CACHE / 4 else MAX_IN_MEMORY_EVENT_CACHE / 2
-        val trimmed = eventIngestCache.trimTo(target)
+        // Feed-kind notes are protected from the first eviction pass — they ARE the feed the
+        // user is coming back to — so only non-feed cached events are shed unless even the
+        // protected remainder is over target.
+        val trimmed = eventIngestCache.trimTo(target) { it.kind in FEED_NOTE_KINDS }
         if (trimmed > 0) {
             // Lets every active observeFeedNotes() collector's own externalEvents mirror shrink
             // back down too, instead of only the shared source cache.
             eventIngestCache.signalFeedRebuild()
+            // Evictions may have removed notes the per-relay `since` watermark assumes are still
+            // cached — clearing it makes the next REQ to each relay re-request the full window
+            // instead of resuming past notes that no longer exist locally, which would leave
+            // them unnoticed until a later subscription.
+            feedSinceByRelay.clear()
             logger.d { "Trimmed $trimmed events from in-memory cache (aggressive=$aggressive)" }
         }
     }
@@ -1574,17 +1657,28 @@ class EventRepositoryImpl @Inject constructor(
 
         initialCacheLoaded.await()
 
-        // Use newest cached event timestamp as `since` to avoid re-fetching events already in DB
-        val newestKind1 = withContext(Dispatchers.IO) {
-            val newestCached = eventIngestCache.snapshot().asSequence()
-                .filter { it.kind == Event.KIND_TEXT_NOTE }
-                .maxOfOrNull { it.createdAt }
-            listOfNotNull(
-                newestCached,
-                encryptedEventDao.getNewestTimestampByKind(Event.KIND_TEXT_NOTE)
-            ).maxOrNull()
+        // The feed REQ's `since` must be derived ONLY from the in-memory cache, never from the
+        // Room archive: the archive holds the user's OWN posts only, and using their newest
+        // timestamp as `since` made the feed skip everyone else's notes older than the user's
+        // last post (worst right after process death, when the empty cache collapsed the feed to
+        // "notes newer than my last post"). The in-memory-cache value is also trusted only when
+        // the cache actually holds enough kind-1 notes that it plausibly reflects the feed
+        // window; otherwise fall back to the initial window (cache may be near-empty after a
+        // process restart, and resuming from a single stale timestamp would hide everything
+        // older than it).
+        val (newestKind1, cachedKind1Count) = withContext(Dispatchers.Default) {
+            var newest: Long? = null
+            var count = 0
+            for (event in eventIngestCache.snapshot()) {
+                if (event.kind != Event.KIND_TEXT_NOTE) continue
+                count++
+                if (newest == null || event.createdAt > newest) newest = event.createdAt
+            }
+            newest to count
         }
-        cachedFeedSince = if (newestKind1 != null && newestKind1 > 0) {
+        cachedFeedSince = if (newestKind1 != null && newestKind1 > 0 &&
+            cachedKind1Count >= MIN_CACHED_FEED_NOTES_FOR_SINCE
+        ) {
             newestKind1 - 60
         } else {
             null
@@ -1883,6 +1977,9 @@ class EventRepositoryImpl @Inject constructor(
         logLabel: String
     ) {
         val mutex = channelOverlayMutex.getOrPut(channelId) { Mutex() }
+        // Holding this lock across awaitChannelEoseOrTimeout (up to HISTORY_PAGE_CLOSE_MS) is
+        // intentional: the serialization span covers the base→overlay→base revert, so concurrent
+        // callers for the same channel queue rather than corrupt each other's filter state.
         mutex.withLock {
             val base = channelFilters[channelId]
             if (base.isNullOrEmpty()) return
@@ -1991,10 +2088,10 @@ class EventRepositoryImpl @Inject constructor(
 
             val pageChannelId = "$channelId-page"
 
-            val activePageJob = historyPageJobs[pageChannelId]
-            if (activePageJob?.isActive == true && pageRequestFingerprint[pageChannelId] == requestFingerprint) {
-                return@launch
-            }
+            val isNewRequest =
+                pageRequestFingerprint[pageChannelId] != requestFingerprint ||
+                    historyPageJobs[pageChannelId]?.isActive != true
+            if (!isNewRequest) return@launch
 
             pageRequestFingerprint[pageChannelId] = requestFingerprint
             subscribeChannel(pageChannelId, pageFilters)
@@ -2002,13 +2099,22 @@ class EventRepositoryImpl @Inject constructor(
             // Close the page sub as soon as every relay it was sent to reports EOSE (NIP-01:
             // no more stored events for this REQ) — HISTORY_PAGE_CLOSE_MS is only a backstop for
             // relays that never send EOSE (buggy/non-conformant) or drop the connection.
-            historyPageJobs.remove(pageChannelId)?.cancel()
-            historyPageJobs[pageChannelId] = repoScope.launch {
-                awaitChannelEoseOrTimeout(pageChannelId, HISTORY_PAGE_CLOSE_MS)
-                clearChannel(pageChannelId)
-                historyPageJobs.remove(pageChannelId)
-                pageRequestFingerprint.remove(pageChannelId)
-                logger.d { "Page channel '$pageChannelId' closed (EOSE or timeout)" }
+            //
+            // compute() runs the cancel-and-install atomically per pageChannelId, so two
+            // concurrent loadOlderEvents/scheduling calls can't interleave into each other's
+            // remove-then-put and orphan a still-active job. The job is launched LAZY and
+            // started here, inside the compute lambda — compute is atomic per key, so the
+            // winner's start executes before any competing scheduling call can touch this key
+            // (same reasoning as AtomicJobScheduling.launchIfIdle's start-after-cas ordering).
+            historyPageJobs.compute(pageChannelId) { _, previous: Job? ->
+                previous?.cancel()
+                repoScope.launch(start = CoroutineStart.LAZY) {
+                    awaitChannelEoseOrTimeout(pageChannelId, HISTORY_PAGE_CLOSE_MS)
+                    clearChannel(pageChannelId)
+                    historyPageJobs.remove(pageChannelId, coroutineContext.job)
+                    pageRequestFingerprint.remove(pageChannelId)
+                    logger.d { "Page channel '$pageChannelId' closed (EOSE or timeout)" }
+                }.also { it.start() }
             }
         }
     }
@@ -2051,12 +2157,17 @@ class EventRepositoryImpl @Inject constructor(
 
             subscribeChannel(pageChannelId, pageFilters)
 
-            historyPageJobs.remove(pageChannelId)?.cancel()
-            historyPageJobs[pageChannelId] = repoScope.launch {
-                awaitChannelEoseOrTimeout(pageChannelId, HISTORY_PAGE_CLOSE_MS)
-                clearChannel(pageChannelId)
-                historyPageJobs.remove(pageChannelId)
-                logger.d { "Resync channel '$pageChannelId' closed (EOSE or timeout)" }
+            // Cancel-and-install atomically per pageChannelId — same reasoning as loadOlderEvents'
+            // historyPageJobs.compute() comment above; the job is launched LAZY and started after
+            // compute() returns.
+            historyPageJobs.compute(pageChannelId) { _, previous: Job? ->
+                previous?.cancel()
+                repoScope.launch(start = CoroutineStart.LAZY) {
+                    awaitChannelEoseOrTimeout(pageChannelId, HISTORY_PAGE_CLOSE_MS)
+                    clearChannel(pageChannelId)
+                    historyPageJobs.remove(pageChannelId, coroutineContext.job)
+                    logger.d { "Resync channel '$pageChannelId' closed (EOSE or timeout)" }
+                }.also { it.start() }
             }
         }
     }
@@ -2396,6 +2507,49 @@ class EventRepositoryImpl @Inject constructor(
     // applyIncomingDeletion moved to EventIngestCache.kt — see
     // eventIngestCache.applyIncomingDeletion, called from subscribeToEvents above.
 
+}
+
+/**
+ * Thread-safe, insertion-ordered set bounded at [maxSize]: once full, adding a new element evicts
+ * the eldest (least-recently-inserted) one instead of dropping the caller's add or clearing the
+ * whole set — unlike a ConcurrentHashMap keyset drained by hand at a size threshold, which under
+ * concurrent adders both drops ids other adders inserted between the size check and the clear and
+ * re-exposes them to re-ingest. Every operation is one atomic step under the set's own monitor;
+ * the ingestion path uses only [add]'s return value, so dedup decisions can't interleave.
+ */
+internal class BoundedInsertionOrderedSet<T>(private val maxSize: Int) : AbstractMutableSet<T>() {
+    init {
+        require(maxSize > 0)
+    }
+
+    private val delegate = object : LinkedHashMap<T, Boolean>(16, 0.75f, false) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<T, Boolean>): Boolean =
+            size > maxSize
+    }
+
+    override val size: Int
+        get() = synchronized(this) { delegate.size }
+
+    override fun add(element: T): Boolean = synchronized(this) {
+        val roomWasAvailable = element in delegate
+        delegate[element] = true
+        // LinkedHashMap.put on an existing key does not touch iteration order, so a re-add of an
+        // already-tracked element is a no-op here (matching `Set.add` semantics), not an MRU
+        // refresh — this set is FIFO eviction, not LRU.
+        !roomWasAvailable
+    }
+
+    override fun contains(element: T): Boolean = synchronized(this) { element in delegate }
+
+    override fun remove(element: T): Boolean = synchronized(this) { delegate.remove(element) != null }
+
+    override fun clear() = synchronized(this) { delegate.clear() }
+
+    override fun iterator(): MutableIterator<T> = synchronized(this) {
+        // Iterator over a snapshot copy: iterating outside the monitor stays safe from
+        // ConcurrentModificationException while other adders proceed.
+        ArrayList(delegate.keys).iterator()
+    }
 }
 
 

@@ -1,10 +1,8 @@
 package com.umbra.app.domain.notifications
 
-import com.umbra.app.domain.lightning.parseBolt11
 import com.umbra.app.domain.nip01.Event
-import com.umbra.app.domain.util.JsonUtils
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import com.umbra.app.domain.nip57.ZapReceiptValidation
+import com.umbra.app.domain.nip57.validateZapReceipt
 
 enum class NotificationType { REPLY, MENTION, REACTION, REPOST, ZAP }
 
@@ -30,34 +28,40 @@ data class NotificationGroup(
     val zapComment: String? = null
 )
 
-/** A NIP-57 receipt's payer, amount and message, read from its embedded zap request. */
-data class ZapReceipt(val senderPubkey: String?, val amountSats: Long, val comment: String?, val targetEventId: String?)
+/** A validated NIP-57 receipt's payer, amount and message. The payer is the zap request's
+ * author — the receipt itself is signed by the recipient's wallet server, never the payer. */
+data class ZapReceipt(val senderPubkey: String, val amountSats: Long, val comment: String?, val targetEventId: String?)
 
-fun parseZapReceipt(event: Event): ZapReceipt? {
+fun parseZapReceipt(
+    event: Event,
+    verifySignature: (Event) -> Boolean,
+    expectedReceiptSigner: String? = null
+): ZapReceipt? {
     if (event.kind != Event.KIND_ZAP_RECEIPT) return null
-    val amountMsat = event.getTagValue("bolt11")?.let(::parseBolt11)?.amountMsat
-    val request = event.getTagValue("description")?.let {
-        runCatching { JsonUtils.NostrJson.parseToJsonElement(it) as? JsonObject }.getOrNull()
+    return when (val validation = validateZapReceipt(event, verifySignature, expectedReceiptSigner)) {
+        is ZapReceiptValidation.Valid -> ZapReceipt(
+            senderPubkey = validation.senderPubkey,
+            amountSats = validation.amountMsat / 1_000,
+            comment = validation.comment,
+            targetEventId = validation.targetEventId
+        )
+        is ZapReceiptValidation.Invalid -> null
     }
-    // The receipt is signed by the recipient's wallet server; the zap request inside names the payer.
-    val sender = request?.get("pubkey")?.jsonPrimitive?.content?.lowercase()
-        ?: event.getTagValue("P")?.lowercase()
-    val comment = request?.get("content")?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
-    return ZapReceipt(
-        senderPubkey = sender,
-        amountSats = (amountMsat ?: 0) / 1_000,
-        comment = comment,
-        targetEventId = event.getTagValue("e")
-    )
 }
 
 /**
  * Turns raw inbox events into notification rows, newest first. [mutedPubkeys] are dropped
  * entirely (muting is user-owned state), and a reaction to someone else's note that merely
  * p-tags the user is still shown — Nostr has no reliable way to tell those apart without the
- * target note in hand.
+ * target note in hand. [expectedReceiptSigner], when known, is the recipient's LNURL-pay
+ * `nostrPubkey`: receipts signed by anyone else are rejected as forged.
  */
-fun groupNotifications(events: List<Event>, mutedPubkeys: Set<String>): List<NotificationGroup> {
+fun groupNotifications(
+    events: List<Event>,
+    mutedPubkeys: Set<String>,
+    verifyEventSignature: (Event) -> Boolean = { false },
+    expectedReceiptSigner: String? = null
+): List<NotificationGroup> {
     val groups = LinkedHashMap<String, MutableList<Pair<Event, String>>>()
     val singles = mutableListOf<NotificationGroup>()
 
@@ -86,11 +90,12 @@ fun groupNotifications(events: List<Event>, mutedPubkeys: Set<String>): List<Not
                 groups.getOrPut("${NotificationType.REPOST.name}:$target") { mutableListOf() } += event to event.pubkey.lowercase()
             }
             Event.KIND_ZAP_RECEIPT -> {
-                val receipt = parseZapReceipt(event) ?: continue
-                val sender = receipt.senderPubkey ?: continue
-                if (sender in mutedPubkeys) continue
+                // Invalid (forged/spliced) receipts never become UI data at all — dropping them
+                // from the group in one place also drops them from the zap total and commenter list.
+                val receipt = parseZapReceipt(event, verifyEventSignature, expectedReceiptSigner) ?: continue
+                if (receipt.senderPubkey in mutedPubkeys) continue
                 val key = "${NotificationType.ZAP.name}:${receipt.targetEventId ?: "profile"}"
-                groups.getOrPut(key) { mutableListOf() } += event to sender
+                groups.getOrPut(key) { mutableListOf() } += event to receipt.senderPubkey
             }
         }
     }
@@ -98,7 +103,7 @@ fun groupNotifications(events: List<Event>, mutedPubkeys: Set<String>): List<Not
     val grouped = groups.map { (key, entries) ->
         val type = NotificationType.valueOf(key.substringBefore(':'))
         val sorted = entries.sortedByDescending { it.first.createdAt }
-        val zaps = if (type == NotificationType.ZAP) sorted.mapNotNull { parseZapReceipt(it.first) } else emptyList()
+        val zaps = if (type == NotificationType.ZAP) sorted.mapNotNull { parseZapReceipt(it.first, verifyEventSignature, expectedReceiptSigner) } else emptyList()
         NotificationGroup(
             key = key,
             type = type,

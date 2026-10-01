@@ -207,6 +207,26 @@ class UmbraNostrClient @Inject constructor(
 
     internal val clientScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    // Every delayed redial (backoff ladder, Orbot wait, SOCKS retry) as one Job per relay, so
+    // disconnect/forgetRelay/disconnectAll can cancel it. Untracked launches outlived those calls
+    // and redialed relays the user had just disabled or removed, and reopened sockets after
+    // logout — disconnectAll even cleared the cooldown that would otherwise have stopped them.
+    internal val pendingReconnects = ConcurrentHashMap<String, Job>()
+
+    internal fun scheduleReconnect(relayUrl: String, delayMs: Long, action: suspend () -> Unit) {
+        val job = clientScope.launch(start = CoroutineStart.LAZY) {
+            delay(delayMs)
+            pendingReconnects.remove(relayUrl, coroutineContext[Job])
+            action()
+        }
+        pendingReconnects.put(relayUrl, job)?.cancel()
+        job.start()
+    }
+
+    private fun cancelPendingReconnect(relayUrl: String) {
+        pendingReconnects.remove(relayUrl)?.cancel()
+    }
+
     /**
      * Per-relay challenge string received via a real ["AUTH", challenge] frame (NIP-42).
      * ONLY this stored value should be signed and sent back as AUTH response.
@@ -291,10 +311,7 @@ class UmbraNostrClient @Inject constructor(
             )
         }
 
-        clientScope.launch {
-            delay(delayMs)
-            reconnectAction()
-        }
+        scheduleReconnect(relayUrl, delayMs, reconnectAction)
     }
 
     override fun resetFailureCount(relayUrl: String) {
@@ -432,10 +449,7 @@ class UmbraNostrClient @Inject constructor(
                     kind = RelayIssueKind.NETWORK,
                     message = "Orbot SOCKS5 not available. Please ensure Orbot is running and TOR is initialized."
                 )
-                clientScope.launch {
-                    delay(waitDelayMs)
-                    connect(relayUrl)
-                }
+                scheduleReconnect(relayUrl, waitDelayMs) { connect(relayUrl) }
                 return@runCatching
             }
             orbotWaitRetryCount.remove(relayUrl)
@@ -475,7 +489,7 @@ class UmbraNostrClient @Inject constructor(
     /** Every outgoing frame goes through here, so traffic accounting has one choke point. */
     private fun sendFrame(relayUrl: String, webSocket: WebSocket, payload: String): Boolean {
         val sent = webSocket.send(payload)
-        if (sent) trafficMeter.recordRelaySent(relayUrl, payload.toByteArray(Charsets.UTF_8).size)
+        if (sent) trafficMeter.recordRelaySent(relayUrl, utf8ByteLength(payload))
         return sent
     }
 
@@ -573,11 +587,13 @@ class UmbraNostrClient @Inject constructor(
     }
 
     override fun disconnect(relayUrl: String) {
+        cancelPendingReconnect(relayUrl)
         closeRelaySocket(relayUrl, reason = "Client disconnect", markIntentional = true)
         logger.d { "Disconnected from relay: ${scrubUrlForLogs(relayUrl)}" }
     }
 
     override fun forgetRelay(relayUrl: String) {
+        cancelPendingReconnect(relayUrl)
         closeRelaySocket(relayUrl, reason = "Client disconnect", markIntentional = true)
         relayFailureCount.remove(relayUrl)
         relayCooldownUntil.remove(relayUrl)
@@ -595,6 +611,7 @@ class UmbraNostrClient @Inject constructor(
     }
 
     override fun disconnectAll() {
+        pendingReconnects.keys.toList().forEach(::cancelPendingReconnect)
         webSockets.keys.toList().forEach { relayUrl ->
             closeRelaySocket(relayUrl, reason = "Client disconnect all", markIntentional = true)
         }
@@ -629,10 +646,20 @@ class UmbraNostrClient @Inject constructor(
         if (isThrottled(relayUrl)) return false
         if (isReqUnsupported(relayUrl)) return false
         if (requiresSearchFilter(relayUrl) && filters.none { !it.search.isNullOrBlank() }) return false
-        if (!subscriptions.hasChanged(relayUrl, channelId, filters)) return false
+        // Check and reserve are one atomic step per (relay, channel), so two concurrent
+        // applyChannel calls can't both send the same REQ. If the send throws, the reservation is
+        // rolled back so a later retry isn't wrongly suppressed.
+        if (!subscriptions.tryReserve(relayUrl, channelId, filters)) return false
         val subId = subscriptions.getOrCreateSubId(relayUrl, channelId, rejectsSubIdReuse(relayUrl))
-        subscribe(relayUrl, subId, filters)
-        subscriptions.recordSent(relayUrl, channelId, filters)
+        var sent = false
+        try {
+            subscribe(relayUrl, subId, filters)
+            sent = true
+        } finally {
+            if (!sent) {
+                subscriptions.rollbackReservation(relayUrl, channelId, filters)
+            }
+        }
         return true
     }
 

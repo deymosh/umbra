@@ -237,12 +237,17 @@ class ComposerViewModel @Inject constructor(
             snapshotFlow { textState.text }
                 .collectLatest { text ->
                     val sanitization = TrackingTokenSanitizer.sanitizeTextWithResult(text.toString())
-                    if (sanitization.sanitizedText != text.toString()) {
+                    if (sanitization.removedTrackingTokens) {
                         textState.edit {
                             replace(0, length, sanitization.sanitizedText)
                         }
+                        _state.update { it.copy(removedTrackingToken = true) }
+                    } else if (!text.contains("http", ignoreCase = true)) {
+                        // The edit above re-emits the already-clean text, so clearing on every
+                        // token-free emission would hide the notice before it ever rendered. Keep
+                        // it while a link is still in the draft; drop it once the link is gone.
+                        _state.update { it.copy(removedTrackingToken = false) }
                     }
-                    _state.update { it.copy(removedTrackingToken = sanitization.removedTrackingTokens) }
                 }
         }
 

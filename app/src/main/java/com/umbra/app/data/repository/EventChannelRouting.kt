@@ -1,6 +1,7 @@
 package com.umbra.app.data.repository
 
 import com.umbra.app.data.nostr.NostrClient
+import com.umbra.app.data.nostr.filterFingerprint
 import com.umbra.app.data.repository.policy.DiscoveredRelayIdlePolicy
 import com.umbra.app.data.repository.policy.FeedRelaySincePolicy
 import com.umbra.app.data.repository.policy.OutboxInboxRelaySincePolicy
@@ -313,21 +314,9 @@ internal class EventChannelRouting(
         }
     }
 
-    internal fun fingerprint(filters: List<EventFilter>): String {
-        return filters
-            .joinToString(separator = "||") { filter ->
-                listOf(
-                    "ids=${filter.ids.sorted().joinToString(",")}",
-                    "authors=${filter.authors.sorted().joinToString(",")}",
-                    "kinds=${filter.kinds.sorted().joinToString(",")}",
-                    "since=${filter.since ?: ""}",
-                    "until=${filter.until ?: ""}",
-                    "limit=${filter.limit}",
-                    "tags=${filter.tagFilters.toSortedMap().entries.joinToString(";") { (k, v) -> "$k=${v.sorted().joinToString(",")}" }}",
-                    "search=${filter.search ?: ""}"
-                ).joinToString("|")
-            }
-    }
+    // Delegates to the shared filterFingerprint so this routing layer's no-op dedup and
+    // RelaySubscriptionRegistry's per-(relay, channel) dedup can never drift apart.
+    internal fun fingerprint(filters: List<EventFilter>): String = filterFingerprint(filters)
 
     /**
      * Collapses filters that differ only in `kinds` (same authors/tags/ids/time window/limit/

@@ -8,6 +8,9 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
+private val REFERENCE_TAG_NAMES = setOf("e", "E", "q")
+private val HEX_PUBKEY_REGEX = Regex("^[0-9a-fA-F]{64}$")
+
 /**
  * Nostr Event model (NIP-01)
  * Base protocol for all events in the Nostr network
@@ -222,6 +225,30 @@ data class Event(
         return eTags.lastOrNull { resolveETagMarker(it) != "mention" }?.getOrNull(1)
     }
 
+    /**
+     * Relay hints for [eventId]: slot 2 of every `e`/`E`/`q` tag that references it (NIP-10,
+     * NIP-22, NIP-18). These are the relays the author saw the referenced event on, often the
+     * only place a parent that isn't on any of our relays can be found.
+     */
+    fun relayHintsFor(eventId: String): List<String> = tags.asSequence()
+        .filter { it.getOrNull(0) in REFERENCE_TAG_NAMES && it.getOrNull(1) == eventId }
+        .mapNotNull { tag ->
+            tag.getOrNull(2)?.trim()?.takeIf { it.startsWith("wss://") || it.startsWith("ws://") }
+        }
+        .distinct()
+        .toList()
+
+    /**
+     * Author pubkey hint for [eventId]: NIP-10 puts it in slot 4 of an `e` tag, NIP-22 in slot 3
+     * of an `E`/`e` tag and NIP-18 in slot 3 of a `q` tag. Lets a caller look the event up on the
+     * author's outbox relays when no relay hint is present.
+     */
+    fun authorHintFor(eventId: String): String? = tags.asSequence()
+        .filter { it.getOrNull(0) in REFERENCE_TAG_NAMES && it.getOrNull(1) == eventId }
+        .flatMap { sequenceOf(it.getOrNull(4), it.getOrNull(3)) }
+        .firstOrNull { it != null && HEX_PUBKEY_REGEX.matches(it) }
+        ?.lowercase()
+
     private fun resolveETagMarker(eTag: List<String>): String? {
         val candidate3 = eTag.getOrNull(3)?.trim()?.lowercase()
         if (candidate3 == "reply" || candidate3 == "root" || candidate3 == "mention") {
@@ -401,6 +428,21 @@ data class EventFilter(
     // Only get events from these relays
     val relayUrls: Set<String> = emptySet()
 ) {
+    /**
+     * Whether [event] satisfies this filter's `ids`/`authors`/`kinds`/tag constraints (NIP-01: an
+     * empty set means "any"). `since`/`until`/`limit`/`search` are deliberately ignored — this
+     * answers "did a subscription ask for this kind of event at all", not "would the relay have
+     * returned it in this exact window".
+     */
+    fun matchesTagsAndIds(event: Event): Boolean {
+        if (ids.isNotEmpty() && event.id !in ids) return false
+        if (authors.isNotEmpty() && authors.none { it.equals(event.pubkey, ignoreCase = true) }) return false
+        if (kinds.isNotEmpty() && event.kind !in kinds) return false
+        return tagFilters.all { (name, values) ->
+            values.isEmpty() || event.tags.any { tag -> tag.getOrNull(0) == name && tag.getOrNull(1) in values }
+        }
+    }
+
     /**
      * Create filter for text note feed
      */

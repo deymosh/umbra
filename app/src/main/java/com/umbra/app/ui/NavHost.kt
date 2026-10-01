@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.ui.Alignment
@@ -269,7 +270,10 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
     // LIVENESS_CHECK_INTERVAL_MS probe), and FeedViewModel.observeTorRuntimeState already reflects
     // live Tor state in the feed's status dot independent of navigation. This flag scopes the
     // force-navigate-to-TorGate behavior below to the initial bootstrap only.
-    var hasReachedFeedOnce by remember { mutableStateOf(false) }
+    // rememberSaveable, not remember: when the OS destroys the Activity while it's backgrounded,
+    // returning must not forget we reached the feed — a plain remember would bounce the user
+    // through TorGate, which pops the whole back stack and recreates the feed.
+    var hasReachedFeedOnce by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(currentRoute) {
         if (currentRoute == Screen.Feed.route) hasReachedFeedOnce = true
     }
@@ -310,8 +314,10 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
             // the same way regardless of form, so passing the bare id here would silently drop
             // them right before the one lookup that could use them.
             is NostrUriEntity.Note -> navController.navigate(Screen.Thread.forEvent(deepLinkUri))
-            // No addressable-content (article/etc) reading screen yet to route naddr to.
-            is NostrUriEntity.Address, null -> Unit
+            // The thread screen resolves an naddr reference itself (cache, then relays), so an
+            // article or other addressable event opens there instead of the link doing nothing.
+            is NostrUriEntity.Address -> navController.navigate(Screen.Thread.forEvent(deepLinkUri))
+            null -> Unit
         }
         deepLinkConsumed = true
     }

@@ -152,11 +152,11 @@ class NostrSessionManager @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val nip11FetchSemaphore = Semaphore(MAX_CONCURRENT_NIP11_FETCHES)
     // bootstrapJob, autoDisableRelayJob, and torCircuitRecoveryJob are written only by start()
-    // and stop() — the volatile started flag above serializes calls to that pair, and neither
-    // field is ever read or reassigned from reconcile()'s concurrently-reachable paths (the
-    // combine()-driven collect and retryJob's own delayed relaunch). An atomic holder would add
-    // no guarantee here, and it could not make the multi-field start()/stop() sequence atomic as
-    // a whole anyway — so these three stay plain nullable fields.
+    // and stop() — lifecycleLock serializes calls to that pair, and neither field is ever read
+    // or reassigned from reconcile()'s concurrently-reachable paths (the combine()-driven collect
+    // and retryJob's own delayed relaunch). An atomic holder would add no guarantee here, and it
+    // could not make the multi-field start()/stop() sequence atomic as a whole anyway — so these
+    // three stay plain nullable fields.
     private var bootstrapJob: Job? = null
     private var autoDisableRelayJob: Job? = null
     private var torCircuitRecoveryJob: Job? = null
@@ -197,8 +197,16 @@ class NostrSessionManager @Inject constructor(
 
     @Volatile
     private var started = false
+    // Serializes start()/stop(): the volatile flag alone did not — two concurrent starts both
+    // passed the check, both cancelled nothing and each launched their own
+    // bootstrap/autoDisable/recovery jobs (one set leaked), and a stop racing a start could
+    // cancel the freshly-launched jobs while the start continued past the check. All multi-field
+    // mutations of the job set happen under this lock; readers of individual fields elsewhere
+    // (invokeOnCompletion's cancel-side cleanup) remain safe because those paths only ever clear
+    // their own atomic holder.
+    private val lifecycleLock = Any()
 
-    override fun start() {
+    override fun start(): Unit = synchronized(lifecycleLock) {
         if (started) return
         started = true
         appStartMs = System.currentTimeMillis()
@@ -301,7 +309,7 @@ class NostrSessionManager @Inject constructor(
         }
     }
 
-    override fun stop() {
+    override fun stop(): Unit = synchronized(lifecycleLock) {
         started = false
         retryJob.getAndSet(null)?.cancel()
         bootstrapJob?.cancel()
@@ -326,6 +334,21 @@ class NostrSessionManager @Inject constructor(
         relayListDecryptionCoordinator.stop()
         torRuntimeManager.stop()
         eventRepository.disconnectFromAll()
+    }
+
+    /**
+     * Redials relays whose WebSocket sockets died while the app was backgrounded (idle-kill,
+     * Orbot churn) — [connectToEnabledRelays] skips relays already connected, so this only opens
+     * the ones actually down. No-op before the session has started or before relays ever
+     * connected.
+     */
+    override fun onAppForegrounded() {
+        if (!started || !relaysConnected) return
+        scope.launch {
+            lastSnapshot?.relays?.let { relays ->
+                eventRepository.connectToEnabledRelays(relays)
+            }
+        }
     }
 
     /**

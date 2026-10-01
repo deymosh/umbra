@@ -51,8 +51,9 @@ class NostrEventBuilderTest {
         assertEquals("+", obj.getValue("content").jsonPrimitive.content)
 
         val tags = tagArrays(obj)
-        assertEquals(listOf("e", target.id), tags[0].map { it.jsonPrimitive.content })
-        assertEquals(listOf("p", target.pubkey), tags[1].map { it.jsonPrimitive.content })
+        assertEquals(listOf("e", target.id, "", target.pubkey), tags[0].map { it.jsonPrimitive.content })
+        assertEquals(listOf("k", Event.KIND_TEXT_NOTE.toString()), tags[1].map { it.jsonPrimitive.content })
+        assertEquals(listOf("p", target.pubkey, ""), tags[2].map { it.jsonPrimitive.content })
     }
 
     @Test
@@ -61,7 +62,7 @@ class NostrEventBuilderTest {
         val obj = parseObject(NostrEventBuilder.reaction(target, content = "🔥"))
 
         assertEquals("🔥", obj.getValue("content").jsonPrimitive.content)
-        assertEquals(2, tagArrays(obj).size)
+        assertEquals(3, tagArrays(obj).size)
     }
 
     @Test
@@ -72,10 +73,10 @@ class NostrEventBuilderTest {
 
         assertEquals(":umbra:", obj.getValue("content").jsonPrimitive.content)
         val tags = tagArrays(obj)
-        assertEquals(3, tags.size)
+        assertEquals(4, tags.size)
         assertEquals(
             listOf("emoji", "umbra", "https://example.com/umbra.png"),
-            tags[2].map { it.jsonPrimitive.content }
+            tags[3].map { it.jsonPrimitive.content }
         )
     }
 
@@ -239,6 +240,76 @@ class NostrEventBuilderTest {
     }
 
     @Test
+    fun `given addressable target when building repost then kind16 with k and a tags and relay hint`() {
+        val target = Event(
+            id = "f".repeat(64),
+            pubkey = "0".repeat(64),
+            createdAt = 42L,
+            kind = Event.KIND_LONG_FORM,
+            tags = listOf(listOf("d", "my-article")),
+            content = "article body",
+            sig = "c".repeat(128)
+        )
+        val obj = parseObject(NostrEventBuilder.repost(target, "wss://relay.example"))
+        val tags = tagArrays(obj)
+
+        assertEquals(Event.KIND_GENERIC_REPOST, obj.getValue("kind").jsonPrimitive.content.toInt())
+        assertEquals(listOf("k", Event.KIND_LONG_FORM.toString()), tags[0].map { it.jsonPrimitive.content })
+        assertEquals(
+            listOf("a", "${Event.KIND_LONG_FORM}:${target.pubkey}:my-article", "wss://relay.example"),
+            tags[1].map { it.jsonPrimitive.content }
+        )
+        assertEquals(listOf("e", target.id, "wss://relay.example"), tags[2].map { it.jsonPrimitive.content })
+        assertEquals(listOf("p", target.pubkey), tags[3].map { it.jsonPrimitive.content })
+    }
+
+    @Test
+    fun `given reaction on addressable target then adds a tag and relay hints`() {
+        val target = Event(
+            id = "9".repeat(64),
+            pubkey = "8".repeat(64),
+            createdAt = 42L,
+            kind = Event.KIND_LONG_FORM,
+            tags = listOf(listOf("d", "my-article")),
+            content = "article body",
+            sig = "c".repeat(128)
+        )
+        val obj = parseObject(NostrEventBuilder.reaction(target, relayHint = "wss://relay.example"))
+        val tags = tagArrays(obj)
+
+        assertEquals(listOf("e", target.id, "wss://relay.example", target.pubkey), tags[0].map { it.jsonPrimitive.content })
+        assertEquals(listOf("k", Event.KIND_LONG_FORM.toString()), tags[1].map { it.jsonPrimitive.content })
+        assertEquals(
+            listOf("a", "${Event.KIND_LONG_FORM}:${target.pubkey}:my-article", "wss://relay.example"),
+            tags[2].map { it.jsonPrimitive.content }
+        )
+        assertEquals(listOf("p", target.pubkey, "wss://relay.example"), tags[3].map { it.jsonPrimitive.content })
+    }
+
+    @Test
+    fun `given deep thread parent without p tags when building reply then root author still p-tagged`() {
+        val rootId = "7".repeat(64)
+        val rootAuthor = "6".repeat(64)
+        val parent = sampleEvent(
+            id = "8".repeat(64),
+            pubkey = "9".repeat(64),
+            tags = listOf(listOf("e", rootId, "", "root"))
+        )
+        // Simulate a parent whose root e tag carries the root author in the 4th slot
+        val parentWithRootAuthor = parent.copy(
+            tags = listOf(listOf("e", rootId, "wss://relay.example", "root", rootAuthor))
+        )
+
+        val obj = parseObject(NostrEventBuilder.reply("deep", parentWithRootAuthor, "wss://relay.example"))
+        val pTags = tagArrays(obj).filter { it[0].jsonPrimitive.content == "p" }
+            .map { it[1].jsonPrimitive.content }
+
+        assertEquals(2, pTags.size) // parent author + root author, no duplicates
+        assertTrue(pTags.contains("9".repeat(64)))
+        assertTrue(pTags.contains(rootAuthor))
+    }
+
+    @Test
     fun `given text note with outer whitespace when building then content is trimmed`() {
         val obj = parseObject(NostrEventBuilder.textNote("\n\n  hello world  \t"))
 
@@ -319,6 +390,69 @@ class NostrEventBuilderTest {
         val obj = parseObject(
             NostrEventBuilder.updateProfile(
                 name = "carol",
+                displayName = null,
+                about = null,
+                website = null,
+                nip05 = null,
+                lud16 = null,
+                picture = null
+            )
+        )
+
+        assertTrue(tagArrays(obj).isEmpty())
+    }
+
+    @Test
+    fun `given profile fields using known shortcodes when updateProfile with emojis then emoji tags added for each`() {
+        val obj = parseObject(
+            NostrEventBuilder.updateProfile(
+                name = " :umbra: ",
+                displayName = " Alice :umbra: ",
+                about = "bio with :moon: and :umbra: again",
+                website = null,
+                nip05 = null,
+                lud16 = null,
+                picture = null,
+                emojis = listOf(
+                    CustomEmoji("umbra", "https://example.com/umbra.png"),
+                    CustomEmoji("moon", "https://example.com/moon.png"),
+                    CustomEmoji("unused", "https://example.com/unused.png")
+                )
+            )
+        )
+
+        val tags = tagArrays(obj)
+        assertTrue(tags.any { it.map { v -> v.jsonPrimitive.content } == listOf("emoji", "umbra", "https://example.com/umbra.png") })
+        assertTrue(tags.any { it.map { v -> v.jsonPrimitive.content } == listOf("emoji", "moon", "https://example.com/moon.png") })
+        // Deduped: ":umbra:" appears in both name and about but only one tag is emitted.
+        assertEquals(1, tags.count { it.map { v -> v.jsonPrimitive.content }.getOrNull(1) == "umbra" })
+        // No tag for an emoji the text never uses.
+        assertTrue(tags.none { it.map { v -> v.jsonPrimitive.content }.getOrNull(1) == "unused" })
+    }
+
+    @Test
+    fun `given profile fields with unknown shortcodes when updateProfile with emojis then no emoji tags`() {
+        val obj = parseObject(
+            NostrEventBuilder.updateProfile(
+                name = ":notmine:",
+                displayName = null,
+                about = "plain",
+                website = null,
+                nip05 = null,
+                lud16 = null,
+                picture = null,
+                emojis = listOf(CustomEmoji("umbra", "https://example.com/umbra.png"))
+            )
+        )
+
+        assertTrue(tagArrays(obj).isEmpty())
+    }
+
+    @Test
+    fun `given no emojis when updateProfile then tags empty even with shortcode-looking text`() {
+        val obj = parseObject(
+            NostrEventBuilder.updateProfile(
+                name = ":umbra:",
                 displayName = null,
                 about = null,
                 website = null,

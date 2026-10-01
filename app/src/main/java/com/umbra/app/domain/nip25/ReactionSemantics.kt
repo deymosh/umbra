@@ -20,6 +20,12 @@ fun extractReactionTarget(event: Event): ReactionTarget {
     return ReactionTarget(eventId = targetEventId, authorPubkey = targetAuthorPubkey)
 }
 
+/**
+ * NIP-25: a `-` reaction is a dislike. Every other content (`+`, empty, any emoji or custom
+ * `:shortcode:`) is a positive reaction, so a dislike must never be counted as one.
+ */
+fun isDislikeReactionContent(content: String): Boolean = content.trim() == "-"
+
 fun isPositiveReactionContent(content: String): Boolean {
     val normalized = content.trim()
     return normalized.isEmpty() || normalized == "+" || normalized == "❤️" || normalized == "👍"

@@ -283,4 +283,36 @@ class EventLruCacheTest {
         assertEquals(beforeClear, cache.stats)
         assertEquals(CacheStats(hits = 1, misses = 1, evictions = 1), cache.stats)
     }
+
+    @Test
+    fun `given protected entries when trimTo then unprotected evicted first and protected survive`() {
+        val evicted = mutableListOf<Event>()
+        val cache = EventLruCache(maxSize = 10, onEvicted = { evicted.add(it) })
+        val (e1, e2, e3, e4) = listOf(event("1"), event("2"), event("3"), event("4"))
+        listOf(e1, e2, e3, e4).forEach(cache::put)
+
+        // e3 and e4 are the two most recently inserted, so a plain trimTo(2) would keep them;
+        // protecting them instead forces trimTo to evict e1 and e2 around them.
+        cache.trimTo(2) { it.id == e3.id || it.id == e4.id }
+
+        assertEquals(2, cache.size)
+        assertEquals(listOf(e1, e2), evicted)
+        assertEquals(e3, cache.get(e3.id))
+        assertEquals(e4, cache.get(e4.id))
+    }
+
+    @Test
+    fun `given protected entries alone exceed target when trimTo then eldest protected still evicted`() {
+        val evicted = mutableListOf<Event>()
+        val cache = EventLruCache(maxSize = 10, onEvicted = { evicted.add(it) })
+        val (e1, e2, e3) = listOf(event("1"), event("2"), event("3"))
+        listOf(e1, e2, e3).forEach(cache::put)
+
+        cache.trimTo(1) { true }
+
+        assertEquals(1, cache.size)
+        // Second, eldest-first pass over the all-protected cache must evict e1 and e2.
+        assertEquals(listOf(e1, e2), evicted)
+        assertEquals(e3, cache.get(e3.id))
+    }
 }

@@ -279,6 +279,7 @@ interface EventDao : NegentropyEventSource {
                 JOIN events eng ON eng.id = et.event_id
                 WHERE et.tag_name = 'e'
                   AND eng.kind IN (1, 6, 7)
+                  AND NOT (eng.kind = 7 AND TRIM(eng.content) = '-')
                   AND et.tag_value IN (SELECT id FROM base)
             ) dedup
             GROUP BY dedup.targetId
@@ -297,6 +298,7 @@ interface EventDao : NegentropyEventSource {
             p.about AS authorAbout,
             p.nip05 AS authorNip05,
             p.nip05VerificationState AS authorNip05VerificationState,
+            p.customEmojis AS authorCustomEmojis,
             COALESCE(engagement.reactionCount, 0) AS reactionCount,
             COALESCE(engagement.replyCount, 0) AS replyCount,
             COALESCE(engagement.repostCount, 0) AS repostCount

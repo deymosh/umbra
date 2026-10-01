@@ -350,7 +350,9 @@ WAL journal mode enabled. `fallbackToDestructiveMigration()` as last resort. Rea
   in-memory cache re-fetched from relays as needed (`EventRepository.fetchEventById()`) — no
   Room persistence, no periodic cleanup job, matching Amethyst's pure in-memory event graph
 - `initialCacheLoaded: CompletableDeferred<Unit>` gates `connectToEnabledRelays()`
-- `getNewestTimestampByKind()` used as `since` filter on relay reconnect
+- The feed REQ's reconnect `since` comes from the in-memory cache only (newest cached kind-1,
+  and only once the cache holds enough notes to reflect the feed window) — never from the Room
+  archive, which holds only the user's own posts and would hide everyone else's older notes
 - `isFresh(pubkey)` checked before any relay metadata request — skip profiles fresh < 24h
 - Batch inserts `insertEvents(List)` for bursts — never loop `insertEvent()` one by one
 - `clearCache()` clears only the in-memory `EventLruCache` + engagement index (a manual,
@@ -364,7 +366,8 @@ WAL journal mode enabled. `fallbackToDestructiveMigration()` as last resort. Rea
   Part 4.2), sweeping `UserRepositoryImpl`'s stale profile/relay-list entries on demand
   (`pruneStaleData()`, normally a 24h timer), and trimming `OwnerTagSetCache`-backed
   contact/mute/pin lists down to just the signed-in owner (`trimToOwner()`) at
-  `TRIM_MEMORY_UI_HIDDEN`+ (light) or `TRIM_MEMORY_BACKGROUND`+ (aggressive). Also exposed as a
+  `TRIM_MEMORY_BACKGROUND`+ only — never at `TRIM_MEMORY_UI_HIDDEN`, which fires on every
+  backgrounding — and feed-note kinds are evicted last. Also exposed as a
   manual "Trim all caches now" action on the App Resource Usage screen.
 
 ### 3.3 N+1 prevention
@@ -696,7 +699,7 @@ Use this as a final pass after every audit session.
 - [ ] Verification before every persist
 - [ ] `initialCacheLoaded.await()` before relay connection
 - [ ] `isFresh()` checked before relay metadata request
-- [ ] `getNewestTimestampByKind()` used as `since` on reconnect
+- [ ] Feed reconnect `since` derived from the in-memory cache, never the own-events archive
 - [ ] No N+1 profile or event lookups
 - [ ] `clearCache()` clears the in-memory `EventLruCache`; `clearAllData()`/`clearAll()` clear Room (no public `events` table exists to clear)
 - [ ] All DAO calls on `Dispatchers.IO`
