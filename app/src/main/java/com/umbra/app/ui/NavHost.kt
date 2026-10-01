@@ -45,6 +45,8 @@ import com.umbra.app.domain.nip21.NostrUriEntity
 import com.umbra.app.domain.nip21.resolveNostrUri
 import com.umbra.app.ui.broadcast.BroadcastViewModel
 import com.umbra.app.ui.components.BroadcastBanner
+import com.umbra.app.ui.components.CustomEmojiCatalogViewModel
+import com.umbra.app.ui.components.LocalCustomEmojiGroups
 import com.umbra.app.ui.composer.ComposerScreen
 import com.umbra.app.ui.composer.ComposerViewModel
 import com.umbra.app.ui.zap.ZapHost
@@ -366,8 +368,13 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
             null
         }
     }
+    // The single collector of the user's NIP-30 emoji catalog (see LocalCustomEmojiGroups): one
+    // ViewModel instance feeds the composer and the reaction picker through the local.
+    val customEmojiCatalogViewModel: CustomEmojiCatalogViewModel = hiltViewModel()
+    val customEmojiGroups by customEmojiCatalogViewModel.groups.collectAsStateWithLifecycle()
     ZapHost {
     CompositionLocalProvider(
+        LocalCustomEmojiGroups provides customEmojiGroups,
         LocalBookmarks provides bookmarkActions,
         LocalHashtagNavigator provides { tag -> navController.navigate(Screen.Hashtag.forTag(tag)) },
         LocalReadLater provides readLaterActions
