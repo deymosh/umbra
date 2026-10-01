@@ -213,6 +213,8 @@ Requires JDK 21 and Android SDK 37. Use the included Gradle wrapper; do not rely
 | NIP-57 | Lightning Zaps | ✅ Implemented | Zap requests signed by the NIP-55 signer, LNURL-pay over Tor, invoice handed to the user's wallet; receipts counted on notes and grouped in Notifications |
 | NIP-65 | Relay List Metadata | ✅ Implemented | Domain model and relay metadata workflow in place |
 | NIP-67 | EOSE Completeness Hint | ✅ Implemented | Parses EOSE's optional completeness hint; a `more` hint withholds the feed's per-relay resume watermark instead of assuming full coverage |
+| NIP-86 | Relay Management | ✅ Implemented | Manage relay screen for relays advertising NIP-86: people/events/kinds/IP moderation lists and relay metadata, authenticated per call with NIP-98 |
+| NIP-98 | HTTP Auth | ✅ Implemented | Kind-27235 event builder and `Authorization: Nostr` header, signing each HTTP request through the NIP-55 signer |
 | NIP-68 | Picture-first feeds | ✅ Implemented | Kind-20 posts in the home feed and a Pictures tab on profiles, rendered with `imeta` aspect ratio/blurhash/alt; composing kind-20 posts is not offered |
 | NIP-77 | Negentropy Syncing | ✅ Implemented | Set-reconciliation sync of the signed-in user's own event history against their write relays, gated on relay NIP-77 support — not a general backfill feature |
 | NIP-92 | Media Attachments Metadata | ✅ Implemented | `imeta` parsed and generated; drives alt text, aspect ratio, blurhash, and detection of extensionless image/video URLs |

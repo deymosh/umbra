@@ -59,12 +59,12 @@ Legend:
 | 7D | Forum Threads | YES | PENDING | Not yet done: `domain/nip7d` has `extractForumThread()` (the `title` tag) and a `forumThread()` builder (kind 11), and replies would be NIP-22 comments rooted at the thread — but kind 11 is not subscribed to, rendered, or composable anywhere. |
 | 84 | Highlights | YES | NO | No highlights events support. |
 | 85 | Trusted Assertions | YES | NO | No trust assertion event support. |
-| 86 | Relay Management API | NO | NO | Relay server admin API out of client scope. |
+| 86 | Relay Management API | NO | YES | `domain/nip86` models the rpc (method enum, encode/decode, typed results); `RelayManagementRepositoryImpl` POSTs over the Tor-proxied client with a fresh NIP-98 auth event per call, 401/403 map to a calm not-authorized state. RelayDetailsScreen shows a "Manage relay" row when the relay advertises NIP-86, and RelayManagementScreen probes `supportedmethods` and manages people/events/kinds/IPs/relay metadata, re-fetching each list after its own write. |
 | 88 | Polls | YES | NO | No poll kind support. |
 | 89 | Recommended Application Handlers | YES | NO | No handler metadata events yet. |
 | 92 | Media Attachments Metadata | YES | YES | `imeta` tags parsed (`domain/nip92`) and generated (`ImetaTag.toTag()`) for composer attachments; rendering uses them for alt text, aspect ratio and blurhash placeholders, and `reclassifyUrlSegmentsWithImeta` turns extensionless URLs into images/videos when their `imeta` declares an image/video MIME type. |
 | 94 | File Metadata | YES | NO | No dedicated file metadata event flow. |
-| 98 | HTTP Auth | NO | NO | Not needed in current social client flow. |
+| 98 | HTTP Auth | NO | YES | `domain/nip98` builds the kind-27235 event (`u`/`method`/`payload` sha256 tags) and the `Authorization: Nostr <base64>` header; used by the NIP-86 relay management calls, signed fresh by the NIP-55 signer for every request. Not published to relays. |
 | 99 | Classified Listings | NO | NO | Marketplace scope excluded. |
 | A0 | Voice Messages | YES | NO | No voice-message flow. |
 | A3 | Payment Targets | YES | PARTIAL | `domain/nipa3` parses kind-`10133` `payto` targets and builds the event; the zap sheet fetches the recipient's list (`NostrChannels.paymentTargets`) and offers each target as a `payto:` link behind the external-link warning. Editing and publishing your own payment targets is pending. |
