@@ -157,13 +157,21 @@ internal class OwnerTagSetCache<T>(
 
         if (latestByOwner.isEmpty()) return
 
-        val currentState = state.value
         latestByOwner.values.filterNotNull().forEach { event ->
             val candidate = build(event.pubkey.lowercase(), extractValues(event), event.createdAt)
             val owner = ownerOf(candidate).lowercase()
-            val existing = currentState[owner]
-            if (existing == null || updatedAtOf(existing) < updatedAtOf(candidate)) {
-                updateCache(candidate)
+            // Staleness comparison folded into the atomic update: snapshotting state.value first
+            // and then calling updateCache() made the comparison a check-then-act — a newer list
+            // landing between the snapshot and the update would be silently overwritten by this
+            // older one. update{} serializes updates per caller, so the comparison sees the value
+            // as of the moment of the write.
+            state.update { cache ->
+                val existing = cache[owner]
+                if (existing == null || updatedAtOf(existing) < updatedAtOf(candidate)) {
+                    cache + (owner to candidate)
+                } else {
+                    cache
+                }
             }
         }
     }
