@@ -50,14 +50,11 @@ class ZapReceiptDisplayMappingTest {
             """"kind":${request.kind},"tags":$tagsJson,"content":"$contentJson","sig":"${request.sig}"}"""
     }
 
-    /**
-     * Builds a receipt for a request whose tags also decide anonymity: a `P` tag equal to the
-     * request pubkey names the payer; its absence signals an anonymous zap (NIP-57).
-     */
+    /** Builds a receipt for [request]; wallet servers may or may not copy the payer into `P`. */
     private fun receipt(
         request: Event,
         bolt11: String = TestInvoice.invoiceForMsat(1_000_000L),
-        anonymous: Boolean = false,
+        withPayerTag: Boolean = true,
         eTag: String? = note,
         description: String? = requestJson(request)
     ) = Event(
@@ -69,7 +66,7 @@ class ZapReceiptDisplayMappingTest {
             add(listOf("p", recipient))
             if (eTag != null) add(listOf("e", eTag))
             add(listOf("bolt11", bolt11))
-            if (!anonymous) add(listOf("P", request.pubkey))
+            if (withPayerTag) add(listOf("P", request.pubkey))
             if (description != null) add(listOf("description", description))
         }
     )
@@ -86,8 +83,15 @@ class ZapReceiptDisplayMappingTest {
     }
 
     @Test
-    fun `given verified anonymous receipt without P tag when mapping then sender is null but valid`() {
-        val display = mapZapReceiptToDisplay(receipt(request(listOf(listOf("p", recipient))), anonymous = true), validVerify)!!
+    fun `given verified receipt without P tag when mapping then payer still comes from the request`() {
+        val display = mapZapReceiptToDisplay(receipt(request(listOf(listOf("p", recipient))), withPayerTag = false), validVerify)!!
+        assertTrue(display.isVerified)
+        assertEquals(payer, display.senderPubkey)
+    }
+
+    @Test
+    fun `given verified anonymous request when mapping then sender is null but valid`() {
+        val display = mapZapReceiptToDisplay(receipt(request(listOf(listOf("p", recipient), listOf("anon")))), validVerify)!!
         assertTrue(display.isVerified)
         assertNull(display.senderPubkey)
         assertEquals(1_000L, display.amountSats)

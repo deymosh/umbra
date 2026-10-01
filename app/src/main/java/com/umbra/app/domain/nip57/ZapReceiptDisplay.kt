@@ -2,6 +2,8 @@ package com.umbra.app.domain.nip57
 
 import com.umbra.app.domain.lightning.parseBolt11
 import com.umbra.app.domain.nip01.Event
+import com.umbra.app.domain.util.JsonUtils
+import kotlinx.serialization.json.JsonObject
 
 /**
  * UI-facing view of a NIP-57 zap receipt, built by [mapZapReceiptToDisplay] just before a zap
@@ -38,10 +40,8 @@ data class ZapReceiptDisplay(
  * [validateZapReceipt]) into the display model above, usable anywhere the event can appear by
  * reference (an inline quote, a thread opened on its id, a notification row).
  *
- * Anonymity rule: a Valid receipt still shows "Someone zapped" (no sender) when the receipt
- * carries no `P` tag naming an even-y pubkey equal to the request's own author — NIP-57's
- * anonymous-zap signal. The request's own signature keeps proving the payment happened; only the
- * payer's displayed identity is withheld, which is what anonymity means here.
+ * Anonymity rule: a Valid receipt shows "Someone zapped" (no sender) when its zap request has an
+ * `anon` tag — NIP-57's anonymous-zap signal, where the request is signed by a throwaway key.
  *
  * An Invalid receipt is never dropped outright when the user has referenced it explicitly (a
  * quote or a thread) — it renders as its claimed contents, muted, under an explicit unverified
@@ -58,9 +58,7 @@ fun mapZapReceiptToDisplay(
 
     return when (val validation = validateZapReceipt(receipt, verifySignature)) {
         is ZapReceiptValidation.Valid -> ZapReceiptDisplay(
-            senderPubkey = validation.senderPubkey.takeIf { ebp ->
-                receipt.tags.any { tag -> tag.size >= 2 && tag[0] == "P" && tag[1].equals(ebp, ignoreCase = true) }
-            },
+            senderPubkey = validation.senderPubkey.takeUnless { isAnonymousZapRequest(receipt) },
             recipientPubkey = receipt.getTagValue("p")?.lowercase()?.takeIf { it.isNotBlank() },
             amountSats = validation.amountMsat / 1_000,
             comment = validation.comment,
@@ -82,6 +80,18 @@ fun mapZapReceiptToDisplay(
             isVerified = false
         )
     }
+}
+
+// NIP-57 anonymous zaps carry an `anon` tag on the request, which is signed by a throwaway key,
+// so its author is not the payer. The receipt's own `P` tag is optional for wallet servers and
+// says nothing about anonymity.
+private fun isAnonymousZapRequest(receipt: Event): Boolean {
+    val description = receipt.getTagValue("description") ?: return false
+    val request = runCatching { JsonUtils.NostrJson.parseToJsonElement(description) as? JsonObject }
+        .getOrNull()
+        ?.let { runCatching { Event.fromJsonObject(it) }.getOrNull() }
+        ?: return false
+    return request.tags.any { it.firstOrNull() == "anon" }
 }
 
 private fun String.matchesHex64(): Boolean =
