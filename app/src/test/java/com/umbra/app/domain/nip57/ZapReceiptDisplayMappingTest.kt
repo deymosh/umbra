@@ -1,5 +1,6 @@
 package com.umbra.app.domain.nip57
 
+import com.umbra.app.domain.crypto.EventCrypto
 import com.umbra.app.domain.nip01.Event
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -11,6 +12,10 @@ import org.junit.Test
  * mapZapReceiptToDisplay is exercised with the same fake verify lambda ZapReceiptValidationTest
  * uses ("valid" iff the request carries the all-'s' sig marker and kind 9734), so each display
  * case is built by injecting the failure it means, not one shared reject-everything stub.
+ *
+ * Requests likewise carry real ids hashed from their own fields ([request]), since validation
+ * checks id integrity independently of that lambda and an invented id would turn every
+ * "verified" case into REQUEST_ID_MISMATCH.
  */
 class ZapReceiptDisplayMappingTest {
     private val payer = "a".repeat(64)
@@ -26,15 +31,18 @@ class ZapReceiptDisplayMappingTest {
         content: String = "great shot",
         pubkey: String = payer,
         sig: String = "s".repeat(128)
-    ) = Event(
-        id = "q".padEnd(64, '0'),
-        pubkey = pubkey,
-        createdAt = 40L,
-        kind = Event.KIND_ZAP_REQUEST,
-        tags = tags,
-        content = content,
-        sig = sig
-    )
+    ): Event {
+        val unsigned = Event(
+            id = "",
+            pubkey = pubkey,
+            createdAt = 40L,
+            kind = Event.KIND_ZAP_REQUEST,
+            tags = tags,
+            content = content,
+            sig = sig
+        )
+        return unsigned.copy(id = EventCrypto.computeEventId(unsigned))
+    }
 
     private fun requestJson(request: Event): String {
         val tagsJson = request.tags.joinToString(",", "[", "]") { tag ->

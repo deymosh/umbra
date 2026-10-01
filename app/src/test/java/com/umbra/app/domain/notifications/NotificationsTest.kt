@@ -1,5 +1,6 @@
 package com.umbra.app.domain.notifications
 
+import com.umbra.app.domain.crypto.EventCrypto
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip57.TestInvoice
 import org.junit.Assert.assertEquals
@@ -60,15 +61,20 @@ class NotificationsTest {
         tags: List<List<String>>? = null,
         content: String = "great shot",
         sig: String = VALID_REQUEST_SIG
-    ): Event = Event(
-        id = "q".padEnd(64, '0'),
-        pubkey = pubkey,
-        createdAt = 40L,
-        kind = Event.KIND_ZAP_REQUEST,
-        tags = tags ?: listOf(listOf("p", me), listOf("e", note)),
-        content = content,
-        sig = sig
-    )
+    ): Event {
+        // A real id hashed from the fields: zap validation checks id integrity before anything
+        // else, so an invented id would make every zap fixture here fail as REQUEST_ID_MISMATCH.
+        val unsigned = Event(
+            id = "",
+            pubkey = pubkey,
+            createdAt = 40L,
+            kind = Event.KIND_ZAP_REQUEST,
+            tags = tags ?: listOf(listOf("p", me), listOf("e", note)),
+            content = content,
+            sig = sig
+        )
+        return unsigned.copy(id = EventCrypto.computeEventId(unsigned))
+    }
 
     private fun zapReceiptEvent(
         requestJson: String,

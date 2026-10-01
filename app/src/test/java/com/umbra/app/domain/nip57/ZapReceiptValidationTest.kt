@@ -1,5 +1,6 @@
 package com.umbra.app.domain.nip57
 
+import com.umbra.app.domain.crypto.EventCrypto
 import com.umbra.app.domain.lightning.parseBolt11
 import com.umbra.app.domain.nip01.Event
 import org.junit.Assert.assertEquals
@@ -7,10 +8,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * validateZapReceipt is exercised with a fake verify lambda: the real BIP-340 verifier lives in
- * `domain.crypto` (EventCrypto), which a plain JVM unit test builds receipts without. The test
- * verifier accepts exactly the fixture's signed-and-kind-9734 shape, so per-reason tests inject
- * the failure they mean rather than one shared "reject everything" stub.
+ * validateZapReceipt is exercised with a fake verify lambda: the BIP-340 verifier's own correctness
+ * is covered by the official-vector tests, so here it is stubbed to accept the fixture's marker
+ * shape and per-reason tests inject the failure they mean rather than one shared "reject
+ * everything" stub.
+ *
+ * The fixtures still carry *real* ids ([request] hashes each one with EventCrypto), because
+ * id-integrity is checked inside validateZapReceipt independently of the injected lambda — an
+ * invented id would collapse every per-reason test into REQUEST_ID_MISMATCH.
  */
 class ZapReceiptValidationTest {
     private val payer = "a".repeat(64)
@@ -21,15 +26,18 @@ class ZapReceiptValidationTest {
     /** "Valid signature" marker the fake verifier matches on; no real BIP-340 fixture is needed. */
     private val validVerify: (Event) -> Boolean = { it.sig == "s".repeat(128) && it.kind == Event.KIND_ZAP_REQUEST }
 
-    private fun request(tags: List<List<String>>, content: String = "great shot", sig: String = "s".repeat(128)) = Event(
-        id = "q".padEnd(64, '0'),
-        pubkey = payer,
-        createdAt = 40L,
-        kind = Event.KIND_ZAP_REQUEST,
-        tags = tags,
-        content = content,
-        sig = sig
-    )
+    private fun request(tags: List<List<String>>, content: String = "great shot", sig: String = "s".repeat(128)): Event {
+        val unsigned = Event(
+            id = "",
+            pubkey = payer,
+            createdAt = 40L,
+            kind = Event.KIND_ZAP_REQUEST,
+            tags = tags,
+            content = content,
+            sig = sig
+        )
+        return unsigned.copy(id = EventCrypto.computeEventId(unsigned))
+    }
 
     private fun requestJson(request: Event): String {
         val tagsJson = request.tags.joinToString(",", "[", "]") { tag ->
@@ -169,6 +177,34 @@ class ZapReceiptValidationTest {
         val request = request(listOf(listOf("p", recipient)), sig = "f".repeat(64))
         val outcome = validateZapReceipt(receipt(request, TestInvoice.invoiceForMsat(1_000_000L)), validVerify)
         assertEquals(ZapReceiptValidation.Reason.SIGNATURE_INVALID, (outcome as ZapReceiptValidation.Invalid).reason)
+    }
+
+    @Test
+    fun `given request id that does not hash its own fields when validating then request id mismatch`() {
+        // The forgery this guards against: copy a real (id, pubkey, sig) triple out of any event
+        // the payer signed publicly, rewrite the fields, and the BIP-340 signature still verifies
+        // because it covers only the 32-byte id. validVerify accepts the marker sig without ever
+        // looking at the id, so the id-vs-fields check is the only thing standing between this
+        // fixture and a forged "X zapped you N sats: <message>".
+        val signedElsewhere = request(listOf(listOf("p", recipient), listOf("amount", "1000000")))
+        assertTrue("fixture must carry a genuine hash, not a marker", signedElsewhere.id.matches(Regex("[0-9a-f]{64}")))
+        val forged = signedElsewhere.copy(content = "forged message")
+
+        val outcome = validateZapReceipt(receipt(forged, TestInvoice.invoiceForMsat(1_000_000L)), validVerify)
+
+        assertEquals(ZapReceiptValidation.Reason.REQUEST_ID_MISMATCH, (outcome as ZapReceiptValidation.Invalid).reason)
+    }
+
+    @Test
+    fun `given request id borrowed from another signed event when validating then request id mismatch`() {
+        // Same hole reached the way an attacker actually would: keep a genuine signature triple,
+        // but attach it to a *different* event's fields.
+        val genuine = request(listOf(listOf("p", recipient), listOf("amount", "1000000")))
+        val borrowed = request(listOf(listOf("p", recipient), listOf("amount", "500000000"))).copy(id = genuine.id)
+
+        val outcome = validateZapReceipt(receipt(borrowed, TestInvoice.invoiceForMsat(500_000_000L)), validVerify)
+
+        assertEquals(ZapReceiptValidation.Reason.REQUEST_ID_MISMATCH, (outcome as ZapReceiptValidation.Invalid).reason)
     }
 
     @Test

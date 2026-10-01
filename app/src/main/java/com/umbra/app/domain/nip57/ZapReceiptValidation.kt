@@ -1,5 +1,6 @@
 package com.umbra.app.domain.nip57
 
+import com.umbra.app.domain.crypto.EventCrypto
 import com.umbra.app.domain.lightning.Bolt11Invoice
 import com.umbra.app.domain.lightning.parseBolt11
 import com.umbra.app.domain.nip01.Event
@@ -29,6 +30,8 @@ sealed interface ZapReceiptValidation {
         NOT_A_ZAP_RECEIPT,
         MISSING_DESCRIPTION,
         DESCRIPTION_NOT_A_ZAP_REQUEST,
+        /** The request's own `id` is not the hash of its fields — a spliced or hand-edited request. */
+        REQUEST_ID_MISMATCH,
         SIGNATURE_INVALID,
         AMOUNT_MISMATCH,
         TARGET_P_MISMATCH,
@@ -56,9 +59,12 @@ sealed interface ZapReceiptValidation {
  * - the invoice amount must equal the request's `amount` tag when that tag exists;
  * - when [expectedReceiptSigner] is non-null, the receipt's own pubkey must equal it (the spec's
  *   MUST-level check that the signer is the recipient's LNURL-pay endpoint `nostrPubkey`);
- * - the request's signature must verify, via the injected [verifySignature]. The BIP-340 verifier
- *   lives in `domain.crypto` (`EventCrypto.verifySignature`), injectable here since validation
- *   stays pure — tests pass a lambda instead.
+ * - the request's `id` must be the hash of its own fields ([EventCrypto.verifyEventId], computed
+ *   here so no caller can skip it), and its signature must verify via the injected
+ *   [verifySignature]. That lambda is signature-only on purpose — it is the BIP-340 verifier over
+ *   `event.id` and nothing more — which is exactly why the id-integrity check cannot be delegated
+ *   to it: a signature over a copied `id` says nothing about the fields it is attached to. Keeping
+ *   the verifier injectable keeps this function testable with a lambda instead of real crypto.
  *
  * Not checked (deliberately, both spec-SHOULD level and false-negative prone when the verifier
  * is this cheap): the invoice's description-hash ('h') field, since the invoice is parsed without
@@ -91,6 +97,16 @@ fun validateZapReceipt(
 
     val requestEvent = runCatching { Event.fromJsonObject(request) }.getOrNull()
         ?: return ZapReceiptValidation.Invalid(ZapReceiptValidation.Reason.DESCRIPTION_NOT_A_ZAP_REQUEST)
+    // The request's id must be the hash of its own fields, checked HERE rather than left to the
+    // injected [verifySignature]. That lambda is signature-only by contract (BIP-340 over
+    // event.id), and Event.fromJsonObject takes `id` verbatim from the JSON — so without this
+    // check anyone could copy a real (id, pubkey, sig) triple out of any event the payer signed
+    // publicly, rewrite kind/tags/content, and have the signature still verify: a fully forged
+    // "X zapped you N sats: <message>". Enforcing it in the one place that decides Valid means no
+    // future call site can reintroduce the hole by picking the shorter-named verifier.
+    if (!EventCrypto.verifyEventId(requestEvent)) {
+        return ZapReceiptValidation.Invalid(ZapReceiptValidation.Reason.REQUEST_ID_MISMATCH)
+    }
     if (!verifySignature(requestEvent)) {
         return ZapReceiptValidation.Invalid(ZapReceiptValidation.Reason.SIGNATURE_INVALID)
     }
