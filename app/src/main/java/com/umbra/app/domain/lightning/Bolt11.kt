@@ -2,6 +2,7 @@ package com.umbra.app.domain.lightning
 
 import com.umbra.app.domain.nip19.Bech32Encoder
 import com.umbra.app.domain.nip21.stripNostrUriPrefix
+import com.umbra.app.domain.util.toHex
 
 /**
  * A BOLT11 Lightning invoice detected in note content, decoded best-effort. [amountMsat] and
@@ -43,7 +44,11 @@ private const val FIELD_TYPE_EXPIRY = 6
 // BOLT11's own default expiry when an invoice carries no explicit 'x' tagged field.
 private const val DEFAULT_EXPIRY_SECONDS = 3600L
 
-private data class DecodedFields(val timestampSeconds: Long?, val description: String?, val expirySeconds: Long?)
+private data class DecodedFields(
+    val timestampSeconds: Long?,
+    val description: String?,
+    val expirySeconds: Long?
+)
 
 // Amount multipliers: how many msat one whole unit of the HRP's amount digits represents.
 // 1 BTC = 10^11 msat; m/u/n divide that by 10^3/10^6/10^9 respectively. 'p' (10^-12) is handled
@@ -125,7 +130,11 @@ private fun parseTaggedFields(words: List<Int>): DecodedFields {
         }
         index = dataEnd
     }
-    return DecodedFields(timestampSeconds = timestampSeconds, description = description, expirySeconds = expirySeconds)
+    return DecodedFields(
+        timestampSeconds = timestampSeconds,
+        description = description,
+        expirySeconds = expirySeconds
+    )
 }
 
 /** Packs 5-bit words into bytes, discarding any trailing partial byte (BOLT11 zero-pads it). */

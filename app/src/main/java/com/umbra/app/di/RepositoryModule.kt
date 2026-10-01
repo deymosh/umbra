@@ -19,6 +19,8 @@ import com.umbra.app.data.repository.MuteListRepositoryImpl
 import com.umbra.app.data.repository.PinListRepositoryImpl
 import com.umbra.app.data.repository.RelayInfoRepositoryImpl
 import com.umbra.app.data.repository.RelayManagementRepositoryImpl
+import com.umbra.app.util.AvatarPrefetcher
+import com.umbra.app.util.ImagePrefetcher
 import com.umbra.app.data.repository.RelayRepositoryImpl
 import com.umbra.app.data.repository.ResourceUsageRepositoryImpl
 import com.umbra.app.data.repository.TorStatusRepositoryImpl
@@ -112,6 +114,9 @@ abstract class RepositoryModule {
     // constructor-injected wherever its full get/set API is needed (e.g. NostrSessionManager).
     @Binds
     abstract fun bindBackfillAnchorClearer(impl: BackfillAnchorStore): BackfillAnchorClearer
+
+    @Binds
+    abstract fun bindAvatarPrefetcher(impl: ImagePrefetcher): AvatarPrefetcher
 
     @Singleton
     @Binds

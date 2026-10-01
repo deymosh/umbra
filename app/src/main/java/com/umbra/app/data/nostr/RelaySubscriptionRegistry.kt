@@ -89,23 +89,41 @@ internal class RelaySubscriptionRegistry {
     }
 
     /**
-     * True if [filters] differ from the filters last successfully sent for (relayUrl, channelId)
-     * — i.e. this REQ would not be a no-op. Doesn't record anything itself; callers must call
-     * [recordSent] only after actually sending, so a withheld send is never cached as "already
-     * applied" (see [recordSent]'s doc comment).
+     * Atomically "check fingerprint and reserve it" in one step per (relayUrl, channelId):
+     * returns true (and records [filters]' fingerprint as sent) only if they differ from what was
+     * last sent, so two concurrent apply paths for the same pair can never both send an identical
+     * REQ. Call it only after every withholding precondition has passed; if the send then doesn't
+     * go out, call [rollbackReservation] so a later retry isn't treated as a no-op.
      */
-    fun hasChanged(relayUrl: String, channelId: String, filters: List<EventFilter>): Boolean =
-        lastSentFingerprint[relayUrl]?.get(channelId) != filterFingerprint(filters)
+    fun tryReserve(relayUrl: String, channelId: String, filters: List<EventFilter>): Boolean {
+        val fingerprint = filterFingerprint(filters)
+        var won = false
+        lastSentFingerprintPerChannel(relayUrl).compute(channelId) { _, existing ->
+            if (existing == fingerprint) {
+                // Identical filters already sent — call is a genuine no-op, not a lost race.
+                existing
+            } else {
+                won = true
+                fingerprint
+            }
+        }
+        return won
+    }
 
     /**
-     * Records [filters] as the last filters successfully sent for (relayUrl, channelId). Callers
-     * must only call this after a REQ actually went out — caching a fingerprint for a REQ that was
-     * withheld (throttled, subscription-limited, ...) would wrongly suppress the real attempt once
-     * the withholding condition clears.
+     * Undoes a [tryReserve] reservation whose send never went out: clears the fingerprint (the next
+     * reserve then always sends) unless a newer reservation already replaced it, which is kept.
      */
-    fun recordSent(relayUrl: String, channelId: String, filters: List<EventFilter>) {
-        lastSentFingerprint.getOrPut(relayUrl) { ConcurrentHashMap() }[channelId] = filterFingerprint(filters)
+    fun rollbackReservation(relayUrl: String, channelId: String, filters: List<EventFilter>) {
+        val fingerprint = filterFingerprint(filters)
+        lastSentFingerprintPerChannel(relayUrl).compute(channelId) { _, existing ->
+            if (existing == fingerprint) null else existing
+        }
     }
+
+    // Per-relay channel->fingerprint accessor shared by tryReserve and rollbackReservation.
+    private fun lastSentFingerprintPerChannel(relayUrl: String): MutableMap<String, String> =
+        lastSentFingerprint.getOrPut(relayUrl) { ConcurrentHashMap() }
 
     /** Removes [channelId]'s forward-map entry on [relayUrl], returning the removed subId if any. */
     fun remove(relayUrl: String, channelId: String): String? = currentSubIds[relayUrl]?.remove(channelId)
@@ -128,7 +146,7 @@ internal class RelaySubscriptionRegistry {
     /**
      * Clears [relayUrl]'s fingerprint cache only — called when a fresh socket opens for it (see
      * [UmbraNostrClient.onWebSocketOpen]): a new socket has no memory of what filters were sent to
-     * the old one, so the next [hasChanged] check for it must not treat identical filters as a
+     * the old one, so the next [tryReserve] for it must not treat identical filters as a
      * no-op.
      */
     fun clearFingerprint(relayUrl: String) {
