@@ -308,8 +308,10 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
             // the same way regardless of form, so passing the bare id here would silently drop
             // them right before the one lookup that could use them.
             is NostrUriEntity.Note -> navController.navigate(Screen.Thread.forEvent(deepLinkUri))
-            // No addressable-content (article/etc) reading screen yet to route naddr to.
-            is NostrUriEntity.Address, null -> Unit
+            // The thread screen resolves an naddr reference itself (cache, then relays), so an
+            // article or other addressable event opens there instead of the link doing nothing.
+            is NostrUriEntity.Address -> navController.navigate(Screen.Thread.forEvent(deepLinkUri))
+            null -> Unit
         }
         deepLinkConsumed = true
     }

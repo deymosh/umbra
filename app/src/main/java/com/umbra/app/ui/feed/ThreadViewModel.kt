@@ -337,8 +337,9 @@ class ThreadViewModel @Inject constructor(
         // discoverRelayHints registers them as discovered relays for future opens/retries
         // (best-effort/async, gated behind the normal debounced reconcile); fetchEventById's own
         // relayHints param additionally dials them directly for *this* wait (see its doc comment)
-        // instead of only relying on that debounce to eventually catch up. naddr has no such
-        // direct-dial fallback yet — getLatestAddressableEvent stays cache-only.
+        // instead of only relying on that debounce to eventually catch up. naddr gets the same
+        // via fetchAddressableEvent, which asks relays when the coordinate isn't cached;
+        // tracking the author lets their outbox relays answer too.
         return when {
             normalized.startsWith("note1", ignoreCase = true) -> {
                 Bech32Encoder.decodeNote(normalized)?.let { eventRepository.fetchEventById(it) }
@@ -351,10 +352,12 @@ class ThreadViewModel @Inject constructor(
             normalized.startsWith("naddr1", ignoreCase = true) -> {
                 val naddr = Bech32Encoder.decodeNaddr(normalized) ?: return null
                 userRepository.discoverRelayHints(naddr.relays)
-                eventRepository.getLatestAddressableEvent(
+                trackReferencedAuthorUseCase(naddr.authorPubkey)
+                eventRepository.fetchAddressableEvent(
                     kind = naddr.kind,
                     pubkey = naddr.authorPubkey,
-                    identifier = naddr.identifier
+                    identifier = naddr.identifier,
+                    relayHints = naddr.relays
                 )
             }
             HEX_64_REGEX.matches(normalized) -> eventRepository.fetchEventById(normalized)

@@ -1434,6 +1434,43 @@ class EventRepositoryImpl @Inject constructor(
             listOfNotNull(cached, encrypted).maxByOrNull { it.createdAt }
         }
 
+    override suspend fun fetchAddressableEvent(
+        kind: Int,
+        pubkey: String,
+        identifier: String,
+        relayHints: List<String>,
+        timeoutMs: Long
+    ): Event? {
+        getLatestAddressableEvent(kind, pubkey, identifier)?.let { return it }
+        if (!NostrValidation.is64HexValid(pubkey)) return null
+        val channel = NostrChannels.addressLookup(kind, pubkey, identifier)
+        subscribeChannel(
+            channel,
+            listOf(
+                EventFilter(
+                    kinds = setOf(kind),
+                    authors = setOf(pubkey.lowercase()),
+                    tagFilters = mapOf("d" to setOf(identifier)),
+                    limit = 1
+                )
+            )
+        )
+        try {
+            // Polled for the same reason as fetchEventById's hinted path: a hint relay dialed
+            // here is rarely connected yet, so an EOSE-driven return would resolve before it
+            // was ever asked.
+            connectToRelayHints(relayHints)
+            withTimeoutOrNull(timeoutMs) {
+                while (getLatestAddressableEvent(kind, pubkey, identifier) == null) {
+                    delay(EVENT_LOOKUP_HINT_POLL_INTERVAL_MS)
+                }
+            }
+            return getLatestAddressableEvent(kind, pubkey, identifier)
+        } finally {
+            clearChannel(channel)
+        }
+    }
+
     override suspend fun getEventsByIds(ids: List<String>): List<Event> =
         withContext(Dispatchers.IO) {
             val cached = eventIngestCache.getCachedByIds(ids)
