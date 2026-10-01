@@ -289,6 +289,7 @@ class EventRepositoryImpl @Inject constructor(
             activeFeedFilter = { activeFeedFilter },
             isCurrentUserPubkey = ::isCurrentUserPubkey,
             isPendingEventLookupId = { it in pendingEventLookupIds },
+            isRequestedBySubscription = ::isRequestedByActiveSubscription,
             isPinnedProfileAuthor = { pinnedProfileAuthors.contains(it) },
             isWiping = { isWiping.get() }
         )
@@ -1159,6 +1160,20 @@ class EventRepositoryImpl @Inject constructor(
         return if (overlay.isNullOrEmpty()) base else base + overlay
     }
 
+    /**
+     * Whether any live channel (base filters or backfill overlay) names [event]'s kind and
+     * matches its ids/authors/tags. Only kind-scoped filters count: a kind-less filter is a broad
+     * query, not an explicit request for this particular kind. Checked only for kinds outside
+     * USEFUL_PERSISTED_KINDS (see EventIngestCache.shouldPersistEvent), so the scan over the
+     * few dozen live channels stays off the hot path for ordinary feed traffic.
+     */
+    private fun isRequestedByActiveSubscription(event: Event): Boolean {
+        fun List<EventFilter>.requests(event: Event) =
+            any { it.kinds.isNotEmpty() && it.matchesTagsAndIds(event) }
+        return channelFilters.values.any { it.requests(event) } ||
+            channelOverlays.values.any { it.requests(event) }
+    }
+
     override fun clearChannel(channelId: String) {
         pendingChannelJobs.remove(channelId)?.cancel()
         channelFilters.remove(channelId)
@@ -1431,6 +1446,43 @@ class EventRepositoryImpl @Inject constructor(
                 ?.takeIf { isCurrentUserPubkey(it.pubkey) }
             listOfNotNull(cached, encrypted).maxByOrNull { it.createdAt }
         }
+
+    override suspend fun fetchAddressableEvent(
+        kind: Int,
+        pubkey: String,
+        identifier: String,
+        relayHints: List<String>,
+        timeoutMs: Long
+    ): Event? {
+        getLatestAddressableEvent(kind, pubkey, identifier)?.let { return it }
+        if (!NostrValidation.is64HexValid(pubkey)) return null
+        val channel = NostrChannels.addressLookup(kind, pubkey, identifier)
+        subscribeChannel(
+            channel,
+            listOf(
+                EventFilter(
+                    kinds = setOf(kind),
+                    authors = setOf(pubkey.lowercase()),
+                    tagFilters = mapOf("d" to setOf(identifier)),
+                    limit = 1
+                )
+            )
+        )
+        try {
+            // Polled for the same reason as fetchEventById's hinted path: a hint relay dialed
+            // here is rarely connected yet, so an EOSE-driven return would resolve before it
+            // was ever asked.
+            connectToRelayHints(relayHints)
+            withTimeoutOrNull(timeoutMs) {
+                while (getLatestAddressableEvent(kind, pubkey, identifier) == null) {
+                    delay(EVENT_LOOKUP_HINT_POLL_INTERVAL_MS)
+                }
+            }
+            return getLatestAddressableEvent(kind, pubkey, identifier)
+        } finally {
+            clearChannel(channel)
+        }
+    }
 
     override suspend fun getEventsByIds(ids: List<String>): List<Event> =
         withContext(Dispatchers.IO) {

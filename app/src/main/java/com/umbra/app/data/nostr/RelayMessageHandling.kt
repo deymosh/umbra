@@ -410,10 +410,7 @@ internal fun UmbraNostrClient.onWebSocketFailure(relayUrl: String, webSocket: We
         socksRetryCount[relayUrl] = current
         val max = if (relayUrl.contains(".onion")) 4 else 2
         if (current <= max) {
-            clientScope.launch {
-                delay(1000L)
-                connect(relayUrl)
-            }
+            scheduleReconnect(relayUrl, 1000L) { connect(relayUrl) }
             return
         }
     }

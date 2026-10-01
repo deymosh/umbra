@@ -172,4 +172,43 @@ class UmbraNostrClientTest {
             TorProxyConfig.reset()
         }
     }
+
+    @Test
+    fun `given a pending reconnect when the relay is disconnected then the redial never runs`() {
+        val client = subject()
+        val redialed = CountDownLatch(1)
+        client.scheduleReconnect(testRelayUrl, delayMs = 50L) { redialed.countDown() }
+
+        client.disconnect(testRelayUrl)
+
+        assertFalse(redialed.await(300, TimeUnit.MILLISECONDS))
+        assertTrue(client.pendingReconnects.isEmpty())
+    }
+
+    @Test
+    fun `given pending reconnects when disconnectAll runs then every redial is cancelled`() {
+        val client = subject()
+        val redialed = CountDownLatch(1)
+        client.scheduleReconnect(testRelayUrl, delayMs = 50L) { redialed.countDown() }
+        client.scheduleReconnect("wss://other.invalid", delayMs = 50L) { redialed.countDown() }
+
+        client.disconnectAll()
+
+        assertFalse(redialed.await(300, TimeUnit.MILLISECONDS))
+        assertTrue(client.pendingReconnects.isEmpty())
+    }
+
+    @Test
+    fun `given a newer reconnect for the same relay when both are scheduled then only the newer one runs`() {
+        val client = subject()
+        val runs = java.util.concurrent.atomic.AtomicInteger(0)
+        val done = CountDownLatch(1)
+        client.scheduleReconnect(testRelayUrl, delayMs = 50L) { runs.incrementAndGet() }
+        client.scheduleReconnect(testRelayUrl, delayMs = 50L) { runs.incrementAndGet(); done.countDown() }
+
+        assertTrue(done.await(1, TimeUnit.SECONDS))
+        Thread.sleep(100)
+        assertEquals(1, runs.get())
+        assertTrue(client.pendingReconnects.isEmpty())
+    }
 }

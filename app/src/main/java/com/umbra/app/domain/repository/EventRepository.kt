@@ -246,6 +246,20 @@ interface EventRepository {
     suspend fun getLatestAddressableEvent(kind: Int, pubkey: String, identifier: String): Event?
 
     /**
+     * [getLatestAddressableEvent], falling back to a bounded relay lookup of the coordinate
+     * (dialing [relayHints] first) when nothing is cached — another user's addressable event
+     * (an article, a list) only ever exists in memory once something fetched it. Default: the
+     * cache-only lookup.
+     */
+    suspend fun fetchAddressableEvent(
+        kind: Int,
+        pubkey: String,
+        identifier: String,
+        relayHints: List<String> = emptyList(),
+        timeoutMs: Long = 8_000L
+    ): Event? = getLatestAddressableEvent(kind, pubkey, identifier)
+
+    /**
      * Get multiple events from local cache storage by ids.
      */
     suspend fun getEventsByIds(ids: List<String>): List<Event>

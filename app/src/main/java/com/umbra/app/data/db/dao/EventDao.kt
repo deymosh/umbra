@@ -279,6 +279,7 @@ interface EventDao : NegentropyEventSource {
                 JOIN events eng ON eng.id = et.event_id
                 WHERE et.tag_name = 'e'
                   AND eng.kind IN (1, 6, 7)
+                  AND NOT (eng.kind = 7 AND TRIM(eng.content) = '-')
                   AND et.tag_value IN (SELECT id FROM base)
             ) dedup
             GROUP BY dedup.targetId

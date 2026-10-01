@@ -263,7 +263,7 @@ class FeedViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "UmbraFeedVM"
-        // CHANNEL_FEED/CHANNEL_METADATA_HYDRATION/CHANNEL_PROFILE_WATCH moved to
+        // CHANNEL_FEED/CHANNEL_METADATA_HYDRATION moved to
         // FeedEngagementSchedulingCoordinator.kt as top-level `internal const val` —
         // read from both this facade (loadOlderFeed/onCleared) and the coordinator's moved
         // functions, so a class-private companion constant here would no longer be visible to it.
@@ -307,8 +307,8 @@ class FeedViewModel @Inject constructor(
     private var latestRelays: List<Relay> = emptyList()
     private var activeFilterJob: Job? = null
     // engagementRefreshJob/lastEngagementSubscriptionKey/lastEngagementSubscriptionAtMs,
-    // profileHydrationJob/profileHydrationChannelCloseJob/profileWatchJob,
-    // requestedProfileAuthors/requestedWatchedProfileAuthors/lastProfileHydrationAtMs, and
+    // profileHydrationJob/profileHydrationChannelCloseJob,
+    // requestedProfileAuthors/lastProfileHydrationAtMs, and
     // lastRelayWorkFingerprint/lastRelayWorkCount all moved into
     // FeedEngagementSchedulingCoordinator — each is read/written only inside the
     // 7 functions that moved with them.
@@ -656,7 +656,7 @@ class FeedViewModel @Inject constructor(
     }
 
     // scheduleEngagementSubscription/schedulePendingRelayWork/scheduleOutboxDiscoveryAcceleration/
-    // scheduleProfileHydration/filterNonFreshPubkeys/scheduleProfileWatch/
+    // scheduleProfileHydration/filterNonFreshPubkeys/
     // resetRequestedProfileAuthors all moved to FeedEngagementSchedulingCoordinator.kt —
     // see feedEngagementSchedulingCoordinator's declaration above for the wiring.
 

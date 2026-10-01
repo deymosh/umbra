@@ -44,6 +44,8 @@ object NostrChannels {
     // One-shot NIP-A3 payment-target lookup for the recipient of an open zap sheet.
     const val PAYMENT_TARGETS_PREFIX = "payto"
     const val EMOJI_PREFIX = "emoji"
+    // One-shot lookup of one addressable-event coordinate (an naddr link or reference).
+    const val ADDRESS_LOOKUP_PREFIX = "addr"
     // One per open hashtag feed.
     const val HASHTAG_PREFIX = "hashtag"
     const val DEFAULT_EVENTS = "default-events"
@@ -123,6 +125,9 @@ object NostrChannels {
     fun paymentTargets(pubkey: String): String = "$PAYMENT_TARGETS_PREFIX-${pubkey.take(16)}"
     fun emojiList(pubkey: String): String = "$EMOJI_PREFIX-list-${pubkey.take(16)}"
     fun emojiSets(pubkey: String): String = "$EMOJI_PREFIX-sets-${pubkey.take(16)}"
+    // The d identifier is free text, so it's folded to a hash rather than embedded verbatim.
+    fun addressLookup(kind: Int, pubkey: String, identifier: String): String =
+        "$ADDRESS_LOOKUP_PREFIX-$kind-${pubkey.take(16)}-${identifier.hashCode().toUInt().toString(16)}"
 
     fun hashtag(tag: String): String = "$HASHTAG_PREFIX-${tag.lowercase().take(32)}"
 

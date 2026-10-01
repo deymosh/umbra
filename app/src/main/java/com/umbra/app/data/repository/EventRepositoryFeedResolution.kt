@@ -4,6 +4,7 @@ import com.umbra.app.domain.model.NoteView
 import com.umbra.app.domain.model.PendingRepost
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip18.extractRepostTarget
+import com.umbra.app.domain.nip25.isDislikeReactionContent
 
 internal fun mergeHybridEvents(
     cachedEvents: List<Event>,
@@ -126,7 +127,7 @@ internal fun buildCachedNoteViews(
             if (targetId !in selectedIds || !seenLinks.add(Triple(event.id, targetId, event.kind))) return@forEach
             val counts = engagement.getOrPut(targetId) { IntArray(3) }
             when (event.kind) {
-                Event.KIND_REACTION -> counts[0] += 1
+                Event.KIND_REACTION -> if (!isDislikeReactionContent(event.content)) counts[0] += 1
                 Event.KIND_TEXT_NOTE -> counts[1] += 1
                 Event.KIND_REPOST -> counts[2] += 1
             }
@@ -203,6 +204,8 @@ internal class EventEngagementIndex {
             event.kind != Event.KIND_REPOST &&
             event.kind != Event.KIND_REACTION
         ) return
+        // A dislike gets no link at all, so remove() stays symmetric without remembering why.
+        if (event.kind == Event.KIND_REACTION && isDislikeReactionContent(event.content)) return
 
         val links = event.getTagValues("e")
             .asSequence()
