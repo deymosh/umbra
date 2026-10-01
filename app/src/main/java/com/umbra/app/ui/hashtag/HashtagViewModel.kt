@@ -30,7 +30,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 
 @Immutable
 data class HashtagState(
@@ -94,28 +93,32 @@ class HashtagViewModel @Inject constructor(
 
     fun like(event: Event, content: String, emoji: CustomEmoji?): Boolean {
         if (!actions.canSignEvents()) return false
-        actions.requestSignAndPublish(
-            NostrEventBuilder.reaction(event, content, emoji, relayHint(event.id)),
-            userPreferences.getPublicKey()
-        )
+        viewModelScope.launch {
+            actions.requestSignAndPublish(
+                NostrEventBuilder.reaction(event, content, emoji, relayHint(event.id)),
+                userPreferences.getPublicKey()
+            )
+        }
         return true
     }
 
     fun repost(event: Event) {
         if (!actions.canSignEvents()) return
-        actions.requestSignAndPublish(
-            NostrEventBuilder.repost(event, relayHint(event.id)),
-            userPreferences.getPublicKey()
-        )
+        viewModelScope.launch {
+            actions.requestSignAndPublish(
+                NostrEventBuilder.repost(event, relayHint(event.id)),
+                userPreferences.getPublicKey()
+            )
+        }
     }
 
     /**
-     * Relay hint for reaction/repost tag relay slots: the first relay the target was seen on;
-     * empty when unknown. Blocking is fine here — the backing lookup is an in-memory map hit.
+     * Relay hint for reaction/repost tag relay slots: the first relay the target was seen on,
+     * empty when unknown (the tags stay valid per NIP-18/NIP-25 either way). Suspends rather than
+     * blocking, so callers build the event inside a coroutine.
      */
-    private fun relayHint(eventId: String): String = runBlocking {
+    private suspend fun relayHint(eventId: String): String =
         eventRepository.getEventRelays(eventId).firstOrNull() ?: ""
-    }
 
     fun share(event: Event) {
         viewModelScope.launch { _shareUrl.emit(actions.buildShareUrl(event.id)) }

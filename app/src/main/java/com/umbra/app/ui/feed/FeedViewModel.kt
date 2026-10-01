@@ -36,7 +36,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.Dispatchers
 import com.umbra.app.domain.nip01.NostrEventBuilder
 import com.umbra.app.domain.usecase.TrackReferencedAuthorUseCase
@@ -690,11 +689,10 @@ class FeedViewModel @Inject constructor(
     }
 
     /**
-     * Relay hint for reaction/repost e-tag relay slots: the first relay the target was seen on,
-     * empty when unknown (the tag stays valid per NIP-18/NIP-25 either way).
+     * Relay hint for reaction/repost tag relay slots: the first relay the target was seen on,
+     * empty when unknown (the tags stay valid per NIP-18/NIP-25 either way). Suspends rather than
+     * blocking, so callers build the event inside a coroutine.
      */
-    private fun targetRelayHint(eventId: String): String = runBlocking { relayHint(eventId) }
-
     private suspend fun relayHint(eventId: String): String =
         eventRepository.getEventRelays(eventId).firstOrNull() ?: ""
 
@@ -711,13 +709,14 @@ class FeedViewModel @Inject constructor(
         val eventId = event.id
         val currentInteraction = _uiState.value.interactions[eventId] ?: EventInteraction(eventId)
         val newInteraction = currentInteraction.copy(liked = !currentInteraction.liked)
-        val relayHint = targetRelayHint(event.id)
-        val eventJson = NostrEventBuilder.reaction(event, content, emoji, relayHint)
-        interactionActionsCoordinator.requestSignAndPublish(eventJson, userPreferences.getPublicKey(), onSigned = {
-            _uiState.update { state ->
-                state.copy(interactions = state.interactions + (eventId to newInteraction))
-            }
-        })
+        viewModelScope.launch {
+            val eventJson = NostrEventBuilder.reaction(event, content, emoji, relayHint(event.id))
+            interactionActionsCoordinator.requestSignAndPublish(eventJson, userPreferences.getPublicKey(), onSigned = {
+                _uiState.update { state ->
+                    state.copy(interactions = state.interactions + (eventId to newInteraction))
+                }
+            })
+        }
         return true
     }
 
@@ -738,12 +737,14 @@ class FeedViewModel @Inject constructor(
         val eventId = event.id
         val currentInteraction = _uiState.value.interactions[eventId] ?: EventInteraction(eventId)
         val newInteraction = currentInteraction.copy(shared = true)
-        val eventJson = NostrEventBuilder.repost(event, targetRelayHint(event.id))
-        interactionActionsCoordinator.requestSignAndPublish(eventJson, userPreferences.getPublicKey(), onSigned = {
-            _uiState.update { state ->
-                state.copy(interactions = state.interactions + (eventId to newInteraction))
-            }
-        })
+        viewModelScope.launch {
+            val eventJson = NostrEventBuilder.repost(event, relayHint(event.id))
+            interactionActionsCoordinator.requestSignAndPublish(eventJson, userPreferences.getPublicKey(), onSigned = {
+                _uiState.update { state ->
+                    state.copy(interactions = state.interactions + (eventId to newInteraction))
+                }
+            })
+        }
     }
 
     private val _shareUrlEffect = MutableSharedFlow<String>()
