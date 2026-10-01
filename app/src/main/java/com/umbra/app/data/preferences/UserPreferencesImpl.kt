@@ -10,6 +10,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 @Singleton
 class UserPreferencesImpl @Inject constructor(
@@ -64,9 +65,21 @@ class UserPreferencesImpl @Inject constructor(
     override fun getNotificationsSeenAtFlow(): StateFlow<Long> = notificationsSeenAt.asStateFlow()
 
     override fun markNotificationsSeen(epochSeconds: Long) {
-        if (epochSeconds <= notificationsSeenAt.value) return
-        encryptedPreferences.putString(KEY_NOTIFICATIONS_SEEN_AT, epochSeconds.toString())
-        notificationsSeenAt.value = epochSeconds
+        // update{}, not a read-check-write on the value: two concurrent callers could otherwise
+        // both read the same older value, both pass the check, and have the earlier timestamp
+        // land last — un-seeing notifications the other caller's newer watermark covered.
+        var won = false
+        val winningValue = notificationsSeenAt.update { current ->
+            if (epochSeconds <= current) {
+                current
+            } else {
+                won = true
+                epochSeconds
+            }
+        }
+        if (!won) return
+        // Persist the value that actually won the update, not this call's argument.
+        encryptedPreferences.putString(KEY_NOTIFICATIONS_SEEN_AT, winningValue.toString())
     }
 
     override fun getPanicWipeEnabledFlow(): StateFlow<Boolean> = panicWipeEnabled.asStateFlow()
