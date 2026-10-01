@@ -12,6 +12,7 @@ import com.umbra.app.domain.usecase.BuildHydrationAuthorSetUseCase
 import com.umbra.app.domain.usecase.BuildProfileHydrationRequestsUseCase
 import com.umbra.app.util.logging.UmbraLog
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -56,6 +57,8 @@ private const val ENGAGEMENT_SINCE_SECONDS = 48 * 60 * 60L
  * package-`internal class`, manually constructed by the facade (not Hilt-injected), decides
  * *when* to fire a relay REQ from currently-visible feed state — the actual REQ dispatch stays in
  * [EventRepository].
+ *
+ * All state is confined to the owning ViewModel's main-thread scope.
  *
  * [outboxSweepCursor]/[outboxSweepStartedAtMs]/[recentlyVisibleAuthors] are `internal var`
  * (package-visible), not `private`, because they are genuinely written by both this coordinator
@@ -117,6 +120,17 @@ internal class FeedEngagementSchedulingCoordinator(
     // notes the moment more than the cap are loaded — even while they're the ones on screen. Same
     // fix as ProfileViewModel.scheduleProfileEngagementSubscription; see its doc comment.
     internal fun scheduleEngagementSubscription(eventIds: List<String> = emptyList(), oldestEventCreatedAt: Long? = null) {
+        // All plain-var state below is confined to the owning ViewModel's main-thread scope —
+        // one caller (FeedViewModel.prefetchViewportImages) reaches this from the middle of its
+        // Dispatchers.Default viewport launch, so the hop here is what keeps the interval/dedup
+        // vars and job handles from being written on worker threads alongside Main-side facade
+        // calls. launch(Main.immediate): already-Main callers run inline with no scheduling hop.
+        scope.launch(Dispatchers.Main.immediate) {
+            scheduleEngagementSubscriptionOnMain(eventIds, oldestEventCreatedAt)
+        }
+    }
+
+    private fun scheduleEngagementSubscriptionOnMain(eventIds: List<String>, oldestEventCreatedAt: Long?) {
         val nowMs = System.currentTimeMillis()
         if (nowMs - lastEngagementSubscriptionAtMs < ENGAGEMENT_REFRESH_MIN_INTERVAL_MS) return
 
@@ -226,6 +240,12 @@ internal class FeedEngagementSchedulingCoordinator(
      */
     private fun scheduleOutboxDiscoveryAcceleration(notes: List<NoteView>) {
         if (!activeFeedFilter().scopeToFollows) return
+        // Compute-and-record the cursor update in one go, before any suspension: splitting the
+        // "which candidates need accelerating" read and the "fold them into the cursor" write
+        // across a suspension point could double-record or drop candidates when a second
+        // emission raced the first between the two halves. The calling context is the owning
+        // ViewModel's Main scope (the onEach downstream of computedFeedFlow's flowOn hop), so
+        // this whole block — including the cursor write — is Main-confined.
         val candidates = notes.asSequence()
             .map { it.event.pubkey.lowercase() }
             .filter { it.length == 64 }
@@ -236,9 +256,11 @@ internal class FeedEngagementSchedulingCoordinator(
             .toSet()
         if (candidates.isEmpty()) return
 
+        outboxSweepCursor = outboxSweepCursor + candidates
+
+        // Main-confined request dispatch; filterNonFreshPubkeys' suspend call stays inside.
         scope.launch {
             val nonFresh = filterNonFreshPubkeys(candidates)
-            outboxSweepCursor = outboxSweepCursor + candidates
             if (nonFresh.isEmpty()) return@launch
 
             logger.d {

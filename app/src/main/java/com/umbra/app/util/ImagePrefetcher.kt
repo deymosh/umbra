@@ -97,17 +97,24 @@ class ImagePrefetcher @Inject constructor(
         if (url.isBlank() || mediaLoadPriorityGate.isInteractiveLoadActive) return
         val key = "$scopeTag::$url"
 
-        val existing = asyncJobs[key]
-        if (existing != null && existing.isActive) return
-
-        val job = scope.launch {
-            try {
-                prefetch(url)
-            } finally {
-                asyncJobs.remove(key)
+        // Single-launch race fix (same mechanism as UrlPrefetcher.prefetchAsync): the old
+        // check-then-put let two racing callers each pass the isActive check and both launch.
+        // compute is atomic per key; only the entry-replacer (put-winner) starts the work, the
+        // caller that observed the winner's active job no-ops. A completed entry (its finally
+        // hasn't removed it yet) counts as dead and is allowed to relaunch.
+        asyncJobs.compute(key) { _, existing ->
+            if (existing != null && existing.isActive) {
+                existing
+            } else {
+                scope.launch {
+                    try {
+                        prefetch(url)
+                    } finally {
+                        asyncJobs.remove(key)
+                    }
+                }
             }
         }
-        asyncJobs[key] = job
     }
 
     fun prefetchWindowUrls(
