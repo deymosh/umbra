@@ -3,7 +3,6 @@ package com.umbra.app.ui.composer
 import com.umbra.app.domain.nip30.CustomEmoji
 import com.umbra.app.domain.nip30.detectEmojiQuery
 import com.umbra.app.domain.nip30.emojiTagsFor
-import com.umbra.app.domain.usecase.ObserveOwnCustomEmojisUseCase
 import android.net.Uri
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.snapshotFlow
@@ -147,8 +146,7 @@ class ComposerViewModel @Inject constructor(
     private val trackReferencedAuthorUseCase: TrackReferencedAuthorUseCase,
     private val uploadBlossomBlobUseCase: UploadBlossomBlobUseCase,
     private val videoCacheDataSourceProvider: VideoCacheDataSourceProvider,
-    private val draftRepository: DraftRepository,
-    private val observeOwnCustomEmojis: ObserveOwnCustomEmojisUseCase
+    private val draftRepository: DraftRepository
 ) : ViewModel() {
 
     val mediaCacheDataSourceFactory get() = videoCacheDataSourceProvider.getCacheDataSourceFactory()
@@ -235,12 +233,6 @@ class ComposerViewModel @Inject constructor(
             }
         }
 
-        if (pubkey != null) {
-            viewModelScope.launch {
-                observeOwnCustomEmojis(pubkey).collect { emojis -> _state.update { it.copy(customEmojis = emojis) } }
-            }
-        }
-
         viewModelScope.launch {
             snapshotFlow { textState.text }
                 .collectLatest { text ->
@@ -310,6 +302,22 @@ class ComposerViewModel @Inject constructor(
                 mentionSuggestions = emptyList(),
                 quotedAuthorProfiles = it.quotedAuthorProfiles + (profile.pubkey.lowercase() to profile)
             )
+        }
+    }
+
+    fun setCustomEmojis(list: List<CustomEmoji>) {
+        // The catalog arrives from a CompositionLocal (single app-wide collector — see
+        // CustomEmojiCatalog), so only update state when it actually changed.
+        if (list != _state.value.customEmojis) {
+            _state.update { it.copy(customEmojis = list) }
+        }
+    }
+
+    /** Inserts [text] at the caret (replacing any selection) and leaves the caret after it. */
+    fun insertAtCursor(text: String) {
+        textState.edit {
+            replace(selection.start, selection.end, text)
+            selection = TextRange(selection.start + text.length)
         }
     }
 
