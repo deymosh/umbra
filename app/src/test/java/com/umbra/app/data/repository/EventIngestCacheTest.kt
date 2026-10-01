@@ -606,6 +606,39 @@ class EventIngestCacheTest {
     // --- NIP-09 deletion ownership and the a-tag created_at bound ---
 
     @Test
+    fun `given a note deleted by its author when the same note is delivered again then it is refused`() = runTest {
+        val author = "c".repeat(64)
+        val cache = subject(this)
+        val note = event(id = "deleted-note", pubkey = author)
+        cache.applyIncomingDeletion(event(pubkey = author, kind = Event.KIND_EVENT_DELETION, tags = listOf(listOf("e", note.id))))
+
+        assertTrue(cache.isTombstoned(note))
+        assertFalse(cache.shouldPersistEvent(note))
+    }
+
+    @Test
+    fun `given a deletion by someone other than the author when the note is delivered then it is not tombstoned`() = runTest {
+        val cache = subject(this)
+        val note = event(id = "kept-note", pubkey = "c".repeat(64))
+        cache.applyIncomingDeletion(event(pubkey = "d".repeat(64), kind = Event.KIND_EVENT_DELETION, tags = listOf(listOf("e", note.id))))
+
+        assertFalse(cache.isTombstoned(note))
+    }
+
+    @Test
+    fun `given an a-tag deletion when versions before and after it arrive then only the older one is refused`() = runTest {
+        val author = "c".repeat(64)
+        val cache = subject(this)
+        cache.applyIncomingDeletion(
+            event(pubkey = author, kind = Event.KIND_EVENT_DELETION, createdAt = 100L, tags = listOf(listOf("a", "30023:$author:post")))
+        )
+        val dTag = listOf(listOf("d", "post"))
+
+        assertTrue(cache.isTombstoned(event(pubkey = author, kind = Event.KIND_LONG_FORM, createdAt = 90L, tags = dTag)))
+        assertFalse(cache.isTombstoned(event(pubkey = author, kind = Event.KIND_LONG_FORM, createdAt = 110L, tags = dTag)))
+    }
+
+    @Test
     fun `given a deletion whose pubkey differs from the target's author when applyIncomingDeletion runs then nothing is deleted from the archive or cache`() = runTest {
         val archive = FakeOwnEventArchive()
         val targetAuthor = "a".repeat(64)

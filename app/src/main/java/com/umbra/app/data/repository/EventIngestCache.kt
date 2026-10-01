@@ -173,6 +173,13 @@ internal class EventIngestCache(
     // kind-0) instead of leaving it reachable via cachedEvents.get()/snapshot() until the LRU
     // happens to reclaim it. Guarded by cachedEventsMutex, same as the two caches above.
     private val latestReplaceableEventId = mutableMapOf<ReplaceableEventKey, String>()
+    // NIP-09 tombstones, so a deleted event a relay delivers again (a reconnect, a backfill, the
+    // dedupe set having been cleared at its cap) is refused instead of reappearing. Event id →
+    // the deletion's author, and "kind:pubkey:d" coordinate → the deletion's created_at (an
+    // a-tag deletion only covers versions up to then). Insertion-ordered and capped; guarded by
+    // their own monitor because the ingest gate reads them outside cachedEventsMutex.
+    private val deletedEventAuthors = boundedLinkedMap<String, String>(MAX_DELETION_TOMBSTONES)
+    private val deletedCoordinatesUntil = boundedLinkedMap<String, Long>(MAX_DELETION_TOMBSTONES)
     private val cachedEventsMutex = Mutex()
 
     private val _cachedEventsFlow = MutableSharedFlow<List<Event>>(
@@ -362,6 +369,8 @@ internal class EventIngestCache(
             cachedEngagementIndex.clear()
             latestReplaceableEventId.clear()
         }
+        synchronized(deletedEventAuthors) { deletedEventAuthors.clear() }
+        synchronized(deletedCoordinatesUntil) { deletedCoordinatesUntil.clear() }
         emitEmptySnapshot()
     }
 
@@ -456,6 +465,8 @@ internal class EventIngestCache(
      * ProfileScreen, not a fixed app-side decision about what a user is allowed to see.
      */
     fun shouldPersistEvent(event: Event): Boolean {
+        // Before the own-event shortcut: the user's own deleted notes must not come back either.
+        if (isTombstoned(event)) return false
         if (isCurrentUserPubkey(event.pubkey)) return true
         // Explicitly requested by id (a quote/mention/repost target being resolved via
         // fetchEventById) — always cache it regardless of kind, since USEFUL_PERSISTED_KINDS
@@ -580,6 +591,30 @@ internal class EventIngestCache(
      * NIP-09: apply incoming deletion event to locally cached events.
      * Only deletes notes authored by the same pubkey that signed the delete request.
      */
+    private fun recordTombstones(deletionEvent: Event, eTagIds: List<String>, aTagCoordinates: List<String>) {
+        val author = deletionEvent.pubkey.lowercase()
+        synchronized(deletedEventAuthors) { eTagIds.forEach { deletedEventAuthors[it] = author } }
+        synchronized(deletedCoordinatesUntil) {
+            aTagCoordinates
+                // Same ownership rule as the a-tag resolution below: only the author may delete.
+                .filter { it.split(":", limit = 3).getOrNull(1).equals(author, ignoreCase = true) }
+                .forEach { coordinate ->
+                    val previous = deletedCoordinatesUntil[coordinate] ?: Long.MIN_VALUE
+                    deletedCoordinatesUntil[coordinate] = maxOf(previous, deletionEvent.createdAt)
+                }
+        }
+    }
+
+    /** Whether [event] was already deleted by its own author (see [recordTombstones]). */
+    fun isTombstoned(event: Event): Boolean {
+        val deleter = synchronized(deletedEventAuthors) { deletedEventAuthors[event.id] }
+        if (deleter != null && deleter.equals(event.pubkey, ignoreCase = true)) return true
+        if (event.kind !in ADDRESSABLE_KIND_RANGE) return false
+        val coordinate = "${event.kind}:${event.pubkey.lowercase()}:${event.getTagValue("d").orEmpty()}"
+        val until = synchronized(deletedCoordinatesUntil) { deletedCoordinatesUntil[coordinate] } ?: return false
+        return event.createdAt <= until
+    }
+
     suspend fun applyIncomingDeletion(deletionEvent: Event) {
         // Holds just enough of either a cached Event or an archived EventEntity to pick a winner
         // and issue the shared removal below, without the two source types needing a common
@@ -600,6 +635,7 @@ internal class EventIngestCache(
             .filter { it.isNotBlank() }
             .distinct()
         if (eTagIds.isEmpty() && aTagCoordinates.isEmpty()) return
+        recordTombstones(deletionEvent, eTagIds, aTagCoordinates)
 
         val resolvedAddressableIds = mutableListOf<String>()
         // Taken once, before the per-coordinate loop below and before entering the IO dispatcher
@@ -684,3 +720,11 @@ internal class EventIngestCache(
         }
     }
 }
+
+private const val MAX_DELETION_TOMBSTONES = 5_000
+private val ADDRESSABLE_KIND_RANGE = 30_000 until 40_000
+
+private fun <K, V> boundedLinkedMap(maxSize: Int): LinkedHashMap<K, V> =
+    object : LinkedHashMap<K, V>(64, 0.75f, false) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>?): Boolean = size > maxSize
+    }
