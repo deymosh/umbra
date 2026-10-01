@@ -270,7 +270,15 @@ fun NostrTextRenderer(
     // Deliberately NOT keyed on getQuotedEvent itself (see EventCard's resolvedQuotes comment) —
     // it's a stable lambda whose underlying data can change without its own identity changing, so
     // re-deriving this on every recomposition (at most a couple ids) is what keeps it fresh.
-    val quotedAuthorPubkeys = quotedEventIds.mapNotNull { id -> getQuotedEvent(id)?.pubkey }.distinct()
+    // Quoted zap receipts add their recipient (`p` tag) too — the "X zapped Y" line's avatar uses
+    // the same reactive profile map, keyed by the recipient pubkey rather than the receipt's own
+    // author (the wallet server).
+    val quotedAuthorPubkeys = (quotedEventIds.mapNotNull { id -> getQuotedEvent(id)?.pubkey } +
+        quotedEventIds.mapNotNull { id ->
+            getQuotedEvent(id)?.takeIf { it.kind == Event.KIND_ZAP_RECEIPT }
+                ?.getTagValue("p")
+                ?.takeIf { it.isNotBlank() }
+        }).distinct()
     val quotedAuthorProfiles by produceState<Map<String, UserProfile>>(
         initialValue = emptyMap(),
         quotedAuthorPubkeys

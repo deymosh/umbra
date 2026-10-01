@@ -222,6 +222,11 @@ internal fun RenderInlineMediaSegments(
                                 onHashtagClick = onHashtagClick,
                                 onUrlClick = onUrlClick,
                                 onEventReferenceClick = onEventReferenceClick,
+                                onProfileClick = onMentionClick,
+                                getZapPartyProfile = { pubkey ->
+                                    quotedAuthorProfiles[pubkey]
+                                        ?: getQuotedEventAuthorProfile(pubkey)
+                                },
                                 quoteEmbedDepth = quoteEmbedDepth
                             )
                         } else {

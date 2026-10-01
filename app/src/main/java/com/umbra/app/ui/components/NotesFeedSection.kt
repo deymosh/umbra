@@ -30,6 +30,7 @@ import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.ui.common.ImmutableListSnapshot
 import com.umbra.app.ui.common.ImmutableMapSnapshot
 import com.umbra.app.ui.feed.EventCard
+import com.umbra.app.ui.feed.zapReceiptDisplayFor
 import com.umbra.app.ui.common.UrlMetadata
 
 /**
@@ -236,6 +237,7 @@ fun LazyListScope.notesFeedSection(
                     onPin = onPin,
                     getQuotedEvent = getQuotedEvent,
                     getQuotedEventAuthorProfile = getQuotedEventAuthorProfile,
+                    getEventZapReceipt = ::zapReceiptDisplayFor,
                     animateAvatars = animateAvatars,
                     getUrlMetadata = getUrlMetadata,
                     getEventJson = getEventJson
