@@ -33,6 +33,7 @@ import com.umbra.app.domain.usecase.UpdateRelayUseCase
 import com.umbra.app.ui.common.UiMessage
 import com.umbra.app.util.coroutines.runCatchingCancellable
 import com.umbra.app.util.coroutines.throttleLatest
+import com.umbra.app.util.coroutines.throttleLatestBatch
 import com.umbra.app.util.logging.UmbraLog
 import androidx.compose.runtime.Immutable
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -387,11 +388,11 @@ class RelayConfigViewModel @Inject constructor(
     private fun observeRelayIssues() {
         viewModelScope.launch {
             eventRepository.observeRelayIssues()
-                .throttleLatest(RELAY_ISSUE_FLUSH_INTERVAL_MS)
-                .collect { issue ->
+                .throttleLatestBatch(RELAY_ISSUE_FLUSH_INTERVAL_MS)
+                .collect { batch ->
                     _state.update { state ->
                         state.copy(
-                            relayIssues = appendBoundedRelayIssues(state.relayIssues, listOf(issue), MAX_ISSUES_PER_RELAY)
+                            relayIssues = appendBoundedRelayIssues(state.relayIssues, batch, MAX_ISSUES_PER_RELAY)
                         )
                     }
                 }
