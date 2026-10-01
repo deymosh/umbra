@@ -164,6 +164,45 @@ class NotificationsTest {
     }
 
     @Test
+    fun `given receipt e tag missing the relay marker of the request when parsing then receipt still parses`() {
+        // Only the tag id must agree: the e tag's relay hint is routinely dropped or rewritten
+        // by wallet servers, so it never fails a receipt.
+        val request = signedZapRequest(tags = listOf(listOf("p", me), listOf("e", note, "wss://relay.example", "root")))
+        val receipt = zapReceiptEvent(request.toJsonString(), bolt11 = TestInvoice.invoiceForMsat(1_000_000L))
+        assertEquals(alice, parseZapReceipt(receipt, verifyRequest)?.senderPubkey)
+    }
+
+    @Test
+    fun `given receipt signed by the expected signer when parsing then receipt parses`() {
+        val receipt = zapReceiptEvent(signedZapRequest().toJsonString(), bolt11 = TestInvoice.invoiceForMsat(1_000_000L))
+            .let { it.copy(pubkey = it.pubkey.uppercase()) }
+        assertEquals(
+            alice,
+            parseZapReceipt(receipt, verifyRequest, expectedReceiptSigner = "w".repeat(64))?.senderPubkey
+        )
+    }
+
+    @Test
+    fun `given receipt signed by someone other than the expected signer when parsing then receipt is dropped`() {
+        val receipt = zapReceiptEvent(signedZapRequest().toJsonString(), bolt11 = TestInvoice.invoiceForMsat(1_000_000L))
+        assertNull(parseZapReceipt(receipt, verifyRequest, expectedReceiptSigner = "f".repeat(64)))
+        assertTrue(
+            groupNotifications(
+                listOf(receipt),
+                emptySet(),
+                verifyEventSignature = verifyRequest,
+                expectedReceiptSigner = "f".repeat(64)
+            ).isEmpty()
+        )
+    }
+
+    @Test
+    fun `given no expected signer when parsing then signer check is skipped`() {
+        val receipt = zapReceiptEvent(signedZapRequest().toJsonString(), bolt11 = TestInvoice.invoiceForMsat(1_000_000L))
+        assertEquals(alice, parseZapReceipt(receipt, verifyRequest, expectedReceiptSigner = null)?.senderPubkey)
+    }
+
+    @Test
     fun `given description is not a signed kind-9734 request when parsing then receipt is dropped`() {
         val receipt = zapReceiptEvent("""{"pubkey":"x"}""", bolt11 = TestInvoice.invoiceForMsat(1_000_000L))
         assertNull(parseZapReceipt(receipt, verifyRequest))

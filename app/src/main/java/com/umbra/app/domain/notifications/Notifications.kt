@@ -32,9 +32,13 @@ data class NotificationGroup(
  * author — the receipt itself is signed by the recipient's wallet server, never the payer. */
 data class ZapReceipt(val senderPubkey: String, val amountSats: Long, val comment: String?, val targetEventId: String?)
 
-fun parseZapReceipt(event: Event, verifySignature: (Event) -> Boolean): ZapReceipt? {
+fun parseZapReceipt(
+    event: Event,
+    verifySignature: (Event) -> Boolean,
+    expectedReceiptSigner: String? = null
+): ZapReceipt? {
     if (event.kind != Event.KIND_ZAP_RECEIPT) return null
-    return when (val validation = validateZapReceipt(event, verifySignature)) {
+    return when (val validation = validateZapReceipt(event, verifySignature, expectedReceiptSigner)) {
         is ZapReceiptValidation.Valid -> ZapReceipt(
             senderPubkey = validation.senderPubkey,
             amountSats = validation.amountMsat / 1_000,
@@ -49,12 +53,14 @@ fun parseZapReceipt(event: Event, verifySignature: (Event) -> Boolean): ZapRecei
  * Turns raw inbox events into notification rows, newest first. [mutedPubkeys] are dropped
  * entirely (muting is user-owned state), and a reaction to someone else's note that merely
  * p-tags the user is still shown — Nostr has no reliable way to tell those apart without the
- * target note in hand.
+ * target note in hand. [expectedReceiptSigner], when known, is the recipient's LNURL-pay
+ * `nostrPubkey`: receipts signed by anyone else are rejected as forged.
  */
 fun groupNotifications(
     events: List<Event>,
     mutedPubkeys: Set<String>,
-    verifyEventSignature: (Event) -> Boolean = { false }
+    verifyEventSignature: (Event) -> Boolean = { false },
+    expectedReceiptSigner: String? = null
 ): List<NotificationGroup> {
     val groups = LinkedHashMap<String, MutableList<Pair<Event, String>>>()
     val singles = mutableListOf<NotificationGroup>()
@@ -86,7 +92,7 @@ fun groupNotifications(
             Event.KIND_ZAP_RECEIPT -> {
                 // Invalid (forged/spliced) receipts never become UI data at all — dropping them
                 // from the group in one place also drops them from the zap total and commenter list.
-                val receipt = parseZapReceipt(event, verifyEventSignature) ?: continue
+                val receipt = parseZapReceipt(event, verifyEventSignature, expectedReceiptSigner) ?: continue
                 if (receipt.senderPubkey in mutedPubkeys) continue
                 val key = "${NotificationType.ZAP.name}:${receipt.targetEventId ?: "profile"}"
                 groups.getOrPut(key) { mutableListOf() } += event to receipt.senderPubkey
@@ -97,7 +103,7 @@ fun groupNotifications(
     val grouped = groups.map { (key, entries) ->
         val type = NotificationType.valueOf(key.substringBefore(':'))
         val sorted = entries.sortedByDescending { it.first.createdAt }
-        val zaps = if (type == NotificationType.ZAP) sorted.mapNotNull { parseZapReceipt(it.first, verifyEventSignature) } else emptyList()
+        val zaps = if (type == NotificationType.ZAP) sorted.mapNotNull { parseZapReceipt(it.first, verifyEventSignature, expectedReceiptSigner) } else emptyList()
         NotificationGroup(
             key = key,
             type = type,

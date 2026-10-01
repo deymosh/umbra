@@ -4,7 +4,7 @@ package com.umbra.app.domain.nip57
  * Test-only, checksum-correct BOLT11 fixture builder (same bech32 approach as Bolt11Test's
  * private encoder, lifted here so multiple test classes can share it without leaking it into
  * production code). Builds an invoice with an optional amount and an optional 'h'
- * (description-hash, type 23) tagged field, which is what validateZapReceipt cross-checks.
+ * (description-hash, type 23) tagged field, so parser behavior around that field is exercisable.
  */
 object TestInvoice {
     private const val CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"

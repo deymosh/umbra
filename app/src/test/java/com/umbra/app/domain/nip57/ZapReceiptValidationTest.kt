@@ -2,17 +2,15 @@ package com.umbra.app.domain.nip57
 
 import com.umbra.app.domain.lightning.parseBolt11
 import com.umbra.app.domain.nip01.Event
-import com.umbra.app.domain.util.JsonUtils
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * validateZapReceipt is exercised with a fake verify lambda: the real BIP-340 verifier lives in
- * the data/ layer, which a plain JVM unit test builds receipts without. The test verifier accepts
- * exactly the fixture's signed-and-kind-9734 shape, so per-reason tests inject the failure they
- * mean rather than one shared "reject everything" stub.
+ * `domain.crypto` (EventCrypto), which a plain JVM unit test builds receipts without. The test
+ * verifier accepts exactly the fixture's signed-and-kind-9734 shape, so per-reason tests inject
+ * the failure they mean rather than one shared "reject everything" stub.
  */
 class ZapReceiptValidationTest {
     private val payer = "a".repeat(64)
@@ -121,8 +119,7 @@ class ZapReceiptValidationTest {
     }
 
     @Test
-    fun `given different case receipt e tag when validating then matches case-insensitively`() {
-        val request = request(listOf(listOf("p", recipient), listOf("e", note)))
+    fun `given different case receipt e tag when validating then matches case-insensitively`() {        val request = request(listOf(listOf("p", recipient), listOf("e", note)))
         val receipt = Event(
             id = "z".padEnd(64, '0'),
             pubkey = walletServer,
@@ -188,27 +185,56 @@ class ZapReceiptValidationTest {
     }
 
     @Test
-    fun `given invoice description hash matches description when validating then valid`() {
-        val request = request(listOf(listOf("p", recipient)))
-        val description = requestJson(request)
-        val hashHex = java.security.MessageDigest.getInstance("SHA-256")
-            .digest(description.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
-        val invoice = TestInvoice.encode("lnbc10u", descriptionHashHex = hashHex)
-        val outcome = validateZapReceipt(receipt(request, invoice), validVerify)
-        assertTrue(outcome is ZapReceiptValidation.Valid)
-        assertEquals(1_000_000L, (outcome as ZapReceiptValidation.Valid).amountMsat)
+    fun `given receipt e tag whose marker differs from the request when validating then still valid`() {
+        // The e tag's third element is a relay-URL hint; wallet servers drop or rewrite it, so
+        // only the tag id must agree.
+        val request = request(listOf(listOf("p", recipient), listOf("e", note, "wss://relay.example", "root")))
+        val receipt = Event(
+            id = "z".padEnd(64, '0'),
+            pubkey = walletServer,
+            createdAt = 50L,
+            kind = Event.KIND_ZAP_RECEIPT,
+            tags = listOf(
+                listOf("p", recipient),
+                listOf("e", note),
+                listOf("bolt11", TestInvoice.invoiceForMsat(1_000_000L)),
+                listOf("description", requestJson(request))
+            )
+        )
+        assertTrue(validateZapReceipt(receipt, validVerify) is ZapReceiptValidation.Valid)
     }
 
     @Test
-    fun `given invoice description hash differs from description when validating then hash mismatch`() {
+    fun `given expected signer matches receipt pubkey when validating then valid`() {
         val request = request(listOf(listOf("p", recipient)))
-        val invoice = TestInvoice.encode("lnbc10u", descriptionHashHex = "ab".repeat(32))
-        val outcome = validateZapReceipt(receipt(request, invoice), validVerify)
-        assertEquals(
-            ZapReceiptValidation.Reason.DESCRIPTION_HASH_MISMATCH,
-            (outcome as ZapReceiptValidation.Invalid).reason
+        val outcome = validateZapReceipt(
+            receipt(request, TestInvoice.invoiceForMsat(1_000_000L)),
+            validVerify,
+            expectedReceiptSigner = walletServer.uppercase()
         )
+        assertTrue(outcome is ZapReceiptValidation.Valid)
+    }
+
+    @Test
+    fun `given receipt pubkey differs from expected signer when validating then signer mismatch`() {
+        val request = request(listOf(listOf("p", recipient)))
+        val outcome = validateZapReceipt(
+            receipt(request, TestInvoice.invoiceForMsat(1_000_000L)),
+            validVerify,
+            expectedReceiptSigner = "f".repeat(64)
+        )
+        assertEquals(ZapReceiptValidation.Reason.RECEIPT_SIGNER_MISMATCH, (outcome as ZapReceiptValidation.Invalid).reason)
+    }
+
+    @Test
+    fun `given expected signer is null when validating then signer check is skipped`() {
+        val request = request(listOf(listOf("p", recipient)))
+        val outcome = validateZapReceipt(
+            receipt(request, TestInvoice.invoiceForMsat(1_000_000L)),
+            validVerify,
+            expectedReceiptSigner = null
+        )
+        assertTrue(outcome is ZapReceiptValidation.Valid)
     }
 
     @Test
@@ -250,18 +276,4 @@ class ZapReceiptValidationTest {
     fun `given fixture invoice when parsing then amount decodes to the requested msat`() {
         assertEquals(1_000_000L, parseBolt11(TestInvoice.invoiceForMsat(1_000_000L))?.amountMsat)
     }
-
-    @Test
-    fun `given fixture invoice with description hash when parsing then h field round trips`() {
-        val hashHex = "ab".repeat(32)
-        val decoded = parseBolt11(TestInvoice.encode("lnbc10u", descriptionHashHex = hashHex))
-        assertEquals(hashHex, decoded?.descriptionHashHex)
-        assertEquals(1_000_000L, decoded?.amountMsat)
-    }
-
-    @Test
-    fun `given fixture invoice without description hash when parsing then h is null`() {
-        assertNull(parseBolt11(TestInvoice.invoiceForMsat(1_000_000L))?.descriptionHashHex)
-    }
-
 }

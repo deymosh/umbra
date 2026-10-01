@@ -23,12 +23,7 @@ data class Bolt11Invoice(
     val amountMsat: Long?,
     val description: String?,
     val timestampSeconds: Long? = null,
-    val expirySeconds: Long? = null,
-    /** SHA-256 hex of the invoice's description/memo (BOLT11 'h' tagged field, type 23), or null
-     * when the field is absent. NIP-57 zap receipts carry it instead of a plain description so the
-     * receipt's `description` JSON can be tied to the invoice, and it's what
-     * validateZapReceipt's description-hash check compares against. */
-    val descriptionHashHex: String? = null
+    val expirySeconds: Long? = null
 )
 
 /** Absolute expiry time (Unix seconds), or null if the invoice's creation timestamp itself
@@ -45,7 +40,6 @@ private val HRP_REGEX = Regex("""^ln(bc|tb|bcrt)(\d+)?([munp]?)$""", RegexOption
 // BOLT11 tagged-field types.
 private const val FIELD_TYPE_DESCRIPTION = 13
 private const val FIELD_TYPE_EXPIRY = 6
-private const val FIELD_TYPE_DESCRIPTION_HASH = 23
 
 // BOLT11's own default expiry when an invoice carries no explicit 'x' tagged field.
 private const val DEFAULT_EXPIRY_SECONDS = 3600L
@@ -53,8 +47,7 @@ private const val DEFAULT_EXPIRY_SECONDS = 3600L
 private data class DecodedFields(
     val timestampSeconds: Long?,
     val description: String?,
-    val expirySeconds: Long?,
-    val descriptionHashHex: String? = null
+    val expirySeconds: Long?
 )
 
 // Amount multipliers: how many msat one whole unit of the HRP's amount digits represents.
@@ -91,8 +84,7 @@ fun parseBolt11(invoice: String): Bolt11Invoice? {
         amountMsat = amountMsat,
         description = decodedFields?.description,
         timestampSeconds = decodedFields?.timestampSeconds,
-        expirySeconds = decodedFields?.timestampSeconds?.let { decodedFields.expirySeconds ?: DEFAULT_EXPIRY_SECONDS },
-        descriptionHashHex = decodedFields?.descriptionHashHex
+        expirySeconds = decodedFields?.timestampSeconds?.let { decodedFields.expirySeconds ?: DEFAULT_EXPIRY_SECONDS }
     )
 }
 
@@ -125,7 +117,6 @@ private fun parseTaggedFields(words: List<Int>): DecodedFields {
 
     var description: String? = null
     var expirySeconds: Long? = null
-    var descriptionHashHex: String? = null
     var index = 7
     while (index + 3 <= words.size) {
         val type = words[index]
@@ -136,15 +127,13 @@ private fun parseTaggedFields(words: List<Int>): DecodedFields {
         when (type) {
             FIELD_TYPE_DESCRIPTION -> description = fiveBitWordsToBytes(words.subList(dataStart, dataEnd)).toString(Charsets.UTF_8)
             FIELD_TYPE_EXPIRY -> expirySeconds = words.subList(dataStart, dataEnd).fold(0L) { acc, word -> (acc shl 5) or word.toLong() }
-            FIELD_TYPE_DESCRIPTION_HASH -> descriptionHashHex = fiveBitWordsToBytes(words.subList(dataStart, dataEnd)).toHex()
         }
         index = dataEnd
     }
     return DecodedFields(
         timestampSeconds = timestampSeconds,
         description = description,
-        expirySeconds = expirySeconds,
-        descriptionHashHex = descriptionHashHex
+        expirySeconds = expirySeconds
     )
 }
 

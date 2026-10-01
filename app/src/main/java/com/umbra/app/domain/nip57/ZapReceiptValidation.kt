@@ -4,8 +4,6 @@ import com.umbra.app.domain.lightning.Bolt11Invoice
 import com.umbra.app.domain.lightning.parseBolt11
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.util.JsonUtils
-import com.umbra.app.domain.util.toHex
-import java.security.MessageDigest
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
@@ -35,7 +33,7 @@ sealed interface ZapReceiptValidation {
         AMOUNT_MISMATCH,
         TARGET_P_MISMATCH,
         TARGET_E_MISMATCH,
-        DESCRIPTION_HASH_MISMATCH,
+        RECEIPT_SIGNER_MISMATCH,
         MISSING_AMOUNT
     }
 
@@ -56,25 +54,31 @@ sealed interface ZapReceiptValidation {
  * - the `p`/`e`/`a` targets the receipt carries must match the request's (re-tagged by the wallet
  *   server, so any divergence means the receipt isn't a receipt for this payment);
  * - the invoice amount must equal the request's `amount` tag when that tag exists;
- * - the invoice's description-hash ('h') field must equal the SHA-256 of the `description` JSON
- *   (SHOULD-level in the spec, enforced here because a mismatch means the description parsed
- *   and the invoice were never issued together — i.e. a spliced receipt);
+ * - when [expectedReceiptSigner] is non-null, the receipt's own pubkey must equal it (the spec's
+ *   MUST-level check that the signer is the recipient's LNURL-pay endpoint `nostrPubkey`);
  * - the request's signature must verify, via the injected [verifySignature]. The BIP-340 verifier
- *   lives in the data/ layer, which domain/ can't import, so callers wire the real one
- *   (data/crypto EventCrypto verifySignature) in — tests pass a lambda instead.
+ *   lives in `domain.crypto` (`EventCrypto.verifySignature`), injectable here since validation
+ *   stays pure — tests pass a lambda instead.
  *
- * Not checked: that the receipt's own pubkey equals the recipient's LNURL endpoint `nostrPubkey`.
- * That is the spec's MUST-level signer check but it needs a live LNURL lookup, and this function
- * is deliberately pure/offline. Callers that have an LNURL-pay context available can layer it on.
+ * Not checked (deliberately, both spec-SHOULD level and false-negative prone when the verifier
+ * is this cheap): the invoice's description-hash ('h') field, since the invoice is parsed without
+ * verifying the node's signature — a forger can set any `h` — and the `e` tag's optional relay
+ * marker, which wallet servers routinely drop or change while the tag id stays the source of
+ * truth.
  *
  * Anonymous zaps (no `P` tag on the request) are not rejected: they validate like any other
  * receipt, and callers show them as anonymous since no payer identity is proven or recoverable.
  */
 fun validateZapReceipt(
     receipt: Event,
-    verifySignature: (Event) -> Boolean
+    verifySignature: (Event) -> Boolean,
+    expectedReceiptSigner: String? = null
 ): ZapReceiptValidation {
     if (receipt.kind != Event.KIND_ZAP_RECEIPT) return ZapReceiptValidation.Invalid(ZapReceiptValidation.Reason.NOT_A_ZAP_RECEIPT)
+
+    if (expectedReceiptSigner?.takeIf { it.isNotBlank() }?.let { !it.equals(receipt.pubkey, ignoreCase = true) } == true) {
+        return ZapReceiptValidation.Invalid(ZapReceiptValidation.Reason.RECEIPT_SIGNER_MISMATCH)
+    }
 
     val description = receipt.getTagValue("description")
         ?: return ZapReceiptValidation.Invalid(ZapReceiptValidation.Reason.MISSING_DESCRIPTION)
@@ -110,30 +114,12 @@ fun validateZapReceipt(
     }
 
     val requestEventTarget = requestEvent.getTagValue("e")?.lowercase()
-    if (requestEventTarget != null) {
-        val requestETagMarker = eventTagMarker(requestEvent, "e")
-        val receiptTag = receipt.tags.firstOrNull {
-            it.size >= 2 && it[0] == "e" && it[1].lowercase() == requestEventTarget
-        }
-        if (receiptTag == null || eventTagMarker(receipt, "e") != requestETagMarker) {
-            return ZapReceiptValidation.Invalid(ZapReceiptValidation.Reason.TARGET_E_MISMATCH)
-        }
+    if (requestEventTarget != null && !receipt.tags.any { it.size >= 2 && it[0] == "e" && it[1].lowercase() == requestEventTarget }) {
+        return ZapReceiptValidation.Invalid(ZapReceiptValidation.Reason.TARGET_E_MISMATCH)
     }
     val aTarget = requestEvent.getTagValue("a")?.lowercase()
     if (aTarget != null && !receipt.getTagValues("a").any { it.lowercase() == aTarget }) {
         return ZapReceiptValidation.Invalid(ZapReceiptValidation.Reason.TARGET_E_MISMATCH)
-    }
-
-    // A receipt whose invoice was issued against a different description is spliced; the 'h'
-    // field only exists when the wallet hashed its description at invoice creation, so its
-    // absence (older/careless wallet servers) can't be checked offline and is tolerated.
-    if (invoice.descriptionHashHex != null) {
-        val computed = MessageDigest.getInstance("SHA-256")
-            .digest(description.toByteArray(Charsets.UTF_8))
-            .toHex()
-        if (!computed.equals(invoice.descriptionHashHex, ignoreCase = true)) {
-            return ZapReceiptValidation.Invalid(ZapReceiptValidation.Reason.DESCRIPTION_HASH_MISMATCH)
-        }
     }
 
     val sender = requestEvent.pubkey.lowercase().takeIf { it.isNotBlank() }
@@ -146,9 +132,6 @@ fun validateZapReceipt(
         comment = requestEvent.content.takeIf { it.isNotBlank() }
     )
 }
-
-private fun eventTagMarker(event: Event, tagName: String): String? =
-    event.tags.firstOrNull { it.size >= 2 && it[0] == tagName }?.getOrNull(2)
 
 /** A zap on a specific note carries an `e` on the request; a profile zap has none. Reply
  * markers ("root"/"mention") also match, so the last `e` is what the payment was for. */
