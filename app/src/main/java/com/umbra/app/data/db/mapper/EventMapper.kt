@@ -6,6 +6,7 @@ import com.umbra.app.data.db.pojo.NoteWithProfile
 import com.umbra.app.data.db.entities.UserProfileEntity
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip05.Nip05VerificationState
+import com.umbra.app.domain.nip30.CustomEmoji
 import com.umbra.app.domain.model.NoteView
 import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.domain.util.JsonUtils
@@ -154,7 +155,8 @@ fun NoteWithProfile.toNoteView(): NoteView {
                 picture      = authorPicture,
                 about        = authorAbout,
                 nip05        = authorNip05,
-                nip05VerificationState = nip05VerificationState
+                nip05VerificationState = nip05VerificationState,
+                customEmojis = authorCustomEmojis.associate { it.shortcode to it.url }
             )
         } else null,
         reactionCount = reactionCount,
@@ -174,7 +176,8 @@ fun UserProfile.toEntity(): UserProfileEntity = UserProfileEntity(
     lud16 = lud16,
     lud06 = lud06,
     website = website,
-    nip05VerificationState = nip05VerificationState.toString()
+    nip05VerificationState = nip05VerificationState.toString(),
+    customEmojis = customEmojis.map { (shortcode, url) -> CustomEmoji(shortcode, url) }
 )
 
 fun UserProfileEntity.toDomain(): UserProfile = UserProfile(
@@ -191,6 +194,7 @@ fun UserProfileEntity.toDomain(): UserProfile = UserProfile(
     lastUpdated = updatedAt / 1000,
     nip05VerificationState = runCatching {
         Nip05VerificationState.valueOf(nip05VerificationState)
-    }.getOrDefault(Nip05VerificationState.NotAvailable)
+    }.getOrDefault(Nip05VerificationState.NotAvailable),
+    customEmojis = customEmojis.associate { it.shortcode to it.url }
 )
 

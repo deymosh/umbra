@@ -298,6 +298,7 @@ interface EventDao : NegentropyEventSource {
             p.about AS authorAbout,
             p.nip05 AS authorNip05,
             p.nip05VerificationState AS authorNip05VerificationState,
+            p.customEmojis AS authorCustomEmojis,
             COALESCE(engagement.reactionCount, 0) AS reactionCount,
             COALESCE(engagement.replyCount, 0) AS replyCount,
             COALESCE(engagement.repostCount, 0) AS repostCount
