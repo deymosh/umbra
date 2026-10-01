@@ -34,7 +34,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -339,20 +339,21 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     override fun saveSearchRelaysList(list: SearchRelaysList) {
-        // Same staleness guard as saveRelayList/saveDmRelayList. update() (not read-then-write)
-        // so the staleness check and the map write are one atomic step; only the value that wins
-        // the update ever triggers side effects.
-        var accepted = false
-        _searchRelayLists.update { current ->
+        // Same staleness guard as saveRelayList/saveDmRelayList. updateAndGet() (not
+        // read-then-write) so the staleness check and the map write are one atomic step; only the
+        // value that wins ever triggers side effects. "Did mine win" is read back from the value
+        // it RETURNED, not latched by a flag inside the lambda — the operator re-runs the lambda
+        // when another thread wins the compare-and-set, so a flag set by a losing attempt would
+        // survive into the winning one and let a rejected (stale) list apply its side effects.
+        val updated = _searchRelayLists.updateAndGet { current ->
             val existing = current[list.ownerPubkey]
             if (existing != null && existing.updatedAt >= list.updatedAt) {
                 current
             } else {
-                accepted = true
                 current + (list.ownerPubkey to list)
             }
         }
-        if (!accepted) return
+        if (updated[list.ownerPubkey] !== list) return
         if (isCurrentUser(list.ownerPubkey)) {
             // Applied as a first-class Relay role (isSearchEnabled/isSearchActive) the same way
             // DM is, so RelayConfigScreen's Search section — driven by the same relay-table Flow
@@ -378,18 +379,18 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     override fun saveIndexRelaysList(list: IndexRelaysList) {
-        // Same staleness guard as saveSearchRelaysList — atomized via update().
-        var accepted = false
-        _indexRelayLists.update { current ->
+        // Same staleness guard as saveSearchRelaysList — atomized via updateAndGet(), with
+        // acceptance read back from the returned value rather than a flag the lambda could set on
+        // an attempt it then loses the compare-and-set for.
+        val updated = _indexRelayLists.updateAndGet { current ->
             val existing = current[list.ownerPubkey]
             if (existing != null && existing.updatedAt >= list.updatedAt) {
                 current
             } else {
-                accepted = true
                 current + (list.ownerPubkey to list)
             }
         }
-        if (!accepted) return
+        if (updated[list.ownerPubkey] !== list) return
         if (isCurrentUser(list.ownerPubkey)) {
             repoScope.launch(Dispatchers.IO) {
                 runCatching { applyIndexRelayListToLocalConfig(list) }

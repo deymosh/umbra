@@ -11,7 +11,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 
 @Singleton
 class UserPreferencesImpl @Inject constructor(
@@ -70,21 +70,21 @@ class UserPreferencesImpl @Inject constructor(
     override fun getNotificationsSeenAtFlow(): StateFlow<Long> = notificationsSeenAt.asStateFlow()
 
     override fun markNotificationsSeen(epochSeconds: Long) {
-        // update{}, not a read-check-write on the value: two concurrent callers could otherwise
-        // both read the same older value, both pass the check, and have the earlier timestamp
-        // land last — un-seeing notifications the other caller's newer watermark covered.
-        var won = false
-        val winningValue = notificationsSeenAt.update { current ->
-            if (epochSeconds <= current) {
-                current
-            } else {
-                won = true
-                epochSeconds
-            }
+        // updateAndGet{}, NOT update{}: update() returns Unit, so reading its "returned" value
+        // persisted the literal string "kotlin.Unit" in place of the watermark — which then
+        // parsed back as 0 on the next cold start, making every notification look unseen again.
+        // It is also not a read-check-write on the value: two concurrent callers could otherwise
+        // both read the same older value, both pass the check, and have the earlier timestamp land
+        // last, un-seeing what the other caller's newer watermark covered. Whether THIS call's
+        // timestamp won is read from the value updateAndGet returned — a flag latched inside the
+        // lambda would be set by an attempt that then loses the compare-and-set, since the
+        // operator re-runs the lambda.
+        val updated = notificationsSeenAt.updateAndGet { current ->
+            if (epochSeconds <= current) current else epochSeconds
         }
-        if (!won) return
-        // Persist the value that actually won the update, not this call's argument.
-        encryptedPreferences.putString(KEY_NOTIFICATIONS_SEEN_AT, winningValue.toString())
+        if (updated != epochSeconds) return
+        // Persist the value that actually won, not this call's argument.
+        encryptedPreferences.putString(KEY_NOTIFICATIONS_SEEN_AT, updated.toString())
     }
 
     override fun getPanicWipeEnabledFlow(): StateFlow<Boolean> = panicWipeEnabled.asStateFlow()
