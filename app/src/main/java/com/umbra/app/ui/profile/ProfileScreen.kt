@@ -823,7 +823,9 @@ internal fun ProfileHero(
             ) {
                 if (!isOwnProfile) {
                     val zapLauncher = LocalZapLauncher.current
-                    if (zapLauncher != null && (!profile?.lud16.isNullOrBlank() || !profile?.lud06.isNullOrBlank())) {
+                    // Shown for every other profile: the sheet reveals what the recipient can
+                    // actually be paid with, so that can't be judged from lud16/lud06 alone.
+                    if (zapLauncher != null) {
                         IconButton(
                             onClick = { zapLauncher(ZapTarget(recipientPubkey = pubkey, profile = profile)) },
                             modifier = Modifier

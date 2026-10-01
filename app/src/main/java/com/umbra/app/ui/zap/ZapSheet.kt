@@ -96,6 +96,7 @@ private fun ZapSheet(target: ZapTarget, onDismiss: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var pendingUri by remember { mutableStateOf<String?>(null) }
+    var openFailed by remember { mutableStateOf(false) }
 
     LaunchedEffect(target) { viewModel.open(target) }
 
@@ -113,6 +114,8 @@ private fun ZapSheet(target: ZapTarget, onDismiss: () -> Unit) {
             onComment = viewModel::setComment,
             onZap = viewModel::zap,
             onRetry = viewModel::retry,
+            onReload = viewModel::reload,
+            noAppFound = openFailed,
             onOpenUri = { pendingUri = it }
         )
     }
@@ -121,7 +124,9 @@ private fun ZapSheet(target: ZapTarget, onDismiss: () -> Unit) {
         ExternalUrlWarningDialog(
             url = uri,
             onConfirm = {
-                launchPaymentUri(context, uri)
+                // No wallet claiming the scheme: the user still gets the URI as text rather
+                // than the tap going nowhere.
+                if (!launchPaymentUri(context, uri)) openFailed = true
                 pendingUri = null
             },
             onDismiss = { pendingUri = null },
@@ -138,6 +143,8 @@ internal fun ZapSheetContent(
     onComment: (String) -> Unit,
     onZap: () -> Unit,
     onRetry: () -> Unit,
+    onReload: () -> Unit,
+    noAppFound: Boolean = false,
     onOpenUri: (String) -> Unit
 ) {
     val target = state.target ?: return
@@ -180,14 +187,33 @@ internal fun ZapSheetContent(
 
         when (val phase = state.phase) {
             ZapPhase.Resolving -> StatusLine(stringResource(R.string.zap_resolving))
-            is ZapPhase.Failed -> FailureBlock(phase.reason, onRetry = onRetry.takeIf { phase.reason == ZapFailure.INVOICE_FAILED || phase.reason == ZapFailure.AMOUNT_OUT_OF_RANGE })
+            is ZapPhase.Failed -> FailureBlock(
+                reason = phase.reason,
+                onRetry = onRetry.takeIf { phase.reason == ZapFailure.INVOICE_FAILED || phase.reason == ZapFailure.AMOUNT_OUT_OF_RANGE },
+                onReload = onReload.takeIf { phase.reason == ZapFailure.ENDPOINT_UNREACHABLE }
+            )
             is ZapPhase.InvoiceReady -> InvoiceBlock(phase.bolt11, phase.isZap, onOpenUri, onRetry)
             ZapPhase.Ready, ZapPhase.Working -> AmountPicker(state, onAmount, onComment, onZap)
+            ZapPhase.NoLightning -> if (state.paymentTargets.isEmpty()) {
+                // The payto subscription may still be working; the spinner gives way to
+                // either a targets list or the empty state once it has reported back.
+                if (state.targetsLoaded) {
+                    NoPaymentOptions(
+                        name = target.profile?.getUserDisplayName() ?: target.recipientPubkey.truncatePublicKey()
+                    )
+                } else {
+                    StatusLine(stringResource(R.string.zap_resolving))
+                }
+            }
         }
 
-        if (state.paymentTargets.isNotEmpty()) {
+        // Payment targets get their own treatment whenever they exist: below the amount picker
+        // when Lightning is also available, alone (with a "Pay with" header) when it isn't.
+        val showTargets = state.paymentTargets.isNotEmpty() && state.phase !is ZapPhase.Ready &&
+            state.phase !is ZapPhase.Working && state.phase !is ZapPhase.InvoiceReady
+        if (showTargets) {
             Text(
-                text = stringResource(R.string.zap_other_ways_title),
+                text = stringResource(R.string.zap_pay_with_title),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 8.dp)
@@ -205,6 +231,15 @@ internal fun ZapSheetContent(
                     }
                 }
             }
+        }
+
+        if (noAppFound) {
+            Text(
+                text = stringResource(R.string.zap_no_wallet_app),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+            )
         }
     }
 }
@@ -360,6 +395,16 @@ private fun InvoiceBlock(bolt11: String, isZap: Boolean, onOpenUri: (String) -> 
 }
 
 @Composable
+private fun NoPaymentOptions(name: String) {
+    // Reuses the shared empty-state component inside the sheet's own padding.
+    com.umbra.app.ui.components.EmptyState(
+        modifier = Modifier.padding(vertical = 24.dp),
+        title = stringResource(R.string.zap_no_options_title),
+        message = stringResource(R.string.zap_no_options_body, name)
+    )
+}
+
+@Composable
 private fun StatusLine(text: String) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
@@ -372,7 +417,7 @@ private fun StatusLine(text: String) {
 }
 
 @Composable
-private fun FailureBlock(reason: ZapFailure, onRetry: (() -> Unit)?) {
+private fun FailureBlock(reason: ZapFailure, onRetry: (() -> Unit)?, onReload: (() -> Unit)?) {
     val message = when (reason) {
         ZapFailure.NO_LIGHTNING_ADDRESS -> R.string.zap_error_no_address
         ZapFailure.ENDPOINT_UNREACHABLE -> R.string.zap_error_unreachable
@@ -394,6 +439,9 @@ private fun FailureBlock(reason: ZapFailure, onRetry: (() -> Unit)?) {
         }
         if (onRetry != null) {
             OutlinedButton(onClick = onRetry) { Text(stringResource(R.string.zap_change_amount)) }
+        }
+        if (onReload != null) {
+            OutlinedButton(onClick = onReload) { Text(stringResource(R.string.zap_try_again)) }
         }
     }
 }
