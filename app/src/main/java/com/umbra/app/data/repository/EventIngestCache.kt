@@ -146,6 +146,7 @@ internal class EventIngestCache(
     private val activeFeedFilter: () -> FeedFilter,
     private val isCurrentUserPubkey: (String) -> Boolean,
     private val isPendingEventLookupId: (String) -> Boolean,
+    private val isRequestedBySubscription: (Event) -> Boolean,
     private val isPinnedProfileAuthor: (String) -> Boolean,
     private val isWiping: () -> Boolean
 ) {
@@ -464,7 +465,16 @@ internal class EventIngestCache(
         // any other not-yet-content-parsed kind) never gets cached, so fetchEventById's caller
         // polls forever and the quote is stuck as an unresolved chip no matter how long it waits.
         if (isPendingEventLookupId(event.id)) return true
-        if (event.kind !in USEFUL_PERSISTED_KINDS) return false
+        if (event.kind !in USEFUL_PERSISTED_KINDS) {
+            // USEFUL_PERSISTED_KINDS is tuned for broad, unsolicited feed traffic. A kind outside
+            // it still belongs in the cache when an active subscription explicitly asked for it —
+            // another user's emoji set (30030) referenced by our emoji list, NIP-22 comments
+            // (1111) on an open thread, NIP-A3 payment targets (10133) for the zap sheet — since
+            // every screen reads those back from this cache and would otherwise wait forever.
+            // Mutes still apply: asking for a thread's comments isn't asking for a muted author's.
+            if (!isRequestedBySubscription(event)) return false
+            return activeFeedFilter().mutedPubkeys.none { it.equals(event.pubkey, ignoreCase = true) }
+        }
 
         // Read the active filter up front (not just below) so its excludedHashtags/excludedTags/
         // excludedContentPrefixes — which default to FilterDefaults' hygiene baseline but are

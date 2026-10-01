@@ -50,6 +50,7 @@ class EventIngestCacheTest {
         activeFeedFilter: () -> FeedFilter = { permissiveFilter() },
         isCurrentUserPubkey: (String) -> Boolean = { false },
         isPendingEventLookupId: (String) -> Boolean = { false },
+        isRequestedBySubscription: (Event) -> Boolean = { false },
         isPinnedProfileAuthor: (String) -> Boolean = { false },
         isWiping: () -> Boolean = { false }
     ): EventIngestCache = EventIngestCache(
@@ -60,6 +61,7 @@ class EventIngestCacheTest {
         activeFeedFilter = activeFeedFilter,
         isCurrentUserPubkey = isCurrentUserPubkey,
         isPendingEventLookupId = isPendingEventLookupId,
+        isRequestedBySubscription = isRequestedBySubscription,
         isPinnedProfileAuthor = isPinnedProfileAuthor,
         isWiping = isWiping
     )
@@ -460,6 +462,24 @@ class EventIngestCacheTest {
     fun `given an unsolicited event of a kind outside the useful-kinds set when persist eligibility is evaluated then it is excluded`() = runTest {
         val cache = subject(this)
         val ev = event(kind = Event.KIND_LONG_FORM)
+
+        assertFalse(cache.shouldPersistEvent(ev))
+    }
+
+    @Test
+    fun `given an event of a kind outside the useful-kinds set that a live subscription asked for when persist eligibility is evaluated then it is included`() = runTest {
+        val cache = subject(this, isRequestedBySubscription = { it.kind == Event.KIND_LONG_FORM })
+        val ev = event(kind = Event.KIND_LONG_FORM)
+
+        assertTrue(cache.shouldPersistEvent(ev))
+    }
+
+    @Test
+    fun `given a subscription-requested event from a muted pubkey when persist eligibility is evaluated then it is excluded`() = runTest {
+        val mutedAuthor = "d".repeat(64)
+        val filter = permissiveFilter().copy(mutedPubkeys = setOf(mutedAuthor))
+        val cache = subject(this, activeFeedFilter = { filter }, isRequestedBySubscription = { true })
+        val ev = event(pubkey = mutedAuthor, kind = Event.KIND_LONG_FORM)
 
         assertFalse(cache.shouldPersistEvent(ev))
     }

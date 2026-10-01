@@ -276,6 +276,7 @@ class EventRepositoryImpl @Inject constructor(
             activeFeedFilter = { activeFeedFilter },
             isCurrentUserPubkey = ::isCurrentUserPubkey,
             isPendingEventLookupId = { it in pendingEventLookupIds },
+            isRequestedBySubscription = ::isRequestedByActiveSubscription,
             isPinnedProfileAuthor = { pinnedProfileAuthors.contains(it) },
             isWiping = { isWiping.get() }
         )
@@ -1144,6 +1145,20 @@ class EventRepositoryImpl @Inject constructor(
         val overlay = channelOverlays[channelId]
         val base = channelFilters[channelId].orEmpty()
         return if (overlay.isNullOrEmpty()) base else base + overlay
+    }
+
+    /**
+     * Whether any live channel (base filters or backfill overlay) names [event]'s kind and
+     * matches its ids/authors/tags. Only kind-scoped filters count: a kind-less filter is a broad
+     * query, not an explicit request for this particular kind. Checked only for kinds outside
+     * USEFUL_PERSISTED_KINDS (see EventIngestCache.shouldPersistEvent), so the scan over the
+     * few dozen live channels stays off the hot path for ordinary feed traffic.
+     */
+    private fun isRequestedByActiveSubscription(event: Event): Boolean {
+        fun List<EventFilter>.requests(event: Event) =
+            any { it.kinds.isNotEmpty() && it.matchesTagsAndIds(event) }
+        return channelFilters.values.any { it.requests(event) } ||
+            channelOverlays.values.any { it.requests(event) }
     }
 
     override fun clearChannel(channelId: String) {

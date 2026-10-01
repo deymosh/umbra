@@ -402,6 +402,21 @@ data class EventFilter(
     val relayUrls: Set<String> = emptySet()
 ) {
     /**
+     * Whether [event] satisfies this filter's `ids`/`authors`/`kinds`/tag constraints (NIP-01: an
+     * empty set means "any"). `since`/`until`/`limit`/`search` are deliberately ignored — this
+     * answers "did a subscription ask for this kind of event at all", not "would the relay have
+     * returned it in this exact window".
+     */
+    fun matchesTagsAndIds(event: Event): Boolean {
+        if (ids.isNotEmpty() && event.id !in ids) return false
+        if (authors.isNotEmpty() && authors.none { it.equals(event.pubkey, ignoreCase = true) }) return false
+        if (kinds.isNotEmpty() && event.kind !in kinds) return false
+        return tagFilters.all { (name, values) ->
+            values.isEmpty() || event.tags.any { tag -> tag.getOrNull(0) == name && tag.getOrNull(1) in values }
+        }
+    }
+
+    /**
      * Create filter for text note feed
      */
     companion object {
