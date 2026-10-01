@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 /**
  * Which relay-list kind the publish/Save flow is signing — 10007/10086 (search/index) also go
  * through nip44_encrypt first; 10002/10050 (outbox/inbox, DM) sign directly. See
- * RelayListPublishingCoordinator.signRelayListKind.
+ * [RelayListPublishingCoordinator.signRelayListKind].
  */
 internal enum class SignableRelayListKind { OUTBOX_INBOX, DM, SEARCH, INDEX }
 
@@ -46,24 +46,28 @@ internal class RelayListPublishingCoordinator(
      * and 10050 (DM) go straight to sign_event; 10007 (search) and 10086 (index) go through
      * nip44_encrypt first, per the private-by-default convention for those two kinds.
      * Processed one kind at a time (a plain suspend loop — each kind's encrypt/sign round trip
-     * goes through AmberSignerGateway/Nip44Gateway's high-level suspend methods, which already
-     * handle background-fast-path + the app-wide Amber launcher internally); a rejected/failed
-     * round trip stops the rest of the backlog, matching the previous "discard on failure, no
-     * retry cascade" behavior.
+     * goes through AmberSignerGateway/Nip44Gateway's high-level round trips, which already
+     * handle background-fast-path + the app-wide launcher internally); a rejected/failed round
+     * trip stops the rest of the backlog, matching the previous discard-no-retry behavior.
      */
     fun publishRelayLists() {
         if (!userPreferences.canSignWithAmber()) {
-            state.update { it.copy(errorMessage = UiMessage.Res(R.string.error_publish_relay_lists_unavailable)) }
+            state.update {
+                it.copy(errorMessage = UiMessage.Res(R.string.error_publish_relay_lists_unavailable))
+            }
             return
         }
         val snapshot = state.value
-        val backlog = buildList {
-            if (snapshot.relayListDirty) add(SignableRelayListKind.OUTBOX_INBOX)
-            if (snapshot.dmRelayListDirty) add(SignableRelayListKind.DM)
-            if (snapshot.searchListDirty) add(SignableRelayListKind.SEARCH)
-            if (snapshot.indexListDirty) add(SignableRelayListKind.INDEX)
-        }
+        val backlog = SignableRelayListKind.entries.filter { it.dirtyFlag(snapshot) }
         if (backlog.isEmpty()) return
+        // Each kind's dirty-state version snapshot, taken before signing. The sign round trip
+        // suspends in the external signer (user interaction, unbounded) — clearing the dirty
+        // flag unconditionally afterwards would lose an edit made while the sign dialog was
+        // open, and that change would then never be republished until some *later* unrelated
+        // edit happened to dirty the same kind again. clearDirtyFlagIfCurrent therefore
+        // leaves the flag set whenever a dirtying edit has bumped the kind's revision since,
+        // so the next Save picks the newer state up.
+        val versions = backlog.associateWith { kind -> kind.revisionOf(snapshot) }
         state.update { it.copy(isPublishing = true) }
         scope.launch {
             for (kind in backlog) {
@@ -82,7 +86,7 @@ internal class RelayListPublishingCoordinator(
                     }
                     return@launch
                 }
-                clearDirtyFlag(kind)
+                clearDirtyFlagIfCurrent(kind, versions.getValue(kind))
             }
             state.update { it.copy(isPublishing = false) }
         }
@@ -122,14 +126,45 @@ internal class RelayListPublishingCoordinator(
         }
     }
 
-    private fun clearDirtyFlag(kind: SignableRelayListKind) {
-        state.update {
-            when (kind) {
-                SignableRelayListKind.OUTBOX_INBOX -> it.copy(relayListDirty = false)
-                SignableRelayListKind.DM -> it.copy(dmRelayListDirty = false)
-                SignableRelayListKind.SEARCH -> it.copy(searchListDirty = false)
-                SignableRelayListKind.INDEX -> it.copy(indexListDirty = false)
+    /**
+     * Clears [kind]'s dirty flag only if no dirtying edit has touched [kind] since the
+     * [versionAtSnapshot] revision was snapshotted before signing — the *ListDirty flags are
+     * paired with the *ListRevision counters in [RelayConfigState], both under the same
+     * state.update discipline from every dirtying site in RelayConfigViewModel and
+     * RelayCrudCoordinator, so a single compare-and-clear inside one update transform is
+     * atomic against any other editor on this ViewModel's (single, Main-confined) scope.
+     * Leaves the flag untouched when revisions diverge, so the next Save republishes the
+     * newer state instead of silently dropping the edit.
+     */
+    internal fun clearDirtyFlagIfCurrent(kind: SignableRelayListKind, versionAtSnapshot: Long) {
+        state.update { current ->
+            if (!kind.dirtyFlag(current) || kind.revisionOf(current) != versionAtSnapshot) {
+                current
+            } else {
+                current.withoutDirtyFlag(kind)
             }
         }
     }
+}
+
+/** Reads this kind's dirtied-state revision counter. */
+internal fun SignableRelayListKind.revisionOf(state: RelayConfigState): Long = when (this) {
+    SignableRelayListKind.OUTBOX_INBOX -> state.outboxInboxListRevision
+    SignableRelayListKind.DM -> state.dmListRevision
+    SignableRelayListKind.SEARCH -> state.searchListRevision
+    SignableRelayListKind.INDEX -> state.indexListRevision
+}
+
+internal fun SignableRelayListKind.dirtyFlag(state: RelayConfigState): Boolean = when (this) {
+    SignableRelayListKind.OUTBOX_INBOX -> state.relayListDirty
+    SignableRelayListKind.DM -> state.dmRelayListDirty
+    SignableRelayListKind.SEARCH -> state.searchListDirty
+    SignableRelayListKind.INDEX -> state.indexListDirty
+}
+
+internal fun RelayConfigState.withoutDirtyFlag(kind: SignableRelayListKind): RelayConfigState = when (kind) {
+    SignableRelayListKind.OUTBOX_INBOX -> copy(relayListDirty = false)
+    SignableRelayListKind.DM -> copy(dmRelayListDirty = false)
+    SignableRelayListKind.SEARCH -> copy(searchListDirty = false)
+    SignableRelayListKind.INDEX -> copy(indexListDirty = false)
 }

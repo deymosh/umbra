@@ -116,6 +116,17 @@ data class RelayConfigState(
     val dmRelayListDirty: Boolean = false,
     val searchListDirty: Boolean = false,
     val indexListDirty: Boolean = false,
+    // Bumped *in the same state.update* as each paired *ListDirty flag above, by every
+    // dirtying site (saveRelay/deleteRelay mark all four; the individual set*Enabled/
+    // removeRelayRole setters mark one). RelayListPublishingCoordinator snapshots a kind's
+    // revision before signing and only clears that kind's dirty flag if the revision is
+    // unchanged afterwards — the sign round trip suspends for unbounded user interaction, and
+    // the version check is what keeps an edit made during that window from being republished
+    // as stale (or, worse, silently dropped) once the sign completes.
+    val outboxInboxListRevision: Long = 0L,
+    val dmListRevision: Long = 0L,
+    val searchListRevision: Long = 0L,
+    val indexListRevision: Long = 0L,
     val isPublishing: Boolean = false,
     // Derived from relays/connectedRelayUrls/relayIssues/relayRequests by
     // observeDerivedRelayState() on Dispatchers.Default — see that function's doc comment for
