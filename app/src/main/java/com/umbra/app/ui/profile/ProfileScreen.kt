@@ -67,11 +67,8 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import coil3.compose.AsyncImage
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
-import androidx.compose.ui.text.Placeholder
-import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.LinkAnnotation
@@ -81,7 +78,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -107,6 +103,7 @@ import com.umbra.app.ui.components.HASHTAG_REGEX
 import com.umbra.app.ui.components.URL_REGEX
 import com.umbra.app.ui.components.buildThreadDepthByEventId
 import com.umbra.app.ui.components.customEmojiInlineContentId
+import com.umbra.app.ui.components.rememberCustomEmojiInlineContent
 import com.umbra.app.ui.components.notesFeedSection
 import com.umbra.app.ui.components.normalizeExternalUrl
 import com.umbra.app.ui.components.QuickActionBottomBar
@@ -1451,28 +1448,15 @@ private fun rememberEmojisInlineContent(
     text: String
 ): Map<String, InlineTextContent> {
     val context = LocalContext.current
-    return remember(customEmojis, text) {
+    val used = remember(customEmojis, text) {
         customEmojis
-            .filter { (_, url) -> url.startsWith("https://") || url.startsWith("http://") }
-            .filterKeys { shortcode -> text.contains(":$shortcode:") }
-            .entries.associate { (shortcode, url) ->
-                customEmojiInlineContentId(shortcode) to InlineTextContent(
-                    Placeholder(
-                        width = 1.em,
-                        height = 1.em,
-                        placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter
-                    )
-                ) {
-                    AsyncImage(
-                        model = url,
-                        contentDescription = context.getString(
-                            R.string.custom_emoji_content_description,
-                            shortcode
-                        ),
-                        modifier = Modifier
-                    )
-                }
+            .filter { (shortcode, url) ->
+                (url.startsWith("https://") || url.startsWith("http://")) && text.contains(":$shortcode:")
             }
+            .mapValues { (shortcode, url) -> CustomEmoji(shortcode = shortcode, url = url) }
+    }
+    return rememberCustomEmojiInlineContent(used) { shortcode ->
+        context.getString(R.string.custom_emoji_content_description, shortcode)
     }
 }
 

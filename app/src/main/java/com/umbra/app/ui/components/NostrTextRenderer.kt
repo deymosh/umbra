@@ -18,7 +18,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -470,19 +473,29 @@ internal fun rememberCustomEmojiInlineContent(
     customEmojis: Map<String, CustomEmoji>,
     emojiContentDescription: (shortcode: String) -> String?
 ): Map<String, androidx.compose.foundation.text.InlineTextContent> {
-    return remember(customEmojis, emojiContentDescription) {
-        customEmojis.mapValues { (_, emoji) ->
-            androidx.compose.foundation.text.InlineTextContent(
+    val placeholderColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    // The description lambda is usually a fresh instance per recomposition; read it through
+    // state so it doesn't rebuild the whole map every time.
+    val description by rememberUpdatedState(emojiContentDescription)
+    return remember(customEmojis, placeholderColor) {
+        customEmojis.values.associate { emoji ->
+            customEmojiInlineContentId(emoji.shortcode) to androidx.compose.foundation.text.InlineTextContent(
                 Placeholder(
                     width = 1.15.em,
                     height = 1.15.em,
                     placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter
                 )
             ) {
+                // Fill the em-sized placeholder so the image scales with the text it sits in
+                // (a display name is far larger than body text); a rounded tile shows until it loads.
                 AsyncImage(
                     model = emoji.url,
-                    contentDescription = emojiContentDescription(emoji.shortcode),
-                    modifier = Modifier.size(18.dp)
+                    contentDescription = description(emoji.shortcode),
+                    placeholder = ColorPainter(placeholderColor),
+                    error = ColorPainter(placeholderColor),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(20))
                 )
             }
         }

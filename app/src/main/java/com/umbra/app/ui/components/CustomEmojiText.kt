@@ -1,6 +1,5 @@
 package com.umbra.app.ui.components
 
-import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -10,23 +9,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.Placeholder
-import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.em
-import coil3.compose.AsyncImage
 import com.umbra.app.R
+import com.umbra.app.domain.nip30.CustomEmoji
 
 private val PROFILE_EMOJI_REGEX = Regex(":([A-Za-z0-9_+-]+):")
 
 /**
  * NIP-30 inline `:shortcode:` rendering for short profile text (display name, about): a
- * shortcode present in [customEmojis] (shortcode → https URL, from the profile event's own
- * `emoji` tags) becomes an inline image at line height; anything unmatched renders as the
- * literal `:shortcode:` text. Long text still ellipsizes via [maxLines]/[overflow] — same
- * contract as a plain Text.
+ * shortcode present in [customEmojis] (shortcode → URL, from the profile event's own `emoji`
+ * tags) becomes an inline image sized to the text; anything unmatched renders as the literal
+ * `:shortcode:` text. Long text still ellipsizes via [maxLines]/[overflow] — same contract as a
+ * plain Text. Uses the note renderer's inline content so emoji look the same everywhere.
  */
 @Composable
 fun CustomEmojiText(
@@ -39,32 +35,16 @@ fun CustomEmojiText(
     overflow: TextOverflow = TextOverflow.Clip
 ) {
     val context = LocalContext.current
-    val annotated = remember(text, customEmojis) { annotateProfileEmoji(text, customEmojis) }
-    val inlineContent = remember(text, customEmojis) {
+    val used = remember(text, customEmojis) {
         customEmojis
-            .filter { (_, url) -> url.startsWith("https://") || url.startsWith("http://") }
-            .filterKeys { shortcode -> text.contains(":$shortcode:") }
-            .mapValues { (shortcode, url) ->
-                InlineTextContent(
-                    // 1em keeps the image at the surrounding text's line height; TextCenter
-                    // aligns it like the note renderer does for in-note emoji.
-                    Placeholder(
-                        width = 1.em,
-                        height = 1.em,
-                        placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter
-                    )
-                ) {
-                    AsyncImage(
-                        model = url,
-                        contentDescription = context.getString(
-                            R.string.custom_emoji_content_description,
-                            shortcode
-                        ),
-                        modifier = Modifier
-                    )
-                }
+            .filter { (shortcode, url) ->
+                (url.startsWith("https://") || url.startsWith("http://")) && text.contains(":$shortcode:")
             }
-            .mapKeys { (shortcode, _) -> customEmojiInlineContentId(shortcode) }
+            .mapValues { (shortcode, url) -> CustomEmoji(shortcode = shortcode, url = url) }
+    }
+    val annotated = remember(text, used) { annotateProfileEmoji(text, used.keys) }
+    val inlineContent = rememberCustomEmojiInlineContent(used) { shortcode ->
+        context.getString(R.string.custom_emoji_content_description, shortcode)
     }
     Text(
         text = annotated,
@@ -77,18 +57,17 @@ fun CustomEmojiText(
 }
 
 /**
- * Builds [text] with every `:shortcode:` that exists in [customEmojis] replaced by an
- * [appendInlineContent] reference (keyed by [customEmojiInlineContentId]); unmatched
- * shortcodes stay literal.
+ * Builds [text] with every `:shortcode:` in [shortcodes] replaced by an [appendInlineContent]
+ * reference (keyed by [customEmojiInlineContentId]); unmatched shortcodes stay literal.
  */
 internal fun annotateProfileEmoji(
     text: String,
-    customEmojis: Map<String, String>
+    shortcodes: Set<String>
 ): AnnotatedString = buildAnnotatedString {
     var cursor = 0
     for (match in PROFILE_EMOJI_REGEX.findAll(text)) {
         val shortcode = match.groupValues.getOrNull(1).orEmpty()
-        if (customEmojis.containsKey(shortcode)) {
+        if (shortcode in shortcodes) {
             if (match.range.first > cursor) append(text.substring(cursor, match.range.first))
             appendInlineContent(customEmojiInlineContentId(shortcode), ":$shortcode:")
             cursor = match.range.last + 1
