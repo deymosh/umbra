@@ -6,6 +6,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.update
 import com.umbra.app.R
 import com.umbra.app.domain.nip55.AmberSignerGateway
+import com.umbra.app.domain.relay.RelayAuthMode
 import com.umbra.app.domain.nostr.NostrSessionController
 import com.umbra.app.domain.preferences.UserPreferences
 import com.umbra.app.domain.repository.RelayRepository
@@ -44,6 +45,10 @@ class LoginViewModel @Inject constructor(
     val panicWipeEnabled: StateFlow<Boolean> = userPreferences.getPanicWipeEnabledFlow()
 
     fun setPanicWipeEnabled(enabled: Boolean) = userPreferences.setPanicWipeEnabled(enabled)
+
+    val relayAuthMode: StateFlow<RelayAuthMode> = userPreferences.getRelayAuthModeFlow()
+
+    fun setRelayAuthMode(mode: RelayAuthMode) = userPreferences.setRelayAuthMode(mode)
 
     private val logger = UmbraLog.tag(TAG)
 

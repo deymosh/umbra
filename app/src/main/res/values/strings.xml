@@ -304,6 +304,12 @@
     <string name="settings_appearance_title">Theme</string>
     <string name="settings_appearance_subtitle">Choose a color palette</string>
 
+    <string name="settings_relay_auth_title">Sign in to other relays</string>
+    <string name="settings_relay_auth_option_throwaway">With a throwaway key (recommended)</string>
+    <string name="settings_relay_auth_option_own_key">With your key</string>
+    <string name="settings_relay_auth_option_never">Don\'t sign in</string>
+    <string name="settings_relay_auth_explainer">Relays you didn\'t add only see a random key, never your account. Your own relays always use your key.</string>
+
     <string name="settings_developer">Developer</string>
     <string name="settings_developer_options_title">Developer options</string>
     <string name="settings_developer_options_subtitle">Toggles to help debug the app, off by default</string>
