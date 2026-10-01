@@ -92,16 +92,27 @@ class TorRuntimeManager @Inject constructor(
      */
     override val state: StateFlow<TorRuntimeState> = _state.asStateFlow()
 
+    // @Volatile: written from start()/stop() under lifecycleLock and read (only) there too —
+    // volatile keeps the flag's visibility safe for any future reader outside the lock.
+    @Volatile
+    private var started = false
     private var statusReceiver: BroadcastReceiver? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var maintenanceJob: Job? = null
-    private var startingSinceMs: Long? = null
-    private var lastLivenessCheckMs: Long = 0L
-
+    // @Volatile: written from the BroadcastReceiver (main thread) and the maintenance loop, read
+    // from both as well as requestOrbotStart() — publication between those threads must not rely
+    // on the StateFlow's own happens-before edges.
     @Volatile
-    private var started = false
+    private var startingSinceMs: Long? = null
+    // @Volatile: written and read from the maintenance loop and the receiver for the same reason.
+    @Volatile
+    private var lastLivenessCheckMs: Long = 0L
+    // Serializes start()/stop(): both mutate the started flag and the same receiver/callback/job
+    // set, and start()'s check-then-act on `started` is only safe under this lock (without it two
+    // concurrent starts would each register and each launch a maintenance loop).
+    private val lifecycleLock = Any()
 
-    override fun start() {
+    override fun start(): Unit = synchronized(lifecycleLock) {
         if (started) return
         started = true
 
@@ -187,7 +198,7 @@ class TorRuntimeManager @Inject constructor(
         }
     }
 
-    override fun stop() {
+    override fun stop() = synchronized(lifecycleLock) {
         started = false
         maintenanceJob?.cancel()
         maintenanceJob = null
