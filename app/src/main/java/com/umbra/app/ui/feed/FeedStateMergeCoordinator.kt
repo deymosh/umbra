@@ -115,11 +115,11 @@ private fun ComputedFeedSnapshot.stableFingerprint(): Int {
  * [uiState]/[displayLimit] are the facade's own [MutableStateFlow] instances, passed by direct
  * reference (never duplicated) — mirrors [RelayIssueBannerCoordinator]'s `uiState` parameter.
  * [onVisibleNotesComputed] is the cross-coordinator coupling callback: [computedFeedFlow]'s
- * combine chain invokes it once per unique computed snapshot in place of a direct cross-class
+ * combine chain hands every raw emission's visible notes to it in place of a direct cross-class
  * call into [FeedEngagementSchedulingCoordinator] — wired by [FeedViewModel] to
- * `feedEngagementSchedulingCoordinator::schedulePendingRelayWork`. It fires on the Main side of
- * the chain's flowOn(Dispatchers.Default) hop (onEach), because the callback's recipient mutates
- * plain vars that must stay confined to the owning ViewModel's main-thread scope.
+ * `feedEngagementSchedulingCoordinator::schedulePendingRelayWork`. Delivery goes through
+ * `visibleNotesChannel`, drained on this coordinator's (main-thread) scope, because the
+ * callback's recipient mutates plain vars that must stay confined to that scope.
  *
  * [followedPubkeysFlow] is `internal`, not `private` — three facade functions
  * (`observeFollowedAuthorOutboxDiscovery` x2, `observeActiveFeedFilterChanges`) read it directly
