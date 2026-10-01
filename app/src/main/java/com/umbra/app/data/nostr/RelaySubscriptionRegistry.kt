@@ -89,28 +89,11 @@ internal class RelaySubscriptionRegistry {
     }
 
     /**
-     * True if [filters] differ from the filters last successfully sent for (relayUrl, channelId)
-     * — i.e. this REQ would not be a no-op. Doesn't record anything itself; the atomic
-     * reserve-then-commit alternative is [tryReserve]/[commitSent], which callers whose
-     * apply-send sequence can run concurrently for the same (relay, channel) must use instead:
-     * hasChanged followed by recordSent is two separate steps, so two concurrent calls can both
-     * read the same old fingerprint, both pass the check, and both send a duplicate REQ.
-     */
-    fun hasChanged(relayUrl: String, channelId: String, filters: List<EventFilter>): Boolean =
-        lastSentFingerprint[relayUrl]?.get(channelId) != filterFingerprint(filters)
-
-    /**
      * Atomically "check fingerprint and reserve it" in one step per (relayUrl, channelId):
-     * returns true (and installs [filterFingerprint(filters)] as the pending sent-fingerprint)
-     * only if the caller won — a concurrent competing call for the same pair either already
-     * reserved an identical fingerprint (returns false; identical filters, so nothing missed) or
-     * reserved a different one (this caller re-checks against the winner instead of the stale
-     * pre-race value). Callers must only call this after every withholding precondition has
-     * passed, and must pair it with [commitSend]/[rollbackReservation] once the send is decided:
-     * a reservation that is neither committed nor rolled back (caller crashed between) leaves a
-     * fingerprint cached for a REQ that may never have gone out — same hazard recordSent's own
-     * doc comment below describes; rollbackReservation (not commit) is the right response to a
-     * withheld/failed send.
+     * returns true (and records [filters]' fingerprint as sent) only if they differ from what was
+     * last sent, so two concurrent apply paths for the same pair can never both send an identical
+     * REQ. Call it only after every withholding precondition has passed; if the send then doesn't
+     * go out, call [rollbackReservation] so a later retry isn't treated as a no-op.
      */
     fun tryReserve(relayUrl: String, channelId: String, filters: List<EventFilter>): Boolean {
         val fingerprint = filterFingerprint(filters)
@@ -128,21 +111,8 @@ internal class RelaySubscriptionRegistry {
     }
 
     /**
-     * Confirms a [tryReserve] reservation: no-op — [tryReserve] caches the fingerprint at reserve
-     * time and a successful send matches it, so nothing further is written. Kept as an explicit
-     * counterpart to [rollbackReservation] so the reserve/commit/rollback protocol reads
-     * uniformly at the call site.
-     */
-    fun commitSent(relayUrl: String, channelId: String, filters: List<EventFilter>) {
-        lastSentFingerprintPerChannel(relayUrl)[channelId] = filterFingerprint(filters)
-    }
-
-    /**
-     * Undoes a [tryReserve] reservation whose send never went out or was withheld — restores the
-     * caller's pre-reserve value. Two concurrent rollers-back could both write their own
-     * pre-reserve values; compute keeps the restore per-key serialized, and the last writer's
-     * pre-reserve observation is the most recent one, so no older fingerprint can survive a
-     * newer reservation being rolled back.
+     * Undoes a [tryReserve] reservation whose send never went out: clears the fingerprint (the next
+     * reserve then always sends) unless a newer reservation already replaced it, which is kept.
      */
     fun rollbackReservation(relayUrl: String, channelId: String, filters: List<EventFilter>) {
         val fingerprint = filterFingerprint(filters)
@@ -151,20 +121,7 @@ internal class RelaySubscriptionRegistry {
         }
     }
 
-    /**
-     * Records [filters] as the last filters successfully sent for (relayUrl, channelId). Callers
-     * must only call this after a REQ actually went out — caching a fingerprint for a REQ that was
-     * withheld (throttled, subscription-limited, ...) would wrongly suppress the real attempt once
-     * the withholding condition clears. Non-concurrent callers can use this directly; callers
-     * whose apply path can race for the same (relay, channel) must use the atomic
-     * [tryReserve]/[rollbackReservation] pair instead.
-     */
-    fun recordSent(relayUrl: String, channelId: String, filters: List<EventFilter>) {
-        lastSentFingerprintPerChannel(relayUrl)[channelId] = filterFingerprint(filters)
-    }
-
-    // Per-relay channel->fingerprint accessor shared by the reserve/commit/rollback protocol and
-    // recordSent, so none of them repeat the getOrPut chain inline.
+    // Per-relay channel->fingerprint accessor shared by tryReserve and rollbackReservation.
     private fun lastSentFingerprintPerChannel(relayUrl: String): MutableMap<String, String> =
         lastSentFingerprint.getOrPut(relayUrl) { ConcurrentHashMap() }
 
@@ -189,7 +146,7 @@ internal class RelaySubscriptionRegistry {
     /**
      * Clears [relayUrl]'s fingerprint cache only — called when a fresh socket opens for it (see
      * [UmbraNostrClient.onWebSocketOpen]): a new socket has no memory of what filters were sent to
-     * the old one, so the next [hasChanged] check for it must not treat identical filters as a
+     * the old one, so the next [tryReserve] for it must not treat identical filters as a
      * no-op.
      */
     fun clearFingerprint(relayUrl: String) {

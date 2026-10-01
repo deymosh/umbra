@@ -646,11 +646,9 @@ class UmbraNostrClient @Inject constructor(
         if (isThrottled(relayUrl)) return false
         if (isReqUnsupported(relayUrl)) return false
         if (requiresSearchFilter(relayUrl) && filters.none { !it.search.isNullOrBlank() }) return false
-        // tryReserve (not hasChanged-then-recordSent): fingerprint check and reservation are one
-        // atomic step per (relay, channel), so two concurrent applyChannel calls for the same
-        // pair cannot both pass the check and both send a duplicate REQ — the loser's reserve
-        // sees the winner's fingerprint and stops. Reserve happens before the send; if the send
-        // throws, roll the reservation back so a later retry isn't wrongly suppressed.
+        // Check and reserve are one atomic step per (relay, channel), so two concurrent
+        // applyChannel calls can't both send the same REQ. If the send throws, the reservation is
+        // rolled back so a later retry isn't wrongly suppressed.
         if (!subscriptions.tryReserve(relayUrl, channelId, filters)) return false
         val subId = subscriptions.getOrCreateSubId(relayUrl, channelId, rejectsSubIdReuse(relayUrl))
         var sent = false
