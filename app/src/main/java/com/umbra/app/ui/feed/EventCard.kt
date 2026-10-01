@@ -896,7 +896,9 @@ internal fun getEventKindLabelModel(event: Event, hasQuoteRefs: Boolean, hasProf
         Event.KIND_CONTACT_LIST -> EventKindLabel(R.string.event_kind_contacts)
         Event.KIND_ENCRYPTED_DM -> EventKindLabel(R.string.event_kind_dm_enc)
         Event.KIND_EVENT_DELETION -> EventKindLabel(R.string.event_kind_deletion)
-        Event.KIND_REPOST -> EventKindLabel(R.string.event_kind_repost)
+        // NIP-18: kind 16 is the generic repost (any target kind other than a kind-1 note); both
+        // are reposts, so both carry the same label rather than falling through to no label.
+        Event.KIND_REPOST, Event.KIND_GENERIC_REPOST -> EventKindLabel(R.string.event_kind_repost)
         Event.KIND_REACTION -> EventKindLabel(R.string.event_kind_reaction)
         Event.KIND_COMMENT -> EventKindLabel(R.string.event_kind_comment)
         Event.KIND_PICTURE -> EventKindLabel(R.string.event_kind_picture)

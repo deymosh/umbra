@@ -46,6 +46,7 @@ import com.umbra.app.domain.repository.EventRepository
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.nip17.DmRelayList
 import com.umbra.app.domain.nip18.extractRepostTarget
+import com.umbra.app.domain.nip18.isRepostKind
 import com.umbra.app.domain.nip51.extractIndexRelaysList
 import com.umbra.app.domain.nip51.extractSearchRelaysList
 import com.umbra.app.domain.nip65.RelayListMetadata
@@ -743,7 +744,9 @@ class EventRepositoryImpl @Inject constructor(
         // is authored by the recipient's zap/LNURL service, never by the zapper, so authors={me}
         // structurally can never match one. The inbox set adds it back in since it's #p-tagged with
         // the recipient (matches the #p={me} tag filter) — without it, zaps received never surfaced.
-        val ownInteractionKinds = setOf(Event.KIND_REPOST, Event.KIND_REACTION)
+        // NIP-18: both repost kinds — a repost of a picture/article is kind 16, and subscribing
+        // only kind 6 left those out of the user's own outbox interactions entirely.
+        val ownInteractionKinds = setOf(Event.KIND_REPOST, Event.KIND_GENERIC_REPOST, Event.KIND_REACTION)
         val inboxInteractionKinds = ownInteractionKinds + Event.KIND_ZAP_RECEIPT
 
         // Outbox profile/notes/interactions subscriptions: always author=logged user.
@@ -2201,12 +2204,12 @@ class EventRepositoryImpl @Inject constructor(
         val normalized = pubkey.lowercase()
         return withContext(Dispatchers.Default) {
             eventIngestCache.snapshot().asSequence()
-                // INBOX_NOTES' interactions filter fetches KIND_REACTION, KIND_REPOST and
+                // INBOX_NOTES' interactions filter fetches both repost kinds, KIND_REACTION and
                 // KIND_ZAP_RECEIPT (see inboxInteractionKinds) — tracking only a subset here
                 // could stall the anchor while backfill on the untracked kind(s) was actually
                 // still progressing.
                 .filter {
-                    (it.kind == Event.KIND_REACTION || it.kind == Event.KIND_REPOST || it.kind == Event.KIND_ZAP_RECEIPT) &&
+                    (it.kind == Event.KIND_REACTION || isRepostKind(it.kind) || it.kind == Event.KIND_ZAP_RECEIPT) &&
                         normalized in it.getMentionedPubkeys()
                 }
                 .minOfOrNull { it.createdAt }

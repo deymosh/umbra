@@ -21,8 +21,17 @@ data class RepostTarget(
     val relayHint: String? = null
 )
 
+/**
+ * NIP-18: kind 6 reposts a text note, kind 16 (generic repost) reposts every other target kind.
+ * Both are reposts, so anything meaning "someone reposted this" — an engagement counter, a feed
+ * filter, an inbox notification — must accept both. Counters that tested only kind 6 silently
+ * went to zero for reposts of pictures/articles once kind 16 started being published, which is
+ * exactly the drift this single predicate exists to prevent.
+ */
+fun isRepostKind(kind: Int): Boolean = kind == Event.KIND_REPOST || kind == Event.KIND_GENERIC_REPOST
+
 fun extractRepostTarget(event: Event): RepostTarget {
-    if (event.kind != Event.KIND_REPOST && event.kind != Event.KIND_GENERIC_REPOST) {
+    if (!isRepostKind(event.kind)) {
         return RepostTarget(eventId = null, authorPubkey = null)
     }
     val eTag = event.tags.lastOrNull { it.size >= 2 && it[0] == "e" }
@@ -44,7 +53,7 @@ fun extractRepostTarget(event: Event): RepostTarget {
  * does for a q-tag-only reference.
  */
 fun parseRepostedEvent(event: Event): Event? {
-    if (event.kind != Event.KIND_REPOST && event.kind != Event.KIND_GENERIC_REPOST) return null
+    if (!isRepostKind(event.kind)) return null
     if (event.content.isBlank()) return null
 
     val obj = runCatching { JsonUtils.NostrJson.parseToJsonElement(event.content) }

@@ -269,7 +269,7 @@ interface EventDao : NegentropyEventSource {
                 dedup.targetId AS targetId,
                 SUM(CASE WHEN dedup.kind = 7 THEN 1 ELSE 0 END) AS reactionCount,
                 SUM(CASE WHEN dedup.kind = 1 THEN 1 ELSE 0 END) AS replyCount,
-                SUM(CASE WHEN dedup.kind = 6 THEN 1 ELSE 0 END) AS repostCount
+                SUM(CASE WHEN dedup.kind IN (6, 16) THEN 1 ELSE 0 END) AS repostCount
             FROM (
                 SELECT DISTINCT
                     et.tag_value AS targetId,
@@ -278,7 +278,7 @@ interface EventDao : NegentropyEventSource {
                 FROM event_tags et
                 JOIN events eng ON eng.id = et.event_id
                 WHERE et.tag_name = 'e'
-                  AND eng.kind IN (1, 6, 7)
+                  AND eng.kind IN (1, 6, 7, 16)
                   AND NOT (eng.kind = 7 AND TRIM(eng.content) = '-')
                   AND et.tag_value IN (SELECT id FROM base)
             ) dedup

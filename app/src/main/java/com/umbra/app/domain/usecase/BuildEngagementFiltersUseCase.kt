@@ -16,6 +16,9 @@ class BuildEngagementFiltersUseCase {
         private val ENGAGEMENT_KINDS = setOf(
             Event.KIND_TEXT_NOTE,
             Event.KIND_REPOST,
+            // NIP-18: reposts of anything but a kind-1 note are kind 16; without it here the
+            // engagement REQ never asks for them, so their count could never arrive at all.
+            Event.KIND_GENERIC_REPOST,
             Event.KIND_REACTION,
             Event.KIND_ZAP_RECEIPT
         )

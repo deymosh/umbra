@@ -20,7 +20,13 @@ class ObserveOwnActivityUseCase @Inject constructor(
         return combine(
             eventRepository.observeCountEventsByPubkeyAndKind(me, Event.KIND_TEXT_NOTE),
             eventRepository.observeCountEventsByPubkeyAndKind(me, Event.KIND_REACTION),
-            eventRepository.observeCountEventsByPubkeyAndKind(me, Event.KIND_REPOST)
-        ) { notes, reactions, reposts -> OwnActivity(notes, reactions, reposts) }
+            eventRepository.observeCountEventsByPubkeyAndKind(me, Event.KIND_REPOST),
+            // NIP-18: a repost of anything other than a kind-1 note is kind 16, and it is still a
+            // repost the user published — counting only kind 6 reported zero after reposting a
+            // picture or an article.
+            eventRepository.observeCountEventsByPubkeyAndKind(me, Event.KIND_GENERIC_REPOST)
+        ) { notes, reactions, reposts, genericReposts ->
+            OwnActivity(notes, reactions, reposts + genericReposts)
+        }
     }
 }

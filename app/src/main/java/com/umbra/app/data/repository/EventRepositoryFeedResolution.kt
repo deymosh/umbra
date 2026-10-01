@@ -4,6 +4,7 @@ import com.umbra.app.domain.model.NoteView
 import com.umbra.app.domain.model.PendingRepost
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip18.extractRepostTarget
+import com.umbra.app.domain.nip18.isRepostKind
 import com.umbra.app.domain.nip25.isDislikeReactionContent
 
 internal fun mergeHybridEvents(
@@ -120,16 +121,16 @@ internal fun buildCachedNoteViews(
     val seenLinks = HashSet<Triple<String, String, Int>>()
     allEvents.forEach { event ->
         if (event.kind != Event.KIND_TEXT_NOTE &&
-            event.kind != Event.KIND_REPOST &&
+            !isRepostKind(event.kind) &&
             event.kind != Event.KIND_REACTION
         ) return@forEach
         event.getTagValues("e").forEach { targetId ->
             if (targetId !in selectedIds || !seenLinks.add(Triple(event.id, targetId, event.kind))) return@forEach
             val counts = engagement.getOrPut(targetId) { IntArray(3) }
-            when (event.kind) {
-                Event.KIND_REACTION -> if (!isDislikeReactionContent(event.content)) counts[0] += 1
-                Event.KIND_TEXT_NOTE -> counts[1] += 1
-                Event.KIND_REPOST -> counts[2] += 1
+            when {
+                event.kind == Event.KIND_REACTION -> if (!isDislikeReactionContent(event.content)) counts[0] += 1
+                event.kind == Event.KIND_TEXT_NOTE -> counts[1] += 1
+                isRepostKind(event.kind) -> counts[2] += 1
             }
         }
     }
@@ -201,7 +202,7 @@ internal class EventEngagementIndex {
     fun add(event: Event) {
         remove(event.id)
         if (event.kind != Event.KIND_TEXT_NOTE &&
-            event.kind != Event.KIND_REPOST &&
+            !isRepostKind(event.kind) &&
             event.kind != Event.KIND_REACTION
         ) return
         // A dislike gets no link at all, so remove() stays symmetric without remembering why.
@@ -244,18 +245,18 @@ internal class EventEngagementIndex {
     }
 
     private fun IntArray.increment(kind: Int) {
-        when (kind) {
-            Event.KIND_REACTION -> this[0] += 1
-            Event.KIND_TEXT_NOTE -> this[1] += 1
-            Event.KIND_REPOST -> this[2] += 1
+        when {
+            kind == Event.KIND_REACTION -> this[0] += 1
+            kind == Event.KIND_TEXT_NOTE -> this[1] += 1
+            isRepostKind(kind) -> this[2] += 1
         }
     }
 
     private fun IntArray.decrement(kind: Int) {
-        when (kind) {
-            Event.KIND_REACTION -> this[0] = (this[0] - 1).coerceAtLeast(0)
-            Event.KIND_TEXT_NOTE -> this[1] = (this[1] - 1).coerceAtLeast(0)
-            Event.KIND_REPOST -> this[2] = (this[2] - 1).coerceAtLeast(0)
+        when {
+            kind == Event.KIND_REACTION -> this[0] = (this[0] - 1).coerceAtLeast(0)
+            kind == Event.KIND_TEXT_NOTE -> this[1] = (this[1] - 1).coerceAtLeast(0)
+            isRepostKind(kind) -> this[2] = (this[2] - 1).coerceAtLeast(0)
         }
     }
 }

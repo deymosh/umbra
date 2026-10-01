@@ -5,6 +5,7 @@ import com.umbra.app.R
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.umbra.app.domain.nip18.isRepostKind
 import com.umbra.app.domain.nip19.Bech32Encoder
 import com.umbra.app.domain.model.NostrChannels
 import com.umbra.app.ui.common.InteractionActionsCoordinator
@@ -405,7 +406,7 @@ class ThreadViewModel @Inject constructor(
 
         val threadIds = eventMap.keys.toList()
         val directEngagement = eventRepository.getEventsReferencingIds(threadIds)
-            .filter { it.kind == Event.KIND_REACTION || it.kind == Event.KIND_REPOST }
+            .filter { it.kind == Event.KIND_REACTION || isRepostKind(it.kind) }
         directEngagement.forEach { engagement -> eventMap.putIfAbsent(engagement.id, engagement) }
 
         return eventMap.values.toList()
@@ -507,19 +508,19 @@ class ThreadViewModel @Inject constructor(
             .distinctBy { it.id }
             .filter { event ->
                 event.kind == Event.KIND_REACTION ||
-                    event.kind == Event.KIND_REPOST ||
+                    isRepostKind(event.kind) ||
                     (event.kind == Event.KIND_TEXT_NOTE && event.isReply())
             }
             .forEach { event ->
                 val targetEventId = event.getParentEventId() ?: event.getTagValue("e") ?: return@forEach
                 if (!threadIds.contains(targetEventId)) return@forEach
 
-                when (event.kind) {
-                    Event.KIND_REACTION -> if (!isDislikeReactionContent(event.content)) {
+                when {
+                    event.kind == Event.KIND_REACTION -> if (!isDislikeReactionContent(event.content)) {
                         reactionCounts[targetEventId] = (reactionCounts[targetEventId] ?: 0) + 1
                     }
-                    Event.KIND_REPOST -> repostCounts[targetEventId] = (repostCounts[targetEventId] ?: 0) + 1
-                    Event.KIND_TEXT_NOTE -> replyCounts[targetEventId] = (replyCounts[targetEventId] ?: 0) + 1
+                    isRepostKind(event.kind) -> repostCounts[targetEventId] = (repostCounts[targetEventId] ?: 0) + 1
+                    event.kind == Event.KIND_TEXT_NOTE -> replyCounts[targetEventId] = (replyCounts[targetEventId] ?: 0) + 1
                 }
             }
 
