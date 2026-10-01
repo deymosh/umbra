@@ -34,15 +34,14 @@ internal const val PROFILE_HYDRATION_CHANNEL_CLOSE_MS = 15_000L
 // whose note is already on screen, not a second bulk sweep.
 internal const val OUTBOX_ACCELERATION_MAX_AUTHORS = 40
 
-// CHANNEL_METADATA_HYDRATION/CHANNEL_PROFILE_WATCH are read by both this coordinator (moved
-// functions) and FeedViewModel's own onCleared() facade cleanup — promoted here (not left as a
-// FeedViewModel companion private const) so both sides see the identical channel id.
+// CHANNEL_METADATA_HYDRATION is read by both this coordinator (moved functions) and
+// FeedViewModel's own onCleared() facade cleanup — promoted here (not left as a FeedViewModel
+// companion private const) so both sides see the identical channel id.
 internal const val CHANNEL_METADATA_HYDRATION = NostrChannels.FEED_PROFILES_ONDEMAND
-internal const val CHANNEL_PROFILE_WATCH = NostrChannels.FEED_PROFILES
 
 // CHANNEL_FEED is read by both this coordinator's scheduleEngagementSubscription and several
 // facade-side functions (loadOlderFeed, onCleared) that stay on FeedViewModel — same reasoning as
-// CHANNEL_METADATA_HYDRATION/CHANNEL_PROFILE_WATCH above. Promoted here because FeedViewModel's
+// CHANNEL_METADATA_HYDRATION above. Promoted here because FeedViewModel's
 // companion `private const val CHANNEL_FEED` would otherwise be invisible to this file, a
 // compile-blocking gap.
 internal const val CHANNEL_FEED = NostrChannels.FEED_NOTES
@@ -85,12 +84,7 @@ internal class FeedEngagementSchedulingCoordinator(
     private var lastEngagementSubscriptionAtMs: Long = 0L
     internal var profileHydrationJob: Job? = null
     private var profileHydrationChannelCloseJob: Job? = null
-    private var profileWatchJob: Job? = null
     private var requestedProfileAuthors: Set<String> = emptySet()
-    // Authors already hydrated among currently-visible notes, being watched on CHANNEL_PROFILE_WATCH
-    // (see scheduleProfileWatch) for future updates — distinct from requestedProfileAuthors, which
-    // tracks authors still awaiting their first (one-shot) fetch on CHANNEL_METADATA_HYDRATION.
-    private var requestedWatchedProfileAuthors: Set<String> = emptySet()
     private var lastProfileHydrationAtMs: Long = 0L
     private var lastRelayWorkFingerprint: Int = 0
     private var lastRelayWorkCount: Int = 0
@@ -178,9 +172,12 @@ internal class FeedEngagementSchedulingCoordinator(
      * coordinators).
      *
      * Queues profile hydration for any note whose [NoteView.authorProfile] is still null (i.e.
-     * the author's kind-0 event has not yet been cached locally), and extends the standing
-     * profile watch (see [scheduleProfileWatch]) to already-hydrated authors so a later update
-     * from them is still picked up live. Engagement REQs are scheduled separately, from
+     * the author's kind-0 event has not yet been cached locally). There is deliberately no
+     * standing "profile watch" REQ for already-hydrated authors: it had to be re-sent to every
+     * relay over Tor each time the visible author set changed while scrolling, and its
+     * `since = now` re-subscribes dropped any update published between two of them anyway. A
+     * visible author whose profile goes stale past UserRepository's freshness window is
+     * re-requested here through the same EOSE-closed hydration. Engagement REQs are scheduled separately, from
      * FeedViewModel's prefetchViewportImages — see [scheduleEngagementSubscription]'s doc comment
      * for why.
      */
@@ -195,9 +192,12 @@ internal class FeedEngagementSchedulingCoordinator(
         lastRelayWorkFingerprint = fingerprint
         lastRelayWorkCount = notes.size
 
+        // Missing profiles first, then already-cached ones: scheduleProfileHydration's freshness
+        // check drops every author still inside the freshness window, so a cached-but-stale
+        // profile is refreshed without re-requesting the fresh ones.
         val authorsToHydrate = notes
+            .sortedBy { it.authorProfile != null }
             .asSequence()
-            .filter { it.authorProfile == null }
             .map { it.event.pubkey.lowercase() }
             .filter { it.length == 64 && it !in requestedProfileAuthors }
             .distinct()
@@ -206,19 +206,6 @@ internal class FeedEngagementSchedulingCoordinator(
 
         if (authorsToHydrate.isNotEmpty()) {
             scheduleProfileHydration(authorsToHydrate)
-        }
-
-        val authorsToWatch = notes
-            .asSequence()
-            .filter { it.authorProfile != null }
-            .map { it.event.pubkey.lowercase() }
-            .filter { it.length == 64 }
-            .distinct()
-            .take(80)
-            .toSet()
-
-        if (authorsToWatch.isNotEmpty()) {
-            scheduleProfileWatch(authorsToWatch)
         }
 
         recentlyVisibleAuthors = notes.asSequence()
@@ -334,50 +321,9 @@ internal class FeedEngagementSchedulingCoordinator(
         }
     }
 
-    /**
-     * Extends CHANNEL_PROFILE_WATCH — a standing (never EOSE-closed) subscription — to cover
-     * [authors], authors whose profile is already hydrated among currently-visible notes. Unlike
-     * [scheduleProfileHydration], this isn't about fetching their current profile (already have
-     * it) but about catching a *later* update live, so there's no freshness check and no
-     * EOSE-driven close: the whole point is staying open past the initial fetch.
-     *
-     * Passes `since = now` on every (re)subscribe so relays only push events newer than this
-     * moment for the *whole* merged author set, not the latest already-known event for authors
-     * that were already being watched before this call — without it, merging in one new author
-     * would make relays resend state for every other watched author too.
-     */
-    private fun scheduleProfileWatch(authors: Set<String>) {
-        profileWatchJob?.cancel()
-        profileWatchJob = scope.launch {
-            delay(PROFILE_HYDRATION_DEBOUNCE_MS)
-
-            val mergedAuthors = buildHydrationAuthorSetUseCase(
-                existing = requestedWatchedProfileAuthors,
-                incoming = authors,
-                maxAuthors = 60
-            )
-            if (mergedAuthors.isEmpty() || mergedAuthors == requestedWatchedProfileAuthors) {
-                return@launch
-            }
-            requestedWatchedProfileAuthors = mergedAuthors
-
-            eventRepository.subscribeChannel(
-                CHANNEL_PROFILE_WATCH,
-                buildProfileHydrationRequestsUseCase(
-                    authors = mergedAuthors,
-                    chunkSize = 60,
-                    perAuthorLimit = 5,
-                    since = System.currentTimeMillis() / 1000L
-                )
-            )
-        }
-    }
-
     internal fun resetRequestedProfileAuthors() {
         requestedProfileAuthors = emptySet()
         lastProfileHydrationAtMs = 0L
-        requestedWatchedProfileAuthors = emptySet()
-        eventRepository.clearChannel(CHANNEL_PROFILE_WATCH)
     }
 
     /** Mirrors `EventIngestCache.cancelPendingSnapshotEmit()`'s precedent. */
@@ -387,6 +333,5 @@ internal class FeedEngagementSchedulingCoordinator(
         engagementRefreshJob?.cancel()
         profileHydrationJob?.cancel()
         profileHydrationChannelCloseJob?.cancel()
-        profileWatchJob?.cancel()
     }
 }
