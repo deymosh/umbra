@@ -222,9 +222,8 @@ class UrlPrefetcher @Inject constructor(
             metadataCache[url] = metadata
         }
         knownMisses.remove(url)
-        cacheOrder.addAndEvict(url)
         // cacheOrder evicted the eldest URL (access-order bound) — drop its metadata too.
-        cacheOrder.eldestEvicted?.let { eldest ->
+        cacheOrder.addAndEvict(url)?.let { eldest ->
             synchronized(metadataCache) {
                 metadataCache.remove(eldest)
             }
@@ -241,17 +240,16 @@ class UrlPrefetcher @Inject constructor(
 /**
  * Synchronized, insertion-order (access-order), size-bounded string set — the concurrency
  * wrapper behind UrlPrefetcher's cacheOrder/knownMisses (see its field doc for why synchronized
- * rather than Main-confinement or a concurrent structure with custom eviction). Zero-when-absent
- * eviction side effect is surfaced through [eldestEvicted] so the metadata cache companion can
- * mirror the drop without a second lock pass.
+ * rather than Main-confinement or a concurrent structure with custom eviction).
+ *
+ * [addAndEvict] RETURNS the key it evicted instead of publishing it through a property: callers
+ * run on several dispatcher threads at once, so a shared "last evicted" cell could be overwritten
+ * by another thread's add between this thread's write and its read — the eldest URL's companion
+ * metadata was then never dropped and that cache grew past its bound. A returned value belongs to
+ * the caller that caused the eviction and cannot be stolen.
  */
 private class SynchronizedBoundedOrderedSet(private val maxSize: Int) {
     private val set = LinkedHashSet<String>()
-
-    /** Non-null just after an [addAndEvict] that evicted the eldest entry. */
-    @get:Synchronized @set:Synchronized
-    var eldestEvicted: String? = null
-        private set
 
     @Synchronized
     fun contains(url: String): Boolean = url in set
@@ -261,10 +259,12 @@ private class SynchronizedBoundedOrderedSet(private val maxSize: Int) {
         set.remove(url)
     }
 
-    /** Adds [url]; if already present, re-inserts it as the newest (access-order refresh). */
+    /**
+     * Adds [url]; if already present, re-inserts it as the newest (access-order refresh).
+     * Returns the eldest key this add pushed out, or null when nothing was evicted.
+     */
     @Synchronized
-    fun addAndEvict(url: String) {
-        eldestEvicted = null
+    fun addAndEvict(url: String): String? {
         set.remove(url)
         set.add(url)
         var evicted: String? = null
@@ -273,7 +273,7 @@ private class SynchronizedBoundedOrderedSet(private val maxSize: Int) {
             set.remove(eldest)
             evicted = eldest
         }
-        eldestEvicted = evicted
+        return evicted
     }
 }
 
