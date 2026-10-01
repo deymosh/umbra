@@ -6,6 +6,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 
 /**
  * Mounted once directly inside [UmbraNavHost] (same "created once, survives navigation" scoping
@@ -30,4 +32,9 @@ fun AppSessionEffects() {
         viewModel.registerLauncher(callback)
         onDispose { viewModel.unregisterLauncher(callback) }
     }
+
+    // ON_START, not ON_RESUME: fires when the app returns to the foreground so the relay
+    // session can redial sockets that died while backgrounded — before the feed is expected
+    // to show live data again.
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.onAppForegrounded() }
 }

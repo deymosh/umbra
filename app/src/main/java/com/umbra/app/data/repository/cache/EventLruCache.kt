@@ -103,15 +103,29 @@ class EventLruCache(
     /**
      * Evicts least-recently-accessed entries (same order [removeEldestEntry] uses, since
      * `accessOrder = true` iterates the backing map oldest-first) down to [target], running
-     * [onEvicted] for each removal exactly as automatic eviction does. Does not change [maxSize]
-     * — this is a temporary shrink for real memory pressure, not a redesign of the cache's normal
-     * ceiling; the cache is free to grow back to [maxSize] afterward via ordinary [put] calls.
+     * [onEvicted] for each removal exactly as automatic eviction does. Entries for which
+     * [protect] returns true are skipped in the first pass — they belong to content the user is
+     * actively looking at (e.g. feed notes); if protected entries alone exceed [target], a
+     * second, eldest-first pass evicts them too so the target is still respected. Does not
+     * change [maxSize] — this is a temporary shrink for real memory pressure, not a redesign of
+     * the cache's normal ceiling; the cache is free to grow back to [maxSize] afterward via
+     * ordinary [put] calls.
      */
-    fun trimTo(target: Int) {
+    fun trimTo(target: Int, protect: (Event) -> Boolean = { false }) {
         val iterator = map.entries.iterator()
         while (map.size > target && iterator.hasNext()) {
             val eldest = iterator.next()
+            if (protect(eldest.value)) continue
             iterator.remove()
+            relaysByEventId.remove(eldest.value.id)
+            evictionCount.incrementAndGet()
+            onEvicted(eldest.value)
+        }
+        // Second pass needs a fresh iterator: the first one may have walked off the end while
+        // map.size was still above target (protected entries were skipped, not removed).
+        while (map.size > target) {
+            val eldest = map.entries.iterator().next()
+            map.remove(eldest.key)
             relaysByEventId.remove(eldest.value.id)
             evictionCount.incrementAndGet()
             onEvicted(eldest.value)

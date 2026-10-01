@@ -170,6 +170,19 @@ class EventRepositoryImpl @Inject constructor(
         private const val NEGENTROPY_SYNC_DEBOUNCE_MS = 5_000L
         private const val FEED_SINCE_SECONDS        = 12 * 60 * 60L  // interactions/outbox window
         private const val INITIAL_FEED_WINDOW_SECS  = 12 * 60 * 60L  // first live feed-notes window
+        // Minimum kind-1 notes the in-memory cache must hold before its newest timestamp is
+        // trusted as the feed REQ's `since` — a thin (near-empty, e.g. post-process-death) cache
+        // says nothing about where the real feed window starts.
+        private const val MIN_CACHED_FEED_NOTES_FOR_SINCE = 20
+        // The note kinds the feed subscribes for (its delete-request kind comes in via the
+        // feedKinds superset at each subscription site). trimMemory protects these when shrinking
+        // the in-memory cache so the surviving cache still backs the redial `since` watermark.
+        private val FEED_NOTE_KINDS = setOf(
+            Event.KIND_TEXT_NOTE,
+            Event.KIND_PICTURE,
+            Event.KIND_REPOST,
+            Event.KIND_GENERIC_REPOST
+        )
         private const val HISTORY_PAGE_WINDOW_SECS  = 7 * 24 * 60 * 60L // default "load older" page window
         private const val HISTORY_PAGE_CLOSE_MS     = 15_000L           // auto-close page sub after
         private const val NOTIF_SINCE_SECONDS       = 3  * 24 * 60 * 60L
@@ -691,7 +704,7 @@ class EventRepositoryImpl @Inject constructor(
         // ever showed up if its *target* note happened to already be visible (fetched purely as
         // an engagement-count signal via BuildEngagementFiltersUseCase, never rendered as its own
         // feed item). See selectHybridFeedNotes/buildIndexedNoteViews for the unwrap+dedup step.
-        val feedKinds = setOf(Event.KIND_TEXT_NOTE, Event.KIND_PICTURE, Event.KIND_EVENT_DELETION, Event.KIND_REPOST, Event.KIND_GENERIC_REPOST)
+        val feedKinds = FEED_NOTE_KINDS + Event.KIND_EVENT_DELETION
         // Profile kinds: metadata of logged user.
         val profileKinds = setOf(Event.KIND_METADATA)
         // User social graph kinds (replaceable): follows, mute list, relay list, search/index
@@ -1547,11 +1560,19 @@ class EventRepositoryImpl @Inject constructor(
 
     override suspend fun trimMemory(aggressive: Boolean): Unit = withContext(Dispatchers.IO) {
         val target = if (aggressive) MAX_IN_MEMORY_EVENT_CACHE / 4 else MAX_IN_MEMORY_EVENT_CACHE / 2
-        val trimmed = eventIngestCache.trimTo(target)
+        // Feed-kind notes are protected from the first eviction pass — they ARE the feed the
+        // user is coming back to — so only non-feed cached events are shed unless even the
+        // protected remainder is over target.
+        val trimmed = eventIngestCache.trimTo(target) { it.kind in FEED_NOTE_KINDS }
         if (trimmed > 0) {
             // Lets every active observeFeedNotes() collector's own externalEvents mirror shrink
             // back down too, instead of only the shared source cache.
             eventIngestCache.signalFeedRebuild()
+            // Evictions may have removed notes the per-relay `since` watermark assumes are still
+            // cached — clearing it makes the next REQ to each relay re-request the full window
+            // instead of resuming past notes that no longer exist locally, which would leave
+            // them unnoticed until a later subscription.
+            feedSinceByRelay.clear()
             logger.d { "Trimmed $trimmed events from in-memory cache (aggressive=$aggressive)" }
         }
     }
@@ -1574,17 +1595,28 @@ class EventRepositoryImpl @Inject constructor(
 
         initialCacheLoaded.await()
 
-        // Use newest cached event timestamp as `since` to avoid re-fetching events already in DB
-        val newestKind1 = withContext(Dispatchers.IO) {
-            val newestCached = eventIngestCache.snapshot().asSequence()
-                .filter { it.kind == Event.KIND_TEXT_NOTE }
-                .maxOfOrNull { it.createdAt }
-            listOfNotNull(
-                newestCached,
-                encryptedEventDao.getNewestTimestampByKind(Event.KIND_TEXT_NOTE)
-            ).maxOrNull()
+        // The feed REQ's `since` must be derived ONLY from the in-memory cache, never from the
+        // Room archive: the archive holds the user's OWN posts only, and using their newest
+        // timestamp as `since` made the feed skip everyone else's notes older than the user's
+        // last post (worst right after process death, when the empty cache collapsed the feed to
+        // "notes newer than my last post"). The in-memory-cache value is also trusted only when
+        // the cache actually holds enough kind-1 notes that it plausibly reflects the feed
+        // window; otherwise fall back to the initial window (cache may be near-empty after a
+        // process restart, and resuming from a single stale timestamp would hide everything
+        // older than it).
+        val (newestKind1, cachedKind1Count) = withContext(Dispatchers.Default) {
+            var newest: Long? = null
+            var count = 0
+            for (event in eventIngestCache.snapshot()) {
+                if (event.kind != Event.KIND_TEXT_NOTE) continue
+                count++
+                if (newest == null || event.createdAt > newest) newest = event.createdAt
+            }
+            newest to count
         }
-        cachedFeedSince = if (newestKind1 != null && newestKind1 > 0) {
+        cachedFeedSince = if (newestKind1 != null && newestKind1 > 0 &&
+            cachedKind1Count >= MIN_CACHED_FEED_NOTES_FOR_SINCE
+        ) {
             newestKind1 - 60
         } else {
             null
