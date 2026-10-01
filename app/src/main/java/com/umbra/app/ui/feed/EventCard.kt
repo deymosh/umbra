@@ -442,12 +442,11 @@ fun EventCard(
     }
     val shareAction = remember(event.id) { { onShareState.value(event) } }
     val zapLauncher = LocalZapLauncher.current
-    val canZap = !userProfile?.lud16.isNullOrBlank() || !userProfile?.lud06.isNullOrBlank()
-    val zapAction = remember(event.id, userProfile, zapLauncher, canZap) {
-        if (canZap && zapLauncher != null) {
-            { zapLauncher(ZapTarget(recipientPubkey = event.pubkey, profile = userProfile, event = event)) }
-        } else {
-            null
+    // The recipient's payment details aren't known until the sheet resolves them, so the chip
+    // depends only on there being someone around to open that sheet.
+    val zapAction = remember(event.id, userProfile, zapLauncher) {
+        zapLauncher?.let { launcher ->
+            { launcher(ZapTarget(recipientPubkey = event.pubkey, profile = userProfile, event = event)) }
         }
     }
 
