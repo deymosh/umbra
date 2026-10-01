@@ -14,6 +14,7 @@ import com.umbra.app.domain.nip01.NostrEventBuilder
 import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.domain.preferences.UserPreferences
 import com.umbra.app.domain.nip25.ReactionEmoji
+import com.umbra.app.domain.nip25.isDislikeReactionContent
 import com.umbra.app.domain.nip30.CustomEmoji
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.repository.ReactionEmojiRepository
@@ -448,7 +449,9 @@ class ThreadViewModel @Inject constructor(
                 if (!threadIds.contains(targetEventId)) return@forEach
 
                 when (event.kind) {
-                    Event.KIND_REACTION -> reactionCounts[targetEventId] = (reactionCounts[targetEventId] ?: 0) + 1
+                    Event.KIND_REACTION -> if (!isDislikeReactionContent(event.content)) {
+                        reactionCounts[targetEventId] = (reactionCounts[targetEventId] ?: 0) + 1
+                    }
                     Event.KIND_REPOST -> repostCounts[targetEventId] = (repostCounts[targetEventId] ?: 0) + 1
                     Event.KIND_TEXT_NOTE -> replyCounts[targetEventId] = (replyCounts[targetEventId] ?: 0) + 1
                 }
