@@ -19,6 +19,7 @@ import com.umbra.app.domain.preferences.UserPreferences
 import com.umbra.app.ui.common.futureEventRecheckTicker
 import com.umbra.app.ui.common.toImmutableSnapshot
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * Snapshot of the Room-sourced feed computation (visible notes + counts + reposts), before
@@ -113,9 +115,11 @@ private fun ComputedFeedSnapshot.stableFingerprint(): Int {
  * [uiState]/[displayLimit] are the facade's own [MutableStateFlow] instances, passed by direct
  * reference (never duplicated) — mirrors [RelayIssueBannerCoordinator]'s `uiState` parameter.
  * [onVisibleNotesComputed] is the cross-coordinator coupling callback: [computedFeedFlow]'s
- * combine block invokes it once per raw combine emission in place of a direct cross-class call
- * into [FeedEngagementSchedulingCoordinator] — wired by [FeedViewModel] to
- * `feedEngagementSchedulingCoordinator::schedulePendingRelayWork`.
+ * combine chain invokes it once per unique computed snapshot in place of a direct cross-class
+ * call into [FeedEngagementSchedulingCoordinator] — wired by [FeedViewModel] to
+ * `feedEngagementSchedulingCoordinator::schedulePendingRelayWork`. It fires on the Main side of
+ * the chain's flowOn(Dispatchers.Default) hop (onEach), because the callback's recipient mutates
+ * plain vars that must stay confined to the owning ViewModel's main-thread scope.
  *
  * [followedPubkeysFlow] is `internal`, not `private` — three facade functions
  * (`observeFollowedAuthorOutboxDiscovery` x2, `observeActiveFeedFilterChanges`) read it directly
@@ -203,7 +207,27 @@ internal class FeedStateMergeCoordinator(
     // the encrypted DB independent of any relay activity, see FeedViewModel.observeCurrentUserProfile).
     // stateIn gives this an immediate default (empty) value so feedState can emit right away using
     // whatever uiState already has, instead of waiting on the feed computation to catch up too.
-    val computedFeedFlow: StateFlow<ComputedFeedSnapshot> = combine(
+    //
+    // Cross-coordinator coupling, Main-confined: the combine stage upstream of the
+    // flowOn(Dispatchers.Default) hop passes every raw emission's visible-notes list into this
+    // UNLIMITED (un-gated by the snapshot dedup below) channel, and its collection — launched on
+    // this coordinator's scope, i.e. the owning ViewModel's main-thread scope — invokes
+    // [onVisibleNotesComputed] there. Calls remain once per raw combine emission (the contract
+    // FeedStateMergeCoordinatorTest pins; FeedEngagementSchedulingCoordinator's own fingerprint
+    // check is what dedups no-op re-deliveries in production), but each one now runs on Main
+    // instead of inside the combine block on a Default worker — the callback's recipient mutates
+    // plain coordinator vars that Main-side facade calls touch too.
+    private val visibleNotesChannel = Channel<List<NoteView>>(capacity = Channel.UNLIMITED)
+
+    init {
+        scope.launch {
+            for (notes in visibleNotesChannel) {
+                onVisibleNotesComputed(notes)
+            }
+        }
+    }
+
+    private val computedFeedWithNotes = combine(
         notesFlow,
         activeFiltersFlow,
         futureEventRecheckTicker()
@@ -230,12 +254,9 @@ internal class FeedStateMergeCoordinator(
         }
         val visiblePendingReposts = result.pendingReposts.filterNot { isTimestampFromFuture(it.repostedAt) }
 
-        // Schedule pending relay work (hydration/engagement) only when visible set changes.
-        // This used to be a direct schedulePendingRelayWork(visibleNotes) call into
-        // FeedViewModel's own scheduling functions; now routed through the constructor-supplied
-        // callback so this class has no compile-time dependency on
-        // FeedEngagementSchedulingCoordinator.
-        onVisibleNotesComputed(visibleNotes)
+        // Hand the visible set to the Main-side callback channel (see visibleNotesChannel's doc):
+        // NOT deduped here, NOT run on this Default worker.
+        scope.launch { visibleNotesChannel.send(visibleNotes) }
 
         ComputedFeedSnapshot(
             events = visibleNotes.map { it.event },
@@ -270,6 +291,9 @@ internal class FeedStateMergeCoordinator(
         }
         .flowOn(Dispatchers.Default)
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), ComputedFeedSnapshot())
+
+    /** Public computed-snapshot flow (fingerprint-deduped), unchanged in shape from before. */
+    val computedFeedFlow: StateFlow<ComputedFeedSnapshot> get() = computedFeedWithNotes
 
     /** Public feed state derived by merging computed feed snapshot with UI overlay. */
     val feedState: StateFlow<FeedState> = combine(computedFeedFlow, uiState) { computed, ui ->
