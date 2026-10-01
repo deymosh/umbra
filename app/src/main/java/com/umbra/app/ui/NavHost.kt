@@ -83,6 +83,7 @@ import com.umbra.app.ui.profile.EditProfileScreen
 import com.umbra.app.ui.relay.ActiveSubscriptionsScreen
 import com.umbra.app.ui.relay.RelayConfigScreen
 import com.umbra.app.ui.relay.RelayDetailsScreen
+import com.umbra.app.ui.relay.RelayManagementScreen
 import com.umbra.app.ui.settings.SettingsScreen
 import com.umbra.app.ui.settings.AppearanceScreen
 import com.umbra.app.ui.settings.AppearanceViewModel
@@ -123,6 +124,9 @@ sealed class Screen(val route: String) {
     object RelayConfig   : Screen("relay_config")
     object RelayDetails  : Screen("relay_details/{relayId}") {
         fun forRelay(relayId: String) = "relay_details/$relayId"
+    }
+    object RelayManagement : Screen("relay_management/{relayId}") {
+        fun forRelay(relayId: String) = "relay_management/$relayId"
     }
     object ActiveSubscriptions : Screen("active_subscriptions")
     // Wraps FeedConfig/FeedFilterEdit (see the nested navigation() graph below) so both share one
@@ -494,6 +498,24 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
                 val relayGraphEntry = remember(backStackEntry) { navController.getBackStackEntry(Screen.RelayGraph.route) }
                 val relayConfigViewModel: RelayConfigViewModel = hiltViewModel(relayGraphEntry)
                 ActiveSubscriptionsScreen(navController = navController, viewModel = relayConfigViewModel)
+            }
+            composable(Screen.RelayManagement.route) { backStackEntry ->
+                val relayId = backStackEntry.arguments?.getString("relayId")
+                if (relayId != null) {
+                    val relayGraphEntry = remember(backStackEntry) { navController.getBackStackEntry(Screen.RelayGraph.route) }
+                    val relayConfigViewModel: RelayConfigViewModel = hiltViewModel(relayGraphEntry)
+                    val relayState by relayConfigViewModel.state.collectAsStateWithLifecycle()
+                    // The relay list has settled by the time the user reaches the Manage-relay
+                    // row, so firstOrNull resolves immediately; nothing renders before then.
+                    val relayUrl = relayState.relays.firstOrNull { it.id == relayId }?.url
+                    if (relayUrl != null) {
+                        RelayManagementScreen(
+                            navController = navController,
+                            relayUrl = relayUrl,
+                            viewModel = hiltViewModel()
+                        )
+                    }
+                }
             }
         }
         navigation(startDestination = Screen.FeedConfig.route, route = Screen.FeedConfigGraph.route) {

@@ -18,6 +18,7 @@ import com.umbra.app.data.repository.MediaUploadRepositoryImpl
 import com.umbra.app.data.repository.MuteListRepositoryImpl
 import com.umbra.app.data.repository.PinListRepositoryImpl
 import com.umbra.app.data.repository.RelayInfoRepositoryImpl
+import com.umbra.app.data.repository.RelayManagementRepositoryImpl
 import com.umbra.app.util.AvatarPrefetcher
 import com.umbra.app.util.ImagePrefetcher
 import com.umbra.app.data.repository.RelayRepositoryImpl
@@ -43,6 +44,7 @@ import com.umbra.app.domain.repository.MediaUploadRepository
 import com.umbra.app.domain.repository.MuteListRepository
 import com.umbra.app.domain.repository.PinListRepository
 import com.umbra.app.domain.repository.RelayInfoRepository
+import com.umbra.app.domain.repository.RelayManagementRepository
 import com.umbra.app.domain.repository.RelayRepository
 import com.umbra.app.domain.repository.ResourceUsageRepository
 import com.umbra.app.domain.repository.TorStatusRepository
@@ -143,6 +145,10 @@ abstract class RepositoryModule {
     @Singleton
     @Binds
     abstract fun bindNip05Repository(impl: Nip05RepositoryImpl): Nip05Repository
+
+    @Singleton
+    @Binds
+    abstract fun bindRelayManagementRepository(impl: RelayManagementRepositoryImpl): RelayManagementRepository
 
     @Singleton
     @Binds

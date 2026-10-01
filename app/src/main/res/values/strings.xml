@@ -198,6 +198,38 @@
     <string name="relay_counts_mentions">Mentions</string>
     <string name="relay_counts_approximate">~%1$s</string>
     <string name="relay_counts_hint">As reported by this relay (NIP-45 COUNT).</string>
+
+    <!-- NIP-86 relay management -->
+    <string name="relay_manage_title">Manage relay</string>
+    <string name="relay_manage_row">Moderation settings</string>
+    <string name="relay_manage_hint">Bans, allows, kinds, IPs and relay details (NIP-86)</string>
+    <string name="relay_management_title">Manage relay</string>
+    <string name="relay_management_not_authorized">Only this relay\'s admins can manage it.</string>
+    <string name="relay_management_generic_error">The relay refused this request.</string>
+    <string name="relay_management_add">Add</string>
+    <string name="relay_management_remove">Remove</string>
+    <string name="relay_management_reason_hint">Reason (optional)</string>
+    <string name="relay_management_tab_people">People</string>
+    <string name="relay_management_tab_events">Events</string>
+    <string name="relay_management_tab_kinds">Kinds</string>
+    <string name="relay_management_tab_ips">IPs</string>
+    <string name="relay_management_tab_relay">Relay</string>
+    <string name="relay_management_banned">Banned</string>
+    <string name="relay_management_allowed">Allowed</string>
+    <string name="relay_management_add_placeholder">npub or hex pubkey</string>
+    <string name="relay_management_empty_list">Nothing here.</string>
+    <string name="relay_management_kind_placeholder">Event kind number</string>
+    <string name="relay_management_ip_placeholder">IP address</string>
+    <string name="relay_management_needing_moderation">Needs moderation</string>
+    <string name="relay_management_allow">Allow</string>
+    <string name="relay_management_ban">Ban</string>
+    <string name="relay_management_name_label">Name</string>
+    <string name="relay_management_description_label">Description</string>
+    <string name="relay_management_icon_label">Icon URL</string>
+    <string name="relay_management_save">Save</string>
+    <string name="relay_management_confirm_ban_title">Ban this %1$s?</string>
+    <string name="relay_management_confirm_ban">Ban</string>
+
     <string name="relay_sync_direction_title">Sync direction</string>
     <string name="relay_sync_direction_subtitle">Choose how your notes are kept in sync with your write relays via NIP-77.</string>
     <string name="relay_sync_direction_download_only">Download</string>
@@ -605,8 +637,6 @@
     <string name="stay_in_umbra">Stay private</string>
     <string name="thread_reply_hint">Reply to %1$s…</string>
     <string name="settings_group_feed">Feed and look</string>
-    <string name="relay_delete_confirm_title">Remove this relay?</string>
-    <string name="relay_delete_confirm_message">Umbra will stop reading from and publishing to it. You can add it again later.</string>
     <string name="relay_capability_on_cd">%1$s on</string>
     <string name="relay_capability_off_cd">%1$s off</string>
     <string name="profile_stat_following">following</string>
