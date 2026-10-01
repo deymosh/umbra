@@ -87,6 +87,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.style.TextOverflow
 import com.umbra.app.ui.common.toImmutableSnapshot
+import com.umbra.app.ui.components.ZapCard
+import com.umbra.app.domain.nip57.ZapReceiptDisplay
+import com.umbra.app.domain.nip57.mapZapReceiptToDisplay
+import com.umbra.app.domain.crypto.EventCrypto
+
+/** Maps a kind-9735 event to its zap-card display model — cache-only, offline validation via
+ * the real BIP-340 verifier (`EventCrypto` lives under data/crypto but in the domain.crypto
+ * package). Shared by EventCard's zap body and its quote embeds. */
+internal fun zapReceiptDisplayFor(event: Event): ZapReceiptDisplay? =
+    mapZapReceiptToDisplay(event, EventCrypto::verifySignature)
 
 
 internal fun normalizeNoteContentForDisplay(content: String): String = content.trim()
@@ -283,6 +293,10 @@ fun EventCard(
     // when either returns null the existing chip fallback is used.
     getQuotedEvent: (String) -> Event? = { null },
     getQuotedEventAuthorProfile: (String) -> UserProfile? = { null },
+    // NIP-57: maps a kind-9735 event to its zap-card display model (cache-only, offline
+    // validation). Default null disables the zap body rendering entirely, keeping callers
+    // that don't thread profiles yet on the old generic path.
+    getEventZapReceipt: ((Event) -> ZapReceiptDisplay?)? = null,
     animateAvatars: Boolean = true,
     getUrlMetadata: (String) -> com.umbra.app.ui.common.UrlMetadata? = { null },
     // Caps embedded image height instead of full aspect-ratio sizing — for a note shown as
@@ -638,6 +652,32 @@ fun EventCard(
                     }
                 }
 
+                // NIP-57 zap receipt shown as the card's body (a thread opened on a zap
+                // receipt's id, or any EventCard whose event IS the receipt): the receipt's
+                // content is empty and its meaning is entirely in tags, so without this the
+                // card would render as a bare "Kind 9735" placeholder. Sourced per-composition
+                // from the cache-only resolver below — same pattern as resolvedQuotes.
+                val zapBody = if (event.kind == Event.KIND_ZAP_RECEIPT) getEventZapReceipt?.invoke(event) else null
+                zapBody?.let { zapReceipt ->
+                    ZapCard(
+                        receipt = zapReceipt,
+                        senderProfile = zapReceipt.senderPubkey?.let { senderPubkey ->
+                            if (senderPubkey.equals(event.pubkey, ignoreCase = true)) userProfile else null
+                        },
+                        recipientProfile = zapReceipt.recipientPubkey?.let { getQuotedEventAuthorProfile(it) },
+                        createdAt = event.createdAt,
+                        userRepository = userRepository,
+                        onSenderClick = { pubkey -> onProfileClickState.value(pubkey) },
+                        onRecipientClick = { pubkey -> onProfileClickState.value(pubkey) },
+                        onTargetEventClick = {
+                            zapReceipt.targetEventId?.let { id ->
+                                onEventReferenceClickState.value(encodeQuoteReferenceForClick(id, emptyList()))
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(end = 8.dp, bottom = 6.dp)
+                    )
+                }
+
                 // NIP-68 picture post: title and images (from imeta) above the description.
                 if (picture != null && (contentWarning == null || isContentRevealed)) {
                     PicturePostBody(
@@ -649,7 +689,10 @@ fun EventCard(
                 }
 
                 // Content with images, mentions, hashtags, URLs
-                if (contentWarning != null && !isContentRevealed) {
+                if (event.kind == Event.KIND_ZAP_RECEIPT && zapBody != null) {
+                    // Body already rendered as the zap card above — skip the generic path so the
+                    // (empty) receipt content never renders as duplicate text below it.
+                } else if (contentWarning != null && !isContentRevealed) {
                     ContentWarningPlaceholder(
                         reason = contentWarning.reason,
                         onShowEvent = { isContentRevealed = true },

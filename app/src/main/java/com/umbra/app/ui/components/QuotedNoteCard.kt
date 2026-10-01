@@ -28,8 +28,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.datasource.DataSource
 import com.umbra.app.R
+import com.umbra.app.domain.crypto.EventCrypto
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip36.extractContentWarning
+import com.umbra.app.domain.nip57.mapZapReceiptToDisplay
 import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.ui.common.toImmutableSnapshot
@@ -63,10 +65,40 @@ fun QuotedNoteCard(
     onHashtagClick: (String) -> Unit = {},
     onUrlClick: (String) -> Unit = {},
     onEventReferenceClick: (String) -> Unit = {},
+    // Recipient profile for a quoted zap receipt's "X zapped Y" line — null falls back to the
+    // truncated recipient key, same fallback NoteAuthorLine uses for an unknown author. Not
+    // curried into the other quoted-event profile flow above since a zap receipt's recipient is
+    // a distinct lookup target (the `p` tag, not the receipt's own pubkey) only zap cards need.
+    onProfileClick: (String) -> Unit = {},
+    // Party-profile lookup for a quoted zap receipt's sender/recipient names — keyed by the
+    // party's pubkey (not the receipt's own author, which is the wallet server). Zap-card-only.
+    getZapPartyProfile: (String) -> UserProfile? = { null },
     // How many QuotedNoteCard levels deep this one already is — see NostrTextRenderer's
     // quoteEmbedDepth doc comment for the recursion cap this feeds into.
     quoteEmbedDepth: Int = 0
 ) {
+    // A referenced NIP-57 zap receipt renders as its own zap card instead of the generic
+    // content-raw-text fallback — receipts' content is an empty string and their meaning lives
+    // entirely in tags, so the generic path would show nothing but the "Kind 9735" label.
+    if (quotedEvent.kind == Event.KIND_ZAP_RECEIPT) {
+        val zapReceipt = remember(quotedEvent.id, quotedEvent.tags, quotedEvent.content) {
+            mapZapReceiptToDisplay(quotedEvent, EventCrypto::verifySignature)
+        }
+        if (zapReceipt != null) {
+            ZapCard(
+                receipt = zapReceipt,
+                senderProfile = zapReceipt.senderPubkey?.let { getZapPartyProfile(it) },
+                recipientProfile = zapReceipt.recipientPubkey?.let { getZapPartyProfile(it) },
+                createdAt = quotedEvent.createdAt,
+                userRepository = userRepository,
+                onSenderClick = onProfileClick,
+                onRecipientClick = onProfileClick,
+                onTargetEventClick = onClick,
+                modifier = Modifier
+            )
+            return
+        }
+    }
     var isExpanded by remember(quotedEvent.id) { mutableStateOf(false) }
     var isContentRevealed by remember(quotedEvent.id) { mutableStateOf(false) }
     val contentWarning = remember(quotedEvent.id, quotedEvent.tags) { extractContentWarning(quotedEvent) }

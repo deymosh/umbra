@@ -243,6 +243,7 @@ fun ThreadScreen(
                     , getEventJson = getEventJson
                     , getQuotedEvent = getQuotedEvent
                     , getQuotedEventAuthorProfile = getQuotedEventAuthorProfile
+                    , getEventZapReceipt = ::zapReceiptDisplayFor
                 )
             }
         }

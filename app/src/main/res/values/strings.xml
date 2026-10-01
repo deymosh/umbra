@@ -407,6 +407,10 @@
     <string name="content_warning_explanation">This note was marked as sensitive by its author.</string>
     <string name="content_warning_show_button">Show</string>
     <string name="event_quote_reference">Quote %1$s</string>
+    <string name="zap_card_unverified">Unverified zap</string>
+    <string name="zap_card_zapped">zapped</string>
+    <string name="zap_card_anonymous">Someone</string>
+    <string name="zap_card_on_note">on a note</string>
     <string name="event_quote_relay_hint">via %1$s</string>
     <string name="event_lightning_invoice">Lightning invoice</string>
     <string name="event_lightning_amount_sats">%1$s sats</string>
