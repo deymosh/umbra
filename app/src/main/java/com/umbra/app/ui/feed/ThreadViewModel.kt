@@ -35,6 +35,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -100,6 +101,9 @@ class ThreadViewModel @Inject constructor(
     companion object {
         private const val TAG = "UmbraThreadVM"
         private const val THREAD_ROOM_WINDOW = 3000
+        // A reply chain deeper than this is pathological; stop walking rather than loop on relays.
+        private const val MAX_ANCESTOR_FETCH_DEPTH = 64
+        private const val ANCESTOR_FETCH_TIMEOUT_MS = 8_000L
         private const val THREAD_VIEWPORT_PREFETCH_SCOPE = "thread-viewport"
         private const val THREAD_VIEWPORT_URL_PREFETCH_SCOPE = "thread-url-viewport"
     }
@@ -215,6 +219,7 @@ class ThreadViewModel @Inject constructor(
             subscribeToThread(anchor)
             val seedEvents = buildLocalThreadSeed(anchor)
             roomSeedEvents.value = seedEvents
+            launch { fetchMissingAncestors(anchor) }
             // viewModelScope defaults to Dispatchers.Main.immediate — without this hop, the
             // DFS/count-building work in processThreadGraph (collectDescendants, distinctBy,
             // associateBy over what can be a large, deep thread) would run directly on the UI
@@ -391,6 +396,46 @@ class ThreadViewModel @Inject constructor(
         return eventMap.values.toList()
     }
 
+    /**
+     * The cache-only seed above stops at the first ancestor not already in memory, which is the
+     * normal case when a reply is opened from a notification or a link: the thread showed up
+     * headless, with nothing above the anchor. This walks the same parent chain from the
+     * network, one bounded lookup per missing level, using each child's NIP-10/NIP-22 relay hint
+     * for its parent and tracking the parent's author (from the tag's pubkey hint) so their outbox
+     * relays get dialed too. The root is fetched up front in parallel so the top of the thread
+     * appears even while a long middle chain is still resolving. Every hit is folded into
+     * [roomSeedEvents], which observeThread already merges into the graph.
+     */
+    private suspend fun fetchMissingAncestors(anchor: Event) = coroutineScope {
+        fun addToSeed(event: Event) = roomSeedEvents.update { seed ->
+            if (seed.any { it.id == event.id }) seed else seed + event
+        }
+        suspend fun resolve(id: String, referencedBy: Event): Event? {
+            eventRepository.getEventById(id)?.let { return it }
+            referencedBy.authorHintFor(id)?.let { trackReferencedAuthorUseCase(it) }
+            return eventRepository.fetchEventById(
+                id,
+                timeoutMs = ANCESTOR_FETCH_TIMEOUT_MS,
+                relayHints = referencedBy.relayHintsFor(id)
+            )
+        }
+
+        val rootId = anchor.threadRootId()
+        if (!rootId.isNullOrBlank() && rootId != anchor.id) {
+            launch { resolve(rootId, anchor)?.let(::addToSeed) }
+        }
+
+        var child = anchor
+        var parentId = anchor.getParentEventId()
+        val visited = mutableSetOf(anchor.id)
+        while (!parentId.isNullOrBlank() && visited.add(parentId) && visited.size <= MAX_ANCESTOR_FETCH_DEPTH) {
+            val parent = resolve(parentId, child) ?: break
+            addToSeed(parent)
+            child = parent
+            parentId = parent.getParentEventId()
+        }
+    }
+
     private suspend fun processThreadGraph(allEvents: List<Event>): ThreadGraphResult {
         val map = allEvents.associateBy { it.id }
         val activeAnchorId = anchorEventId.value
@@ -415,7 +460,13 @@ class ThreadViewModel @Inject constructor(
         var parentId = anchor.getParentEventId()
         val visited = mutableSetOf<String>()
         while (!parentId.isNullOrBlank() && visited.add(parentId)) {
-            val parent = map[parentId] ?: break
+            // A missing middle link (still being fetched, or unreachable) shouldn't hide what's
+            // above it: skip to the thread root when we have it, so the top post still shows.
+            val parent = map[parentId] ?: run {
+                val rootId = anchor.threadRootId()
+                map[rootId]?.takeIf { it.id != anchor.id && visited.add(it.id) }?.let(parentChain::add)
+                null
+            } ?: break
             parentChain.add(parent)
             parentId = parent.getParentEventId()
         }
