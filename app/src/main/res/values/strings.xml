@@ -425,6 +425,16 @@
     <string name="reaction_picker_shortcode_hint">Emoji or shortcode</string>
     <string name="reaction_picker_image_url_hint">Image URL (optional)</string>
     <string name="reaction_picker_add_action">Add</string>
+    <string name="reaction_picker_edit">Edit</string>
+    <string name="reaction_picker_done">Done</string>
+    <string name="reaction_picker_quick_reactions">Quick reactions</string>
+    <string name="reaction_picker_your_emoji">Your emoji</string>
+    <string name="reaction_picker_empty_custom">Custom emoji from your emoji sets show up here.</string>
+    <string name="reaction_picker_search_hint">Search emoji</string>
+    <string name="composer_emoji_title">Add emoji</string>
+    <string name="composer_emoji_common">Common</string>
+    <string name="composer_emoji_yours">Your emoji</string>
+    <string name="composer_add_emoji_cd">Add emoji</string>
     <string name="event_repost_cd">Repost</string>
     <string name="event_quote_cd">Quote</string>
     <string name="event_repost_icon_cd">Reposted</string>
@@ -629,7 +639,6 @@
     <string name="settings_group_feed">Feed and look</string>
     <string name="relay_capability_on_cd">%1$s on</string>
     <string name="relay_capability_off_cd">%1$s off</string>
-    <string name="reaction_picker_remove_hint">Long-press an emoji to remove it from this list.</string>
     <string name="profile_stat_following">following</string>
     <string name="profile_stat_followers">followers</string>
     <string name="feed_filter_delete_confirm_title">Delete this filter?</string>

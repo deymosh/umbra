@@ -1,8 +1,10 @@
 package com.umbra.app.domain.usecase
 
 import com.umbra.app.domain.model.NostrChannels
+import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip01.EventFilter
 import com.umbra.app.domain.nip30.CustomEmoji
+import com.umbra.app.domain.nip30.EmojiGroup
 import com.umbra.app.domain.nip30.EmojiSetAddress
 import com.umbra.app.domain.nip30.KIND_EMOJI_SET
 import com.umbra.app.domain.nip30.KIND_USER_EMOJI_LIST
@@ -21,15 +23,23 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
+/** A kind-30030 set's resolved content: its address, emoji list and display title. */
+data class EmojiSetContent(
+    val address: EmojiSetAddress,
+    val emojis: List<CustomEmoji>,
+    val title: String
+)
+
 /**
- * The signed-in user's NIP-30 custom emoji: the inline emoji of their kind-10030 list plus every
- * emoji of the kind-30030 sets it references, deduplicated by shortcode (inline entries win).
+ * The signed-in user's NIP-30 emoji catalog grouped by source: the inline emoji of their
+ * kind-10030 list first (untitled group), then one titled group per kind-30030 set it
+ * references, in list order. Shortcodes are deduplicated across groups, first occurrence wins.
  * Both the list and the referenced sets are requested from relays while collected.
  */
 class ObserveOwnCustomEmojisUseCase @Inject constructor(private val eventRepository: EventRepository) {
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    operator fun invoke(pubkey: String): Flow<List<CustomEmoji>> = channelFlow {
+    operator fun invoke(pubkey: String): Flow<List<EmojiGroup>> = channelFlow {
         val listChannel = NostrChannels.emojiList(pubkey)
         val setsChannel = NostrChannels.emojiSets(pubkey)
         eventRepository.subscribeChannel(
@@ -44,7 +54,7 @@ class ObserveOwnCustomEmojisUseCase @Inject constructor(private val eventReposit
                 .flatMapLatest { (inline, sets) ->
                     if (sets.isEmpty()) {
                         eventRepository.clearChannel(setsChannel)
-                        flowOf(inline)
+                        flowOf(if (inline.isEmpty()) emptyList() else listOf(EmojiGroup(title = null, emojis = inline)))
                     } else {
                         eventRepository.subscribeChannel(
                             setsChannel,
@@ -56,7 +66,9 @@ class ObserveOwnCustomEmojisUseCase @Inject constructor(private val eventReposit
                                 )
                             )
                         )
-                        combine(sets.map(::observeSet)) { setEmojis -> (inline + setEmojis.flatMap { it }).distinctBy { it.shortcode } }
+                        combine(sets.map(::observeSet)) { setContents ->
+                            toGroups(inline, setContents.toList())
+                        }
                     }
                 }
                 .distinctUntilChanged()
@@ -69,17 +81,42 @@ class ObserveOwnCustomEmojisUseCase @Inject constructor(private val eventReposit
         }
     }
 
-    private fun observeSet(address: EmojiSetAddress): Flow<List<CustomEmoji>> =
+    private fun observeSet(address: EmojiSetAddress): Flow<EmojiSetContent> =
         eventRepository.observeEventsByPubkeyAndKind(address.pubkey, KIND_EMOJI_SET, SET_SCAN_LIMIT)
             .map { events ->
-                events.asSequence()
+                val event = events.asSequence()
                     .filter { it.getTagValue("d") == address.identifier }
                     .maxByOrNull { it.createdAt }
-                    ?.let { extractCustomEmojis(it.tags).values.toList() }
-                    .orEmpty()
+                EmojiSetContent(
+                    address = address,
+                    emojis = event?.let { extractCustomEmojis(it.tags).values.toList() }.orEmpty(),
+                    title = event?.getTagValue("title") ?: address.identifier
+                )
             }
 
     private companion object {
         const val SET_SCAN_LIMIT = 100
     }
+}
+
+/**
+ * Builds the grouped catalog: the inline group leads when non-empty, then each referenced
+ * set keeps its list position and empty groups are dropped (an unresolved set has none).
+ * A shortcode already seen in an earlier group is removed from later groups.
+ */
+internal fun toGroups(
+    inline: List<CustomEmoji>,
+    setContents: List<EmojiSetContent>
+): List<EmojiGroup> {
+    val groups = buildList {
+        if (inline.isNotEmpty()) add(EmojiGroup(title = null, emojis = inline))
+        for (content in setContents) {
+            if (content.emojis.isNotEmpty()) add(EmojiGroup(title = content.title, emojis = content.emojis))
+        }
+    }
+    val seen = mutableSetOf<String>()
+    return groups.map { group ->
+        val kept = group.emojis.filter { seen.add(it.shortcode) }
+        if (kept.size == group.emojis.size) group else group.copy(emojis = kept)
+    }.filter { it.emojis.isNotEmpty() }
 }
