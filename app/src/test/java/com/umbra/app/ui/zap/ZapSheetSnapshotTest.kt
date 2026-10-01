@@ -9,7 +9,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.umbra.app.domain.nip57.LnurlPayInfo
 import com.umbra.app.domain.nipa3.PaymentTarget
-import com.umbra.app.domain.usecase.ZapFailure
 import com.umbra.app.ui.snapshot.PHONE
 import com.umbra.app.ui.snapshot.SNAPSHOT_SDK
 import com.umbra.app.ui.snapshot.SnapshotFixtures
@@ -28,9 +27,9 @@ class ZapSheetSnapshotTest {
     private val target = ZapTarget(SnapshotFixtures.ALICE, SnapshotFixtures.alice, SnapshotFixtures.textNote)
     private val payInfo = LnurlPayInfo("https://getalby.com/cb", 1_000, 100_000_000, true, SnapshotFixtures.ALICE, 140, "LNURL1X")
 
-    private fun render(name: String, state: ZapUiState) = snapshot(name) {
+    private fun render(name: String, state: ZapUiState, noAppFound: Boolean = false) = snapshot(name) {
         Box(Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow).padding(top = 16.dp)) {
-            ZapSheetContent(state = state, onAmount = {}, onComment = {}, onZap = {}, onRetry = {}, onOpenUri = {})
+            ZapSheetContent(state = state, onAmount = {}, onComment = {}, onZap = {}, onRetry = {}, onReload = {}, noAppFound = noAppFound, onOpenUri = {})
         }
     }
 
@@ -43,6 +42,7 @@ class ZapSheetSnapshotTest {
             payInfo = payInfo,
             amountSats = 1_000,
             comment = "Incredible shot",
+            targetsLoaded = true,
             paymentTargets = listOf(PaymentTarget("bitcoin", "bc1qxq66e0t8d7ugdecwnmv58e90tpry23nc84pg9k"), PaymentTarget("paypal", "alicemoreau"))
         )
     )
@@ -54,8 +54,32 @@ class ZapSheetSnapshotTest {
     )
 
     @Test
-    fun noAddress() = render(
-        "ZapSheet_noAddress",
-        ZapUiState(target = target.copy(profile = SnapshotFixtures.bob), phase = ZapPhase.Failed(ZapFailure.NO_LIGHTNING_ADDRESS))
+    fun noLightningWithTargets() = render(
+        "ZapSheet_noLightningWithTargets",
+        ZapUiState(
+            target = target.copy(profile = SnapshotFixtures.bob),
+            phase = ZapPhase.NoLightning,
+            targetsLoaded = true,
+            paymentTargets = listOf(PaymentTarget("bitcoin", "bc1qxq66e0t8d7ugdecwnmv58e90tpry23nc84pg9k"))
+        )
+    )
+
+    @Test
+    fun nothingAvailable() = render(
+        "ZapSheet_nothingAvailable",
+        ZapUiState(target = target.copy(profile = SnapshotFixtures.bob), phase = ZapPhase.NoLightning, targetsLoaded = true)
+    )
+
+    @Test
+    fun unreachable() = render(
+        "ZapSheet_unreachable",
+        ZapUiState(target = target, phase = ZapPhase.Failed(com.umbra.app.domain.usecase.ZapFailure.ENDPOINT_UNREACHABLE))
+    )
+
+    @Test
+    fun noWalletApp() = render(
+        "ZapSheet_noWalletApp",
+        ZapUiState(target = target, phase = ZapPhase.InvoiceReady("lnbc10u1p3xnhl2pp5jptserfk3zk4qy42tlucycrfwxhydvlemu9pqr93tuzlv9cc7g3sdqsvfhkcap3xyhx7un8cqzpgxqzjcsp5f8c52y2stc300gl6s4xswtjpc37hrnnr3c9wvtgjfuvqmpm35evq9qyyssqy4lgd8tj637qcjp05rdpxxykjenthxftej7a2zzmwrmrl70fyj9hvj0rewhzj7jfyuwkwcg9g2jpwtk3mkx5hc3p9sne3a5gppv6r7cqxl8pn3", true), payInfo = payInfo),
+        noAppFound = true
     )
 }

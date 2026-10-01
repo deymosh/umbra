@@ -17,7 +17,15 @@ data class LnurlPayInfo(
     /** NIP-57: a zap needs the endpoint to accept nostr requests and name the receipt signer. */
     val supportsZaps: Boolean get() = allowsNostr && !nostrPubkey.isNullOrBlank()
 
-    fun accepts(amountMsat: Long): Boolean = amountMsat in minSendableMsat..maxSendableMsat
+    /**
+     * Some LNURL-pay endpoints omit or zero maxSendable despite accepting any practical amount;
+     * that must not lock the payer out, so a missing max counts as unbounded.
+     */
+    fun accepts(amountMsat: Long): Boolean =
+        amountMsat >= minSendableMsat && (maxSendableMsat <= 0 || amountMsat <= maxSendableMsat)
+
+    /** The upper amount limit in msat, with an omitted/zero maxSendable treated as unbounded. */
+    val effectiveMaxSendableMsat: Long get() = if (maxSendableMsat <= 0) Long.MAX_VALUE else maxSendableMsat
 }
 
 /**

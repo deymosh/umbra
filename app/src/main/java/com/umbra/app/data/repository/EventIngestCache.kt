@@ -326,12 +326,14 @@ internal class EventIngestCache(
         cachedEventsMutex.withLock { EventCacheStats(cachedEvents.size, cachedEvents.maxSize) }
 
     /** Evicts least-recently-accessed entries down to [target] (a temporary shrink for real
-     * memory pressure — see [EventLruCache.trimTo]). Returns the number of entries removed. */
-    suspend fun trimTo(target: Int): Int = cachedEventsMutex.withLock {
-        val before = cachedEvents.size
-        cachedEvents.trimTo(target)
-        before - cachedEvents.size
-    }
+     * memory pressure — see [EventLruCache.trimTo]). [protect] passes through to it. Returns the
+     * number of entries removed. */
+    suspend fun trimTo(target: Int, protect: (Event) -> Boolean = { false }): Int =
+        cachedEventsMutex.withLock {
+            val before = cachedEvents.size
+            cachedEvents.trimTo(target, protect)
+            before - cachedEvents.size
+        }
 
     suspend fun removeCachedEvent(eventId: String) {
         cachedEventsMutex.withLock {

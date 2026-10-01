@@ -50,6 +50,18 @@ class ZapTest {
     }
 
     @Test
+    fun `given maxSendable omitted or zero when checking amounts then max is unbounded`() {
+        val zero = LnurlPayInfo("https://x/cb", 1_000, 0, false, null, 0, "LNURL1X")
+        assertTrue(zero.accepts(1_000))
+        assertTrue(zero.accepts(1_000_000))
+        assertEquals(Long.MAX_VALUE, zero.effectiveMaxSendableMsat)
+        val tenSatsMax = zero.copy(maxSendableMsat = 10_000)
+        assertTrue(tenSatsMax.accepts(10_000))
+        assertFalse(tenSatsMax.accepts(10_001))
+        assertFalse(zero.accepts(0))
+    }
+
+    @Test
     fun `given note target when building zap request then required tags are present`() {
         val note = Event(id = "e".repeat(64), pubkey = "p".repeat(64), createdAt = 1, kind = 1, tags = emptyList(), content = "hi")
         val raw = NostrEventBuilder.zapRequest(

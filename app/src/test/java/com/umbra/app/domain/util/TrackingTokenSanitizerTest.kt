@@ -80,4 +80,25 @@ class TrackingTokenSanitizerTest {
         assertFalse(result.removedTrackingTokens)
         assertEquals(input, result.sanitizedText)
     }
+
+    @Test
+    fun `given percent encoded path when sanitize text then returns unchanged`() {
+        val input = "join https://honey.hivetalk.org/meet/Nostr%20Study%20Group"
+
+        val result = TrackingTokenSanitizer.sanitizeTextWithResult(input)
+
+        assertFalse(result.removedTrackingTokens)
+        assertEquals(input, result.sanitizedText)
+    }
+
+    @Test
+    fun `given percent encoded path with tracking param when sanitized twice then output is stable`() {
+        val input = "https://example.com/a%20b?utm_source=x&k=v%26w#frag"
+
+        val once = TrackingTokenSanitizer.sanitizeText(input)
+        val twice = TrackingTokenSanitizer.sanitizeText(once)
+
+        assertEquals("https://example.com/a%20b?k=v%26w#frag", once)
+        assertEquals(once, twice)
+    }
 }

@@ -118,14 +118,18 @@ object TrackingTokenSanitizer {
 
         val cleanedQuery = filterQuery(uri.rawQuery, keysToStrip)
         val cleanedFragment = filterQuery(uri.rawFragment, keysToStrip)
+        if (cleanedQuery == uri.rawQuery && cleanedFragment == uri.rawFragment) return trimmed
 
-        return URI(
-            uri.scheme,
-            uri.rawAuthority,
-            uri.rawPath,
-            cleanedQuery,
-            cleanedFragment
-        ).toString()
+        // Rebuilt by string surgery on the raw components, never through URI's multi-argument
+        // constructors: those re-quote '%', so an already-encoded path like "/a%20b" would grow to
+        // "/a%2520b" on every pass. Callers re-sanitize their own output (the composer's text
+        // observer sees its own edit), so this must be idempotent or it never settles.
+        val base = trimmed.substringBefore('#').substringBefore('?')
+        return buildString {
+            append(base)
+            if (cleanedQuery != null) append('?').append(cleanedQuery)
+            if (cleanedFragment != null) append('#').append(cleanedFragment)
+        }
     }
 
     private fun extractRedirectTarget(rawQuery: String?): String? {

@@ -93,14 +93,32 @@ class HashtagViewModel @Inject constructor(
 
     fun like(event: Event, content: String, emoji: CustomEmoji?): Boolean {
         if (!actions.canSignEvents()) return false
-        actions.requestSignAndPublish(NostrEventBuilder.reaction(event, content, emoji), userPreferences.getPublicKey())
+        viewModelScope.launch {
+            actions.requestSignAndPublish(
+                NostrEventBuilder.reaction(event, content, emoji, relayHint(event.id)),
+                userPreferences.getPublicKey()
+            )
+        }
         return true
     }
 
     fun repost(event: Event) {
         if (!actions.canSignEvents()) return
-        actions.requestSignAndPublish(NostrEventBuilder.repost(event), userPreferences.getPublicKey())
+        viewModelScope.launch {
+            actions.requestSignAndPublish(
+                NostrEventBuilder.repost(event, relayHint(event.id)),
+                userPreferences.getPublicKey()
+            )
+        }
     }
+
+    /**
+     * Relay hint for reaction/repost tag relay slots: the first relay the target was seen on,
+     * empty when unknown (the tags stay valid per NIP-18/NIP-25 either way). Suspends rather than
+     * blocking, so callers build the event inside a coroutine.
+     */
+    private suspend fun relayHint(eventId: String): String =
+        eventRepository.getEventRelays(eventId).firstOrNull() ?: ""
 
     fun share(event: Event) {
         viewModelScope.launch { _shareUrl.emit(actions.buildShareUrl(event.id)) }

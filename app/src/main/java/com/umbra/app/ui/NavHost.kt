@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.ui.Alignment
@@ -267,7 +268,10 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
     // LIVENESS_CHECK_INTERVAL_MS probe), and FeedViewModel.observeTorRuntimeState already reflects
     // live Tor state in the feed's status dot independent of navigation. This flag scopes the
     // force-navigate-to-TorGate behavior below to the initial bootstrap only.
-    var hasReachedFeedOnce by remember { mutableStateOf(false) }
+    // rememberSaveable, not remember: when the OS destroys the Activity while it's backgrounded,
+    // returning must not forget we reached the feed — a plain remember would bounce the user
+    // through TorGate, which pops the whole back stack and recreates the feed.
+    var hasReachedFeedOnce by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(currentRoute) {
         if (currentRoute == Screen.Feed.route) hasReachedFeedOnce = true
     }

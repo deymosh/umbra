@@ -329,6 +329,21 @@ class NostrSessionManager @Inject constructor(
     }
 
     /**
+     * Redials relays whose WebSocket sockets died while the app was backgrounded (idle-kill,
+     * Orbot churn) — [connectToEnabledRelays] skips relays already connected, so this only opens
+     * the ones actually down. No-op before the session has started or before relays ever
+     * connected.
+     */
+    override fun onAppForegrounded() {
+        if (!started || !relaysConnected) return
+        scope.launch {
+            lastSnapshot?.relays?.let { relays ->
+                eventRepository.connectToEnabledRelays(relays)
+            }
+        }
+    }
+
+    /**
      * Flips [relayUrl]'s isEnabled to false — only that flag, not its read/write/DM role flags,
      * so re-enabling it (RelayConfigViewModel, which also resets the failure count) restores
      * whatever role configuration it had rather than making the user reconfigure it from scratch.

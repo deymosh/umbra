@@ -77,21 +77,26 @@ class UmbraApp : Application(), SingletonImageLoader.Factory {
         return entryPoint.imageLoader()
     }
 
-    // TRIM_MEMORY_BACKGROUND (40) and above means the app is backgrounded AND the OS specifically
-    // wants memory back (as opposed to UI_HIDDEN=20, merely "not visible right now," or the
-    // foreground RUNNING_* levels 5/10/15) — proactively drop Coil's in-memory bitmap cache
-    // rather than waiting for the OS to reclaim it under more severe pressure. Coil 2.x's
-    // MemoryCache has no partial/percentage trim, only clear() — a media-heavy session is exactly
-    // the case most likely to have a large image cache worth reclaiming here.
+    // TRIM_MEMORY_UI_HIDDEN (20) fires on *every* backgrounding — it only means "not visible
+    // right now," not that the OS wants anything back. It used to trim the event/profile/list
+    // caches, which emptied the loaded feed on every background/foreground round-trip; it must
+    // not trim anything. The user's feed cache is Umbra's whole cold-start fast path: keeping it
+    // while backgrounded lets the feed render instantly on return (a process death is the only
+    // real loss point, and trimming here does not prevent that anyway).
     //
-    // TRIM_MEMORY_UI_HIDDEN (20)+ additionally triggers a light trim of the event/profile/list
-    // caches TrimMemoryCachesUseCase covers (see that class); TRIM_MEMORY_BACKGROUND (40)+ makes
-    // that trim aggressive. These previously never reacted to onTrimMemory at all — only Coil did.
+    // TRIM_MEMORY_BACKGROUND (40)+ means the OS specifically wants memory back (the foreground
+    // RUNNING_* levels 5/10/15 never reach here with a meaningful trim need — they mean the app
+    // is coming to the front). At that point drop Coil's in-memory bitmap cache — Coil 2.x's
+    // MemoryCache has no partial/percentage trim, only clear() — and trim the event/profile/list
+    // caches TrimMemoryCachesUseCase covers; TRIM_MEMORY_COMPLETE (80)+ makes that trim
+    // aggressive. These previously never reacted to onTrimMemory at all — only Coil did.
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        if (level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
             val entryPoint = EntryPointAccessors.fromApplication(this, UmbraAppEntryPoint::class.java)
-            val aggressive = level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND
+            // ComponentCallbacks2.TRIM_MEMORY_COMPLETE (=80) is API-35-deprecated, and the
+            // warning is fatal (-Werror) — same value, spelled literally.
+            val aggressive = level >= 80
             if (aggressive) {
                 entryPoint.imageLoader().memoryCache?.clear()
             }
