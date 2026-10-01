@@ -8,6 +8,7 @@ import com.umbra.app.R
 import com.umbra.app.domain.nip55.AmberSignerGateway
 import com.umbra.app.domain.nip01.NostrEventBuilder
 import com.umbra.app.domain.nip30.CustomEmoji
+import com.umbra.app.domain.nip30.allEmojis
 import com.umbra.app.domain.nipb7.DefaultBlossomServer
 import com.umbra.app.domain.nipb7.preferredUploadServer
 import com.umbra.app.domain.preferences.UserPreferences
@@ -96,8 +97,8 @@ class EditProfileViewModel @Inject constructor(
     private fun observeOwnEmojis() {
         val pubkey = userPreferences.getPublicKey() ?: return
         viewModelScope.launch {
-            observeOwnCustomEmojis(pubkey).collect { emojis ->
-                _state.update { it.copy(customEmojis = emojis) }
+            observeOwnCustomEmojis(pubkey).collect { groups ->
+                _state.update { it.copy(customEmojis = groups.allEmojis()) }
             }
         }
     }
