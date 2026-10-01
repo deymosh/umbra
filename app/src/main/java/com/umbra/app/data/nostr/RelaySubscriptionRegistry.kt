@@ -95,7 +95,7 @@ internal class RelaySubscriptionRegistry {
      * applied" (see [recordSent]'s doc comment).
      */
     fun hasChanged(relayUrl: String, channelId: String, filters: List<EventFilter>): Boolean =
-        lastSentFingerprint[relayUrl]?.get(channelId) != fingerprint(filters)
+        lastSentFingerprint[relayUrl]?.get(channelId) != filterFingerprint(filters)
 
     /**
      * Records [filters] as the last filters successfully sent for (relayUrl, channelId). Callers
@@ -104,7 +104,7 @@ internal class RelaySubscriptionRegistry {
      * the withholding condition clears.
      */
     fun recordSent(relayUrl: String, channelId: String, filters: List<EventFilter>) {
-        lastSentFingerprint.getOrPut(relayUrl) { ConcurrentHashMap() }[channelId] = fingerprint(filters)
+        lastSentFingerprint.getOrPut(relayUrl) { ConcurrentHashMap() }[channelId] = filterFingerprint(filters)
     }
 
     /** Removes [channelId]'s forward-map entry on [relayUrl], returning the removed subId if any. */
@@ -133,21 +133,5 @@ internal class RelaySubscriptionRegistry {
      */
     fun clearFingerprint(relayUrl: String) {
         lastSentFingerprint.remove(relayUrl)
-    }
-
-    private fun fingerprint(filters: List<EventFilter>): String {
-        return filters
-            .joinToString(separator = "||") { filter ->
-                listOf(
-                    "ids=${filter.ids.sorted().joinToString(",")}",
-                    "authors=${filter.authors.sorted().joinToString(",")}",
-                    "kinds=${filter.kinds.sorted().joinToString(",")}",
-                    "since=${filter.since ?: ""}",
-                    "until=${filter.until ?: ""}",
-                    "limit=${filter.limit}",
-                    "tags=${filter.tagFilters.toSortedMap().entries.joinToString(";") { (k, v) -> "$k=${v.sorted().joinToString(",")}" }}",
-                    "search=${filter.search ?: ""}"
-                ).joinToString("|")
-            }
     }
 }
