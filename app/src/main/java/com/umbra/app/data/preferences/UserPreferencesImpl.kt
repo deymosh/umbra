@@ -4,6 +4,7 @@ import android.content.Context
 import com.umbra.app.data.security.SecurePreferences
 import com.umbra.app.domain.crypto.normalizePubkey
 import com.umbra.app.domain.preferences.UserPreferences
+import com.umbra.app.domain.relay.RelayAuthMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,6 +20,9 @@ class UserPreferencesImpl @Inject constructor(
 
     private val encryptedPreferences = SecurePreferences(context, "user_prefs")
     private val pubkeyFlow = MutableStateFlow(getPublicKey())
+    private val relayAuthModeFlow = MutableStateFlow(
+        RelayAuthMode.fromStored(encryptedPreferences.getString(KEY_RELAY_AUTH_MODE))
+    )
     private val panicWipeEnabled = MutableStateFlow(encryptedPreferences.getString(KEY_PANIC_WIPE) == "1")
     private val notificationsSeenAt = MutableStateFlow(
         encryptedPreferences.getString(KEY_NOTIFICATIONS_SEEN_AT)?.toLongOrNull() ?: 0L
@@ -58,6 +62,7 @@ class UserPreferencesImpl @Inject constructor(
         pubkeyFlow.value = null
         notificationsSeenAt.value = 0L
         panicWipeEnabled.value = false
+        relayAuthModeFlow.value = RelayAuthMode.THROWAWAY_KEY
     }
 
     override fun getPublicKeyFlow(): StateFlow<String?> = pubkeyFlow.asStateFlow()
@@ -89,7 +94,15 @@ class UserPreferencesImpl @Inject constructor(
         panicWipeEnabled.value = enabled
     }
 
+    override fun getRelayAuthModeFlow(): StateFlow<RelayAuthMode> = relayAuthModeFlow.asStateFlow()
+
+    override fun setRelayAuthMode(mode: RelayAuthMode) {
+        encryptedPreferences.putString(KEY_RELAY_AUTH_MODE, mode.name)
+        relayAuthModeFlow.value = mode
+    }
+
     private companion object {
+        const val KEY_RELAY_AUTH_MODE = "relay_auth_mode"
         const val KEY_PANIC_WIPE = "panic_wipe_enabled"
         const val KEY_NOTIFICATIONS_SEEN_AT = "notifications_seen_at"
     }

@@ -5,6 +5,7 @@ package com.umbra.app.ui.feed
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.umbra.app.R
+import com.umbra.app.domain.nip42.ThrowawayAuthSigner
 import com.umbra.app.domain.nip51.ListEdit
 import com.umbra.app.domain.nip55.AmberSignerGateway
 import com.umbra.app.domain.media.VideoCacheDataSourceProvider
@@ -255,6 +256,7 @@ class FeedViewModel @Inject constructor(
     private val buildHydrationAuthorSetUseCase: BuildHydrationAuthorSetUseCase,
     private val buildEngagementFiltersUseCase: BuildEngagementFiltersUseCase,
     private val trackReferencedAuthorUseCase: TrackReferencedAuthorUseCase,
+    private val throwawayAuthSigner: ThrowawayAuthSigner,
 ) : ViewModel() {
     val mediaCacheDataSourceFactory get() = videoCacheDataSourceProvider.getCacheDataSourceFactory()
 
@@ -343,6 +345,7 @@ class FeedViewModel @Inject constructor(
         userPreferences = userPreferences,
         amberSignerGateway = amberSignerGateway,
         publishAuthEventUseCase = publishAuthEventUseCase,
+        throwawayAuthSigner = throwawayAuthSigner,
         uiState = _uiState,
         scope = viewModelScope,
         latestRelays = { latestRelays }

@@ -2,9 +2,14 @@ package com.umbra.app.ui.feed
 
 import com.umbra.app.R
 import com.umbra.app.domain.nip01.NostrEventBuilder
+import com.umbra.app.domain.nip42.ThrowawayAuthSigner
 import com.umbra.app.domain.nip55.AmberSignerGateway
 import com.umbra.app.domain.preferences.UserPreferences
+import com.umbra.app.domain.relay.AuthTrigger
 import com.umbra.app.domain.relay.Relay
+import com.umbra.app.domain.relay.RelayAuthDecision
+import com.umbra.app.domain.relay.RelayAuthMode
+import com.umbra.app.domain.relay.isOwnRelay
 import com.umbra.app.domain.relay.RelayIssue
 import com.umbra.app.domain.relay.RelayIssueKind
 import com.umbra.app.domain.relay.normalizeRelayUrl
@@ -44,6 +49,7 @@ internal class RelayIssueBannerCoordinator(
     private val userPreferences: UserPreferences,
     private val amberSignerGateway: AmberSignerGateway,
     private val publishAuthEventUseCase: PublishAuthEventUseCase,
+    private val throwawayAuthSigner: ThrowawayAuthSigner,
     private val uiState: MutableStateFlow<FeedState>,
     private val scope: CoroutineScope,
     private val latestRelays: () -> List<Relay>
@@ -80,14 +86,24 @@ internal class RelayIssueBannerCoordinator(
                     maybeHandleRelayAuthChallenge(issue)
                 }
 
-                // If AMBER can sign and we received a concrete challenge, AUTH is handled
-                // automatically; avoid showing a blocking error banner in this path.
-                if (
-                    issue.kind == RelayIssueKind.AUTH &&
-                    userPreferences.canSignWithAmber() &&
-                    issue.rawMessage.isNotBlank()
-                ) {
-                    return@collect
+                // If we can actually answer this AUTH (policy says sign, with a key the user
+                // controls or a throwaway one), it is handled automatically; avoid showing a
+                // blocking error banner in that path. Must use the same decision logic
+                // maybeHandleRelayAuthChallenge uses — not canSignWithAmber alone — because a
+                // throwaway-key response is possible even without Amber.
+                if (issue.kind == RelayIssueKind.AUTH && issue.rawMessage.isNotBlank()) {
+                    val relay = ownRelayFor(issue.relayUrl)
+                    val decision = RelayAuthDecision.decide(
+                        userPreferences.getRelayAuthMode(),
+                        isOwnRelay(relay),
+                        issue.authTrigger
+                    )
+                    val canRespond = when (decision) {
+                        is RelayAuthDecision.Sign ->
+                            !decision.useExternalSigner || userPreferences.canSignWithAmber()
+                        RelayAuthDecision.Ignore -> false
+                    }
+                    if (canRespond) return@collect
                 }
 
                 if (isStale(issue.timestampMs, RELAY_ISSUE_BANNER_MAX_AGE_MS)) {
@@ -184,20 +200,39 @@ internal class RelayIssueBannerCoordinator(
         runCatching { java.net.URI(relayUrl).host }.getOrNull()?.takeIf { it.isNotBlank() } ?: relayUrl
 
     internal fun maybeHandleRelayAuthChallenge(issue: RelayIssue) {
-        // Only respond to real ["AUTH", challenge] frames (NIP-42).
-        // CLOSED/OK messages with "auth-required:" text are NOT challenges — the client
-        // must use the previously stored challenge for that relay, which is already handled
-        // at the network layer by re-emitting the stored challenge with isAuthChallenge=true.
+        // Only respond to challenge-bearing AUTH issues (NIP-42). CLOSED/OK messages with
+        // "auth-required:" text are NOT challenges themselves — the client must use the stored
+        // challenge for that relay, which the network layer re-emits with isAuthChallenge=true
+        // and an authTrigger describing what was rejected.
         if (!issue.isAuthChallenge) return
 
         val challenge = issue.rawMessage.trim()
         if (challenge.isBlank()) return
-        if (!userPreferences.canSignWithAmber()) return
 
-        if (recentAuthChallengeByRelay[issue.relayUrl] == challenge) return
-        recentAuthChallengeByRelay[issue.relayUrl] = challenge
+        val relay = ownRelayFor(issue.relayUrl)
+        val isOwnRelay = isOwnRelay(relay)
+        val mode = userPreferences.getRelayAuthMode()
+        val decision = RelayAuthDecision.decide(mode, isOwnRelay, issue.authTrigger)
+        if (decision !is RelayAuthDecision.Sign) return
 
-        requestSignAndPublishAuth(issue.relayUrl, challenge)
+        // Per-relay dedup records only AFTER actually responding (below), so an ignored
+        // CHALLENGE frame can't swallow a later REQ_REJECTED/PUBLISH_REJECTED carrying the
+        // same challenge. Keyed by challenge and key choice: a relay answered with the
+        // throwaway key can still need the real key once it rejects one of the user's publishes.
+        val dedupKey = "$challenge|${decision.useExternalSigner}"
+        if (recentAuthChallengeByRelay[issue.relayUrl] == dedupKey) return
+
+        // The external-signer path needs Amber (and a real pubkey). The throwaway path involves
+        // no Amber at all — even an anonymous session can auth to a non-own relay with a random
+        // identity. Note we deliberately do not consult canSignWithAmber for that path.
+        if (decision.useExternalSigner && !userPreferences.canSignWithAmber()) return
+
+        recentAuthChallengeByRelay[issue.relayUrl] = dedupKey
+        if (decision.useExternalSigner) {
+            requestSignAndPublishAuth(issue.relayUrl, challenge)
+        } else {
+            requestSignAndPublishThrowawayAuth(issue.relayUrl, challenge)
+        }
     }
 
     internal fun shouldClearNetworkBanner(state: FeedState): Boolean {
@@ -241,5 +276,35 @@ internal class RelayIssueBannerCoordinator(
                     }
                 }
         }
+    }
+
+    /**
+     * In-app signing path (AUDIT.md 1.2 narrow exception): the unsigned kind-22242 event is
+     * signed with this connection's throwaway key via [ThrowawayAuthSigner] — no Amber round
+     * trip, no user key material anywhere — then published to just [relayUrl], never broadcast.
+     * Only the kind-22242 AUTH event is ever built here, and only for non-own relays the user
+     * hasn't configured, which is what makes the in-app signature privacy-neutral: the relay
+     * learns an identity the user doesn't own and will not reuse.
+     */
+    private fun requestSignAndPublishThrowawayAuth(relayUrl: String, challenge: String) {
+        scope.launch {
+            val authJson = NostrEventBuilder.relayAuth(challenge = challenge, relayUrl = relayUrl)
+            val signedEvent = try {
+                throwawayAuthSigner.signAuthEvent(relayUrl, authJson)
+            } catch (e: Exception) {
+                logger.d { "Error signing throwaway AUTH event: ${scrubThrowableMessageForLogs(e)}" }
+                null
+            } ?: return@launch
+            publishAuthEventUseCase(signedEvent, relayUrl)
+                .onSuccess { eventRepository.reapplyChannelsToRelay(relayUrl) }
+                .onFailure { e ->
+                    logger.d { "Error publishing AUTH event: ${scrubThrowableMessageForLogs(e)}" }
+                }
+        }
+    }
+
+    private fun ownRelayFor(relayUrl: String): Relay? {
+        val normalized = normalizeRelayUrl(relayUrl)
+        return latestRelays().firstOrNull { normalizeRelayUrl(it.url) == normalized }
     }
 }

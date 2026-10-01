@@ -15,7 +15,20 @@ data class RelayIssue(
      * False for auth-required errors inside CLOSED/OK/NOTICE — those must NOT
      * be used as challenges; they should trigger re-use of the stored challenge.
      */
-    val isAuthChallenge: Boolean = false
+    val isAuthChallenge: Boolean = false,
+    /**
+     * What produced this AUTH issue — set only when [isAuthChallenge] is true. The relay-auth
+     * policy uses it to decide whether (and with which key) to respond:
+     * - [AuthTrigger.CHALLENGE]: the relay sent a real ["AUTH", challenge] frame unprompted.
+     *   Only own relays get a response (they need authenticated reads like the DM inbox).
+     * - [AuthTrigger.REQ_REJECTED]: a REQ was CLOSED with "auth-required:" — the client's own
+     *   request was rejected, so non-own relays get a (lazy) throwaway-key answer.
+     * - [AuthTrigger.PUBLISH_REJECTED]: one of the user's own events was rejected with
+     *   "auth-required:" — that relay already saw the user's real pubkey on the rejected event,
+     *   so answering with the real key keeps replies/mentions flowing instead of hiding an
+     *   identity that's no longer hidden.
+     */
+    val authTrigger: AuthTrigger = AuthTrigger.CHALLENGE
 )
 
 enum class RelayIssueKind {

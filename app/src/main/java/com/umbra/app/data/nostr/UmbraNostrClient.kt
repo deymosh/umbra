@@ -6,6 +6,7 @@ import com.umbra.app.domain.nip01.EventFilter
 import com.umbra.app.domain.nip45.RelayCountResult
 import com.umbra.app.domain.nip67.EoseSignal
 import com.umbra.app.domain.nip77.NegSignal
+import com.umbra.app.domain.relay.AuthTrigger
 import com.umbra.app.domain.relay.RelayIssue
 import com.umbra.app.domain.relay.RelayIssueKind
 import com.umbra.app.domain.relay.RelayPublishResult
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import com.umbra.app.data.crypto.ThrowawayAuthSignerImpl
 import com.umbra.app.data.network.TrafficMeter
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -93,6 +95,7 @@ internal fun scanEventFrame(text: String): ScannedEventFrame? {
 class UmbraNostrClient @Inject constructor(
     @Named("tor") protected val torClient: OkHttpClient,
     protected val orBotCheck: OrBotConnectivityCheck,
+    internal val throwawayAuthSigner: ThrowawayAuthSignerImpl,
     internal val trafficMeter: TrafficMeter = TrafficMeter()
 ) : NostrClient {
 
@@ -353,7 +356,8 @@ class UmbraNostrClient @Inject constructor(
         kind: RelayIssueKind,
         message: String,
         cooldownSeconds: Long? = null,
-        isAuthChallenge: Boolean = false
+        isAuthChallenge: Boolean = false,
+        authTrigger: AuthTrigger = AuthTrigger.CHALLENGE
     ) {
         _relayIssueFlow.tryEmit(
             RelayIssue(
@@ -361,7 +365,8 @@ class UmbraNostrClient @Inject constructor(
                 kind = kind,
                 rawMessage = message,
                 cooldownSeconds = cooldownSeconds,
-                isAuthChallenge = isAuthChallenge
+                isAuthChallenge = isAuthChallenge,
+                authTrigger = authTrigger
             )
         )
     }
@@ -606,6 +611,7 @@ class UmbraNostrClient @Inject constructor(
         relayRejectsSubIdReuse.remove(relayUrl)
         relayEventCounters.remove(relayUrl)
         storedAuthChallenges.remove(relayUrl)
+        throwawayAuthSigner.discardKeyForRelay(relayUrl)
         subscriptions.forgetRelay(relayUrl)
         logger.d { "Forgot relay entirely: ${scrubUrlForLogs(relayUrl)}" }
     }
@@ -618,6 +624,7 @@ class UmbraNostrClient @Inject constructor(
         relayFailureCount.clear()
         relayCooldownUntil.clear()
         relayThrottledUntil.clear()
+        throwawayAuthSigner.discardAllKeys()
         subscriptions.resetAll()
         logger.d { "Disconnected from all relays" }
     }
