@@ -2,6 +2,7 @@ package com.umbra.app.ui.components
 
 import com.umbra.app.R
 import com.umbra.app.domain.nip01.Event
+import com.umbra.app.domain.nip30.CustomEmoji
 import com.umbra.app.domain.nip30.extractCustomEmojis
 import com.umbra.app.domain.nip92.extractImetaTags
 import com.umbra.app.domain.profile.UserProfile
@@ -203,22 +204,8 @@ fun NostrTextRenderer(
     val stableOnUrlClick = remember { { value: String -> onUrlClickState.value(value) } }
     val customEmojis = remember(tags) { extractCustomEmojis(tags.toList()) }
     val imetaByUrl = remember(tags) { extractImetaTags(tags.toList()) }
-    val emojiInlineContent = remember(customEmojis) {
-        customEmojis.values.associate { emoji ->
-            customEmojiInlineContentId(emoji.shortcode) to androidx.compose.foundation.text.InlineTextContent(
-                Placeholder(
-                    width = 1.15.em,
-                    height = 1.15.em,
-                    placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter
-                )
-            ) {
-                AsyncImage(
-                    model = emoji.url,
-                    contentDescription = context.getString(R.string.custom_emoji_content_description, emoji.shortcode),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
+    val emojiInlineContent = rememberCustomEmojiInlineContent(customEmojis) { shortcode ->
+        context.getString(R.string.custom_emoji_content_description, shortcode)
     }
 
     var fullscreenImageIndex by rememberSaveable { mutableStateOf<Int?>(null) }
@@ -466,6 +453,36 @@ private fun SimpleNostrText(
                     inlineContent = emptyMap(),
                     modifier = Modifier.fillMaxWidth(),
                     style = textStyle
+                )
+            }
+        }
+    }
+}
+
+/**
+ * InlineTextContent map for [customEmojis], keyed by [customEmojiInlineContentId]. Shared by the
+ * note renderer and NIP-30 profile text in ProfileHero so every `:shortcode:` renders the same
+ * line-height-sized placeholder. [emojiContentDescription] resolves per-shortcode accessibility
+ * text (callers needing none pass `{ null }` semantics themselves).
+ */
+@Composable
+internal fun rememberCustomEmojiInlineContent(
+    customEmojis: Map<String, CustomEmoji>,
+    emojiContentDescription: (shortcode: String) -> String?
+): Map<String, androidx.compose.foundation.text.InlineTextContent> {
+    return remember(customEmojis, emojiContentDescription) {
+        customEmojis.mapValues { (_, emoji) ->
+            androidx.compose.foundation.text.InlineTextContent(
+                Placeholder(
+                    width = 1.15.em,
+                    height = 1.15.em,
+                    placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter
+                )
+            ) {
+                AsyncImage(
+                    model = emoji.url,
+                    contentDescription = emojiContentDescription(emoji.shortcode),
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

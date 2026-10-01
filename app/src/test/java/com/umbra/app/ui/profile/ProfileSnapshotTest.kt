@@ -10,6 +10,7 @@ import com.umbra.app.ui.snapshot.PHONE
 import com.umbra.app.ui.snapshot.SNAPSHOT_SDK
 import com.umbra.app.ui.snapshot.SnapshotFixtures
 import com.umbra.app.ui.snapshot.snapshot
+import com.umbra.app.domain.profile.UserProfile
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -22,11 +23,11 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [SNAPSHOT_SDK], application = Application::class, qualifiers = PHONE)
 class ProfileSnapshotTest {
 
-    private fun render(name: String, isOwn: Boolean, following: Boolean) = snapshot(name) {
+    private fun render(name: String, isOwn: Boolean, following: Boolean, profile: UserProfile = SnapshotFixtures.alice) = snapshot(name) {
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
                 ProfileHero(
-                    profile = SnapshotFixtures.alice,
+                    profile = profile,
                     pubkey = SnapshotFixtures.ALICE,
                     canSign = true,
                     isOwnProfile = isOwn,
@@ -72,4 +73,7 @@ class ProfileSnapshotTest {
 
     @Test
     fun ownProfile() = render("Profile_own", isOwn = true, following = false)
+
+    @Test
+    fun emojiNameHeader() = render("Profile_emoji_name", isOwn = false, following = false, profile = SnapshotFixtures.aliceEmoji)
 }

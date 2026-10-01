@@ -424,7 +424,9 @@ object NostrEventBuilder {
     /**
      * NIP-01: User metadata update (kind 0).
      * Publishes updated profile fields. Only non-blank values are included in the JSON.
-     * The relay will replace the previous kind-0 for this pubkey.
+     * The relay will replace the previous kind-0 for this pubkey. [emojis] is the user's own
+     * NIP-30 emoji (their kind-10030 list + referenced sets); emoji whose `:shortcode:` appears
+     * in name, display_name or about get an `emoji` tag so clients can render them inline.
      */
     fun updateProfile(
         name: String?,
@@ -435,16 +437,20 @@ object NostrEventBuilder {
         lud16: String?,
         picture: String?,
         banner: String? = null,
-        lud06: String? = null
+        lud06: String? = null,
+        emojis: List<CustomEmoji> = emptyList()
     ): String {
+        val nameShort = name?.trim()?.takeIf { it.isNotBlank() }
+        val displayNameShort = displayName?.trim()?.takeIf { it.isNotBlank() }
+        val aboutShort = about?.trim()?.takeIf { it.isNotBlank() }
         val content = buildJsonObject {
-            name?.trim()?.takeIf { it.isNotBlank() }?.let {
+            nameShort?.let {
                 put("name", TrackingTokenSanitizer.sanitizeText(it))
             }
-            displayName?.trim()?.takeIf { it.isNotBlank() }?.let {
+            displayNameShort?.let {
                 put("display_name", TrackingTokenSanitizer.sanitizeText(it))
             }
-            about?.trim()?.takeIf { it.isNotBlank() }?.let {
+            aboutShort?.let {
                 put("about", TrackingTokenSanitizer.sanitizeText(it))
             }
             website?.trim()?.takeIf { it.isNotBlank() }?.let {
@@ -460,10 +466,21 @@ object NostrEventBuilder {
             }
             lud06?.trim()?.takeIf { it.isNotBlank() }?.let { put("lud06", it) }
         }.toString()
+        // NIP-30: one `emoji` tag per one of the user's available emoji that actually appears as
+        // `:shortcode:` in name, display_name or about — same content-driven rule notes use, over
+        // all three fields concatenated and deduped by shortcode.
+        val emojiTags = emojiTagsFor(
+            listOfNotNull(nameShort, displayNameShort, aboutShort).joinToString(" "),
+            emojis
+        )
         return buildUnsignedEvent(
             kind = Event.KIND_METADATA,
             content = content,
-            tags = buildJsonArray {}
+            tags = buildJsonArray {
+                emojiTags.forEach { tag ->
+                    add(buildJsonArray { tag.forEach { add(JsonPrimitive(it)) } })
+                }
+            }
         )
     }
 

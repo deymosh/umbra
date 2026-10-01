@@ -403,6 +403,69 @@ class NostrEventBuilderTest {
     }
 
     @Test
+    fun `given profile fields using known shortcodes when updateProfile with emojis then emoji tags added for each`() {
+        val obj = parseObject(
+            NostrEventBuilder.updateProfile(
+                name = " :umbra: ",
+                displayName = " Alice :umbra: ",
+                about = "bio with :moon: and :umbra: again",
+                website = null,
+                nip05 = null,
+                lud16 = null,
+                picture = null,
+                emojis = listOf(
+                    CustomEmoji("umbra", "https://example.com/umbra.png"),
+                    CustomEmoji("moon", "https://example.com/moon.png"),
+                    CustomEmoji("unused", "https://example.com/unused.png")
+                )
+            )
+        )
+
+        val tags = tagArrays(obj)
+        assertTrue(tags.any { it.map { v -> v.jsonPrimitive.content } == listOf("emoji", "umbra", "https://example.com/umbra.png") })
+        assertTrue(tags.any { it.map { v -> v.jsonPrimitive.content } == listOf("emoji", "moon", "https://example.com/moon.png") })
+        // Deduped: ":umbra:" appears in both name and about but only one tag is emitted.
+        assertEquals(1, tags.count { it.map { v -> v.jsonPrimitive.content }.getOrNull(1) == "umbra" })
+        // No tag for an emoji the text never uses.
+        assertTrue(tags.none { it.map { v -> v.jsonPrimitive.content }.getOrNull(1) == "unused" })
+    }
+
+    @Test
+    fun `given profile fields with unknown shortcodes when updateProfile with emojis then no emoji tags`() {
+        val obj = parseObject(
+            NostrEventBuilder.updateProfile(
+                name = ":notmine:",
+                displayName = null,
+                about = "plain",
+                website = null,
+                nip05 = null,
+                lud16 = null,
+                picture = null,
+                emojis = listOf(CustomEmoji("umbra", "https://example.com/umbra.png"))
+            )
+        )
+
+        assertTrue(tagArrays(obj).isEmpty())
+    }
+
+    @Test
+    fun `given no emojis when updateProfile then tags empty even with shortcode-looking text`() {
+        val obj = parseObject(
+            NostrEventBuilder.updateProfile(
+                name = ":umbra:",
+                displayName = null,
+                about = null,
+                website = null,
+                nip05 = null,
+                lud16 = null,
+                picture = null
+            )
+        )
+
+        assertTrue(tagArrays(obj).isEmpty())
+    }
+
+    @Test
     fun `given content mentioning a profile when building text note then adds p tag`() {
         val mentionedPubkey = "1".repeat(64)
         val npub = Bech32Encoder.encodeNpub(mentionedPubkey)

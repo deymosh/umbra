@@ -25,7 +25,9 @@ import com.umbra.app.data.db.entities.UserProfileEntity
         FeedFilterEntity::class,
         ReactionEmojiEntity::class
     ],
-    version = 1,
+    // All user_profiles columns carry the domain model; bump on any entity/mapper change —
+    // destructive migrations (fallbackToDestructiveMigration) are the beta policy.
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(RoomConverters::class)
