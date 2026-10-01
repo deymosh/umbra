@@ -917,7 +917,7 @@ class FeedViewModel @Inject constructor(
         // well below MAX_IN_MEMORY_EVENT_CACHE (EventRepositoryImpl, currently 100k) so scrolling
         // can grow deep into whatever's already in the in-memory pool before loadOlderEvents()
         // needs to fall back to a fresh relay REQ.
-        _displayLimit.value = (_displayLimit.value + 200).coerceAtMost(10000)
+        _displayLimit.update { (it + 200).coerceAtMost(10000) }
 
         eventRepository.loadOlderEvents(CHANNEL_FEED, oldest)
         logger.d { "Loading older feed events before timestamp $oldest" }

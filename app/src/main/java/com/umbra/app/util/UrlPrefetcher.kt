@@ -14,7 +14,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import okhttp3.OkHttpClient
@@ -62,8 +61,18 @@ class UrlPrefetcher @Inject constructor(
     private val asyncJobs = ConcurrentHashMap<String, Job>()
     private val prefetchHistoryByScope = ConcurrentHashMap<String, LinkedHashSet<String>>()
     private val metadataCache = mutableStateMapOf<String, UrlMetadata>()
-    private val cacheOrder = LinkedHashSet<String>()
-    private val knownMisses = LinkedHashSet<String>()
+
+    // Concurrency fix (documented choice): these three access-order structures are written from
+    // Dispatchers.IO/Default workers and read from all of IO/Default/Main, so plain
+    // LinkedHashSet is a data race. Confining every access to Main would put the miss/order
+    // bookkeeping on the hot path of scan-driven prefatches, so instead each set is wrapped in
+    // one small synchronized-guarded holder below — a bounded op is O(1) and contention is a
+    // single monitor acquire per lookup/mutation, far cheaper than a Main hop per URL. The
+    // read-check + write in callers (isKnownMiss then rememberMiss) is NOT atomic as a unit,
+    // but a rare double prefetch of the same URL is harmless and self-terminating; no
+    // could be lost-with-no-recovery state lives behind these.
+    private val cacheOrder = SynchronizedBoundedOrderedSet(MAX_METADATA_CACHE_SIZE)
+    private val knownMisses = SynchronizedBoundedOrderedSet(MAX_MISS_CACHE_SIZE)
 
     suspend fun prefetch(url: String, maxWaitMs: Long = 30_000L) {
         if (url.isBlank()) return
@@ -99,30 +108,22 @@ class UrlPrefetcher @Inject constructor(
                             sourceUrl = url,
                             resolvedUrl = response.request.url.toString()
                         )
-                        withContext(Dispatchers.Main) {
-                            cacheMetadata(url, imageMetadata)
-                        }
+                        cacheMetadata(url, imageMetadata)
                         return@use
                     }
 
                     if (!isHtmlContentType(contentType)) {
-                        withContext(Dispatchers.Main) {
-                            rememberMiss(url)
-                        }
+                        rememberMiss(url)
                         return@use
                     }
 
                     val body = response.body.string()
                     val metadata = extractUrlMetadataFromHtml(url, body)
-                    withContext(Dispatchers.Main) {
-                        if (metadata != null) {
-                            cacheMetadata(url, metadata)
-                        } else {
-                            rememberMiss(url)
-                        }
-                    }
                     if (metadata != null) {
+                        cacheMetadata(url, metadata)
                         logger.d { "Captured metadata for ${scrubUrlForLogs(url)}: title=${metadata.title?.take(20)}" }
+                    } else {
+                        rememberMiss(url)
                     }
                 }
             }.onFailure { error ->
@@ -135,17 +136,24 @@ class UrlPrefetcher @Inject constructor(
         if (url.isBlank()) return
         val key = "$scopeTag::$url"
 
-        val existing = asyncJobs[key]
-        if (existing != null && existing.isActive) return
-
-        val job = scope.launch {
-            try {
-                prefetch(url)
-            } finally {
-                asyncJobs.remove(key)
+        // Single-launch race fix: the old check-then-put let two racing callers each pass the
+        // isActive check and both launch. compute is atomic per key; only the put-winner
+        // (absent-or-dead entry replaced by a fresh job) starts the work, the loser sees the
+        // winner's active job and no-ops. An already-completed entry (fetch done, cleanup hasn't
+        // removed it yet) counts as dead and is permitted to relaunch.
+        asyncJobs.compute(key) { _, existing ->
+            if (existing != null && existing.isActive) {
+                existing
+            } else {
+                scope.launch {
+                    try {
+                        prefetch(url)
+                    } finally {
+                        asyncJobs.remove(key)
+                    }
+                }
             }
         }
-        asyncJobs[key] = job
     }
 
     fun prefetchWindowUrls(
@@ -210,29 +218,63 @@ class UrlPrefetcher @Inject constructor(
     fun getMetadata(url: String): UrlMetadata? = metadataCache[url]
 
     private fun cacheMetadata(url: String, metadata: UrlMetadata) {
-        metadataCache[url] = metadata
+        synchronized(metadataCache) {
+            metadataCache[url] = metadata
+        }
         knownMisses.remove(url)
-        cacheOrder.remove(url)
-        cacheOrder.add(url)
-
-        while (cacheOrder.size > MAX_METADATA_CACHE_SIZE) {
-            val eldest = cacheOrder.firstOrNull() ?: break
-            cacheOrder.remove(eldest)
-            metadataCache.remove(eldest)
+        cacheOrder.addAndEvict(url)
+        // cacheOrder evicted the eldest URL (access-order bound) — drop its metadata too.
+        cacheOrder.eldestEvicted?.let { eldest ->
+            synchronized(metadataCache) {
+                metadataCache.remove(eldest)
+            }
         }
     }
 
     private fun rememberMiss(url: String) {
-        knownMisses.remove(url)
-        knownMisses.add(url)
-
-        while (knownMisses.size > MAX_MISS_CACHE_SIZE) {
-            val eldest = knownMisses.firstOrNull() ?: break
-            knownMisses.remove(eldest)
-        }
+        knownMisses.addAndEvict(url)
     }
 
-    private fun isKnownMiss(url: String): Boolean = url in knownMisses
+    private fun isKnownMiss(url: String): Boolean = knownMisses.contains(url)
+}
+
+/**
+ * Synchronized, insertion-order (access-order), size-bounded string set — the concurrency
+ * wrapper behind UrlPrefetcher's cacheOrder/knownMisses (see its field doc for why synchronized
+ * rather than Main-confinement or a concurrent structure with custom eviction). Zero-when-absent
+ * eviction side effect is surfaced through [eldestEvicted] so the metadata cache companion can
+ * mirror the drop without a second lock pass.
+ */
+private class SynchronizedBoundedOrderedSet(private val maxSize: Int) {
+    private val set = LinkedHashSet<String>()
+
+    /** Non-null just after an [addAndEvict] that evicted the eldest entry. */
+    @get:Synchronized @set:Synchronized
+    var eldestEvicted: String? = null
+        private set
+
+    @Synchronized
+    fun contains(url: String): Boolean = url in set
+
+    @Synchronized
+    fun remove(url: String) {
+        set.remove(url)
+    }
+
+    /** Adds [url]; if already present, re-inserts it as the newest (access-order refresh). */
+    @Synchronized
+    fun addAndEvict(url: String) {
+        eldestEvicted = null
+        set.remove(url)
+        set.add(url)
+        var evicted: String? = null
+        while (set.size > maxSize) {
+            val eldest = set.firstOrNull() ?: break
+            set.remove(eldest)
+            evicted = eldest
+        }
+        eldestEvicted = evicted
+    }
 }
 
 private val META_TAG_REGEX = Regex("""<meta\b[^>]*>""", RegexOption.IGNORE_CASE)

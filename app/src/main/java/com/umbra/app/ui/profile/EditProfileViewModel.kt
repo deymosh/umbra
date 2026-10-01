@@ -7,11 +7,14 @@ import androidx.lifecycle.viewModelScope
 import com.umbra.app.R
 import com.umbra.app.domain.nip55.AmberSignerGateway
 import com.umbra.app.domain.nip01.NostrEventBuilder
+import com.umbra.app.domain.nip30.CustomEmoji
+import com.umbra.app.domain.nip30.allEmojis
 import com.umbra.app.domain.nipb7.DefaultBlossomServer
 import com.umbra.app.domain.nipb7.preferredUploadServer
 import com.umbra.app.domain.preferences.UserPreferences
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.usecase.BlossomUploadResult
+import com.umbra.app.domain.usecase.ObserveOwnCustomEmojisUseCase
 import com.umbra.app.domain.usecase.PublishSignedEventUseCase
 import com.umbra.app.domain.usecase.UploadBlossomBlobUseCase
 import com.umbra.app.ui.common.UiMessage
@@ -60,6 +63,7 @@ data class EditProfileState(
     // existing picker-button-disabled/spinner-overlay affordance.
     val pendingUpload: PendingMediaUpload? = null,
     val availableUploadServers: List<String> = listOf(DefaultBlossomServer.URL),
+    val customEmojis: List<CustomEmoji> = emptyList(),
     val savedSuccessfully: Boolean = false,
     val errorMessage: UiMessage? = null
 )
@@ -70,7 +74,8 @@ class EditProfileViewModel @Inject constructor(
     private val userPreferences: UserPreferences,
     private val amberSignerGateway: AmberSignerGateway,
     private val publishSignedEventUseCase: PublishSignedEventUseCase,
-    private val uploadBlossomBlobUseCase: UploadBlossomBlobUseCase
+    private val uploadBlossomBlobUseCase: UploadBlossomBlobUseCase,
+    private val observeOwnCustomEmojis: ObserveOwnCustomEmojisUseCase
 ) : ViewModel() {
 
     companion object {
@@ -84,6 +89,18 @@ class EditProfileViewModel @Inject constructor(
 
     init {
         loadCurrentProfile()
+        observeOwnEmojis()
+    }
+
+    // Same wiring as ComposerViewModel: the user's kind-10030 emoji (+ referenced 30030 sets),
+    // so saveProfile can add the NIP-30 `emoji` tags the profile text needs.
+    private fun observeOwnEmojis() {
+        val pubkey = userPreferences.getPublicKey() ?: return
+        viewModelScope.launch {
+            observeOwnCustomEmojis(pubkey).collect { groups ->
+                _state.update { it.copy(customEmojis = groups.allEmojis()) }
+            }
+        }
     }
 
     private fun loadCurrentProfile() {
@@ -150,7 +167,8 @@ class EditProfileViewModel @Inject constructor(
                 lud16 = currentState.lud16.trim().takeIf { it.isNotBlank() },
                 picture = currentState.picture.trim().takeIf { it.isNotBlank() },
                 banner = currentState.banner.trim().takeIf { it.isNotBlank() },
-                lud06 = currentState.lud06.trim().takeIf { it.isNotBlank() }
+                lud06 = currentState.lud06.trim().takeIf { it.isNotBlank() },
+                emojis = currentState.customEmojis
             )
             val currentUserHex = userPreferences.getPublicKey()
             val signed = amberSignerGateway.signEvent(eventJson, currentUserHex)

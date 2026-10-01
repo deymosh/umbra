@@ -11,6 +11,7 @@ import com.umbra.app.domain.usecase.BuildProfileHydrationFiltersUseCase
 import com.umbra.app.domain.usecase.BuildProfileHydrationRequestsUseCase
 import com.umbra.app.testutil.fakes.FakeEventRepository
 import com.umbra.app.testutil.fakes.FakeUserRepository
+import com.umbra.app.util.MainDispatcherRule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -19,6 +20,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 
 /**
@@ -30,6 +32,9 @@ import org.junit.Test
  * to live on a single class implicitly staying in sync can drift once it's split across two.
  */
 class FeedEngagementSchedulingCoordinatorTest {
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     /** Constructs a [FeedEngagementSchedulingCoordinator] against [scope] with permissive
      * defaults — a fresh [FakeEventRepository]/[FakeUserRepository] and an unscoped

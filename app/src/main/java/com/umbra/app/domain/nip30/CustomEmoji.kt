@@ -71,6 +71,15 @@ fun emojiTagsFor(content: String, available: List<CustomEmoji>): List<List<Strin
         .toList()
 }
 
+/**
+ * One named section of the user's NIP-30 emoji catalog: either their inline emoji ([title] null,
+ * kind-10030) or a referenced kind-30030 set titled by that event.
+ */
+data class EmojiGroup(val title: String?, val emojis: List<CustomEmoji>)
+
+/** Flattens the groups back into one deduplicated list, first occurrence of a shortcode wins. */
+fun List<EmojiGroup>.allEmojis(): List<CustomEmoji> = flatMap { it.emojis }.distinctBy { it.shortcode }
+
 /** Start index and partial shortcode of an in-progress `:query` the caret sits in. */
 data class EmojiQuery(val startIndex: Int, val query: String)
 

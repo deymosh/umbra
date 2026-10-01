@@ -41,6 +41,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldLineLimits
@@ -50,6 +53,7 @@ import androidx.compose.foundation.text.input.insert
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Visibility
@@ -101,6 +105,8 @@ import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.ui.common.resolve
 import com.umbra.app.ui.components.LoadingSpinner
+import com.umbra.app.ui.components.LocalCustomEmojiGroups
+import com.umbra.app.domain.nip30.allEmojis
 import com.umbra.app.ui.components.MENTION_URI_REGEX
 import com.umbra.app.ui.components.MediaUploadDialog
 import com.umbra.app.ui.components.MentionVisualTransformation
@@ -153,6 +159,22 @@ fun ComposerScreen(
     // time — see the LaunchedEffect below — rather than building a full multi-item upload dialog:
     // each queued Uri gets the same single-item MediaUploadDialog treatment in sequence.
     var mediaQueue by remember { mutableStateOf(emptyList<Uri>()) }
+    var showEmojiSheet by remember { mutableStateOf(false) }
+
+    // The single app-wide catalog collector lives above this screen (CustomEmojiCatalog); hand
+    // its content to the ViewModel so publishing can tag the emoji actually used.
+    val customEmojiGroups = LocalCustomEmojiGroups.current
+    LaunchedEffect(customEmojiGroups) {
+        viewModel.setCustomEmojis(customEmojiGroups.allEmojis())
+    }
+
+    if (showEmojiSheet) {
+        ComposerEmojiSheet(
+            onInsertUnicode = viewModel::insertAtCursor,
+            onInsertCustom = { emoji -> viewModel.insertAtCursor(":${emoji.shortcode}: ") },
+            onDismissRequest = { showEmojiSheet = false }
+        )
+    }
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
@@ -228,6 +250,7 @@ fun ComposerScreen(
                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
             )
         },
+        onEmoji = { showEmojiSheet = true },
         onSelectMention = viewModel::selectMention,
         onSelectEmoji = viewModel::selectEmoji,
         onSensitiveChange = viewModel::onSensitiveContentChange,
@@ -280,6 +303,7 @@ internal fun ComposerLayout(
     onSelectMention: (UserProfile) -> Unit,
     onSensitiveChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    onEmoji: () -> Unit = {},
     onSelectEmoji: (CustomEmoji) -> Unit = {},
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     editorModifier: Modifier = Modifier,
@@ -324,6 +348,7 @@ internal fun ComposerLayout(
                 showPreview = showPreview,
                 uploading = state.isUploadingAttachment,
                 onPickMedia = onPickMedia,
+                onEmoji = onEmoji,
                 onSensitiveChange = onSensitiveChange,
                 onTogglePreview = { showPreview = !showPreview },
                 modifier = Modifier.imePadding()
@@ -601,7 +626,7 @@ private fun ComposerNotice(icon: ImageVector, text: String, color: Color) {
     }
 }
 
-/** NIP-30: the user's custom emoji matching the `:query` being typed. */
+/** NIP-30: the user's custom emoji matching the `:query` being typed, as scrollable chips. */
 @Composable
 private fun EmojiSuggestions(suggestions: List<CustomEmoji>, onSelect: (CustomEmoji) -> Unit) {
     Surface(
@@ -610,21 +635,26 @@ private fun EmojiSuggestions(suggestions: List<CustomEmoji>, onSelect: (CustomEm
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(vertical = 4.dp)) {
-            suggestions.forEach { emoji ->
+        LazyRow(
+            modifier = Modifier.padding(vertical = 6.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            items(suggestions, key = { it.shortcode }) { emoji ->
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .height(40.dp)
+                        .clip(MaterialTheme.shapes.small)
                         .clickable { onSelect(emoji) }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     AsyncImage(
                         model = emoji.url,
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                     Text(
                         text = ":${emoji.shortcode}:",
@@ -704,6 +734,7 @@ private fun ComposerToolbar(
     showPreview: Boolean,
     uploading: Boolean,
     onPickMedia: () -> Unit,
+    onEmoji: () -> Unit,
     onSensitiveChange: (Boolean) -> Unit,
     onTogglePreview: () -> Unit,
     modifier: Modifier = Modifier
@@ -725,6 +756,13 @@ private fun ComposerToolbar(
                     Icon(
                         Icons.Outlined.Image,
                         contentDescription = stringResource(R.string.composer_attach_media_cd),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                IconButton(onClick = onEmoji, enabled = !uploading) {
+                    Icon(
+                        Icons.Outlined.EmojiEmotions,
+                        contentDescription = stringResource(R.string.composer_add_emoji_cd),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
