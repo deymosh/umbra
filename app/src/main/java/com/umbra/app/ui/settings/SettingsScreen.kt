@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import android.content.ActivityNotFoundException
+import androidx.compose.material.icons.outlined.BatterySaver
 import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material3.Switch
 import com.umbra.app.ui.auth.rememberPrivacyLogout
@@ -39,8 +41,12 @@ import com.umbra.app.ui.components.UmbraTopAppBarDefaults
 import kotlin.OptIn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.umbra.app.util.BatteryOptimizationHelper
 
 
 /**
@@ -51,6 +57,14 @@ import androidx.compose.runtime.setValue
 fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel) {
     val logout = rememberPrivacyLogout(navController, loginViewModel)
     val panicWipeEnabled by loginViewModel.panicWipeEnabled.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var unrestricted by remember {
+        mutableStateOf(BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context))
+    }
+    LifecycleResumeEffect(Unit) {
+        unrestricted = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
+        onPauseOrDispose { }
+    }
 
     SettingsContent(
         onBack = {
@@ -64,7 +78,20 @@ fun SettingsScreen(navController: NavController, loginViewModel: LoginViewModel)
         onOpen = { route -> navController.navigate(route) },
         onLogout = logout,
         panicWipeEnabled = panicWipeEnabled,
-        onPanicWipeChange = loginViewModel::setPanicWipeEnabled
+        onPanicWipeChange = loginViewModel::setPanicWipeEnabled,
+        backgroundUnrestricted = unrestricted,
+        onBackgroundActivityClick = {
+            try {
+                val intent = if (unrestricted) {
+                    BatteryOptimizationHelper.createSettingsIntent()
+                } else {
+                    BatteryOptimizationHelper.createExemptionRequestIntent(context)
+                }
+                context.startActivity(intent)
+            } catch (_: ActivityNotFoundException) {
+                // Some ROMs ship without this settings action — nothing to do.
+            }
+        }
     )
 }
 
@@ -76,7 +103,9 @@ fun SettingsContent(
     onLogout: () -> Unit,
     versionName: String = BuildConfig.VERSION_NAME,
     panicWipeEnabled: Boolean = false,
-    onPanicWipeChange: (Boolean) -> Unit = {}
+    onPanicWipeChange: (Boolean) -> Unit = {},
+    backgroundUnrestricted: Boolean = true,
+    onBackgroundActivityClick: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -113,7 +142,19 @@ fun SettingsContent(
                         icon = Icons.Outlined.DataUsage,
                         title = stringResource(R.string.network_usage_title),
                         subtitle = stringResource(R.string.settings_network_usage_subtitle),
-                        onClick = { onOpen(Screen.NetworkUsage.route) },
+                        onClick = { onOpen(Screen.NetworkUsage.route) }
+                    )
+                    MenuItemRow(
+                        icon = Icons.Outlined.BatterySaver,
+                        title = stringResource(R.string.settings_background_activity_title),
+                        subtitle = stringResource(
+                            if (backgroundUnrestricted) {
+                                R.string.settings_background_activity_unrestricted
+                            } else {
+                                R.string.settings_background_activity_restricted
+                            }
+                        ),
+                        onClick = onBackgroundActivityClick,
                         showDivider = false
                     )
                 }
