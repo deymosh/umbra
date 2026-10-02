@@ -256,14 +256,10 @@ object AmberConnector {
             return null
         }
 
-        if (candidate.startsWith("npub1")) {
-            val decoded = Bech32Encoder.decodeNpub(candidate)
-            if (!decoded.isNullOrBlank()) {
-                return decoded.lowercase()
-            }
-        }
-
-        return candidate
+        val hex = if (candidate.startsWith("npub1")) Bech32Encoder.decodeNpub(candidate)?.lowercase() else candidate
+        // Anything else the signer sends back (a garbled npub, another network's key) isn't an
+        // identity Umbra can sign in as.
+        return hex?.takeIf { key -> key.length == 64 && key.all { it in '0'..'9' || it in 'a'..'f' } }
     }
 }
 
