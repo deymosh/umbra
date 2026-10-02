@@ -73,6 +73,21 @@ fun FeedConfigScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // Resetting replaces every filter, the user's own included, so it asks first like a delete.
+    var confirmReset by remember { mutableStateOf(false) }
+    if (confirmReset) {
+        ConfirmDialog(
+            title = stringResource(R.string.reset_defaults_confirm_title),
+            message = stringResource(R.string.reset_defaults_confirm_message),
+            confirmLabel = stringResource(R.string.reset_defaults_confirm),
+            isDestructive = true,
+            onConfirm = {
+                confirmReset = false
+                viewModel.resetToDefaults()
+            },
+            onDismiss = { confirmReset = false }
+        )
+    }
     val availableFilters by remember(state.filters, state.activeFilters) {
         derivedStateOf {
             val activeIds = state.activeFilters.map { it.id }.toSet()
@@ -102,7 +117,7 @@ fun FeedConfigScreen(
                         contentDescription = stringResource(R.string.add_filter)
                     )
                 }
-                IconButton(onClick = { viewModel.resetToDefaults() }) {
+                IconButton(onClick = { confirmReset = true }) {
                     Icon(
                         imageVector = Icons.Default.Settings,
                         contentDescription = stringResource(R.string.reset_defaults)

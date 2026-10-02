@@ -84,6 +84,9 @@
     <string name="feed_settings">Feed settings</string>
     <string name="add_filter">Add filter</string>
     <string name="reset_defaults">Reset defaults</string>
+    <string name="reset_defaults_confirm_title">Reset all feed filters?</string>
+    <string name="reset_defaults_confirm_message">Every filter, including the ones you made or edited, is replaced by the starting set.</string>
+    <string name="reset_defaults_confirm">Reset</string>
     <string name="active_feed">Active</string>
     <string name="active_filters">Active filter</string>
     <string name="available_filters">Other filters</string>
