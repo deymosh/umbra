@@ -26,7 +26,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,8 +42,6 @@ import coil3.asDrawable
 import coil3.compose.AsyncImagePainter
 import com.umbra.app.R
 import com.umbra.app.domain.repository.UserRepository
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import com.umbra.app.util.BlurHash
 
 // See ImageAttachment's !hasKnownAspectRatio branch — a floor under Coil's own intrinsic-size-
@@ -109,8 +106,8 @@ fun ImageAttachment(
     // NIP-92 imeta `dim`, as width/height — reserves the correct layout space before the
     // image loads instead of the container jumping from 0 to full height once it decodes.
     aspectRatio: Float? = null,
-    // NIP-92 imeta `blurhash` — decoded off the main thread and shown in place of the plain
-    // gray loading box while the real image fetches.
+    // NIP-92 imeta `blurhash` — decoded once and shown in place of the plain gray loading box
+    // while the real image fetches.
     blurHash: String? = null,
     // Caps the rendered height instead of the normal full aspect-ratio/natural-growth sizing —
     // for contexts showing a note as context rather than as its own post (e.g. the "replying to"
@@ -146,13 +143,16 @@ fun ImageAttachment(
         Modifier.fillMaxWidth().height(MIN_IMAGE_ATTACHMENT_HEIGHT)
     }
 
-    val blurHashBitmap by produceState<android.graphics.Bitmap?>(initialValue = null, blurHash, aspectRatio) {
-        value = if (blurHash.isNullOrBlank()) {
+    // Decoded synchronously in a plain remember rather than off-thread in a produceState: a
+    // BLURHASH_DECODE_WIDTH-wide decode is only a few hundred operations, yet doing it in an
+    // effect left the first composition rendering with a null placeholder (the plain gray box)
+    // for a frame before the blurhash appeared. A remember makes the placeholder present from the
+    // very first frame.
+    val blurHashBitmap = remember(blurHash, aspectRatio) {
+        if (blurHash.isNullOrBlank()) {
             null
         } else {
-            withContext(Dispatchers.Default) {
-                BlurHash.decode(blurHash, width = BLURHASH_DECODE_WIDTH, aspectRatio = aspectRatio)
-            }
+            BlurHash.decode(blurHash, width = BLURHASH_DECODE_WIDTH, aspectRatio = aspectRatio)
         }
     }
 
