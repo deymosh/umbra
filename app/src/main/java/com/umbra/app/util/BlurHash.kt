@@ -59,7 +59,8 @@ object BlurHash {
             if (blurHash.length != 4 + 2 * numCompX * numCompY) return null
 
             val ratio = aspectRatio?.takeIf { it > 0f } ?: (numCompX.toFloat() / numCompY.toFloat())
-            val height = (width / ratio).roundToInt().coerceAtLeast(1)
+            // The ratio comes from a note's imeta, so a degenerate one must not size a huge bitmap.
+            val height = (width / ratio).roundToInt().coerceIn(1, maxOf(width, 1) * MAX_HEIGHT_PER_WIDTH)
 
             val colors = computeColors(numCompX, numCompY, blurHash)
             val pixels = composePixels(width, height, numCompX, numCompY, colors)
@@ -176,6 +177,8 @@ object BlurHash {
     // Blurhash is a low-frequency summary — encoding at full resolution wastes CPU for no
     // visual gain.
     private const val ENCODE_MAX_DIMENSION = 100
+    // Tallest placeholder decoded: four times its width, more than any real photo needs.
+    private const val MAX_HEIGHT_PER_WIDTH = 4
 
     /**
      * Encodes [bitmap] into a blurhash string. [componentX]/[componentY] default to an
