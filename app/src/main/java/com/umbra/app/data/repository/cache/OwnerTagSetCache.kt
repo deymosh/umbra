@@ -68,7 +68,10 @@ internal class OwnerTagSetCache<T>(
         return state.map { cache -> cache[normalized] }.distinctUntilChanged()
     }
 
-    suspend fun resolve(ownerPubkey: String): T {
+    suspend fun resolve(rawOwnerPubkey: String): T {
+        // Every writer and observe() key the cache by lowercase pubkey; a mixed-case caller
+        // would otherwise miss it and rebuild the list under the wrong casing.
+        val ownerPubkey = rawOwnerPubkey.lowercase()
         state.value[ownerPubkey]?.let { return it }
 
         // Bootstrap from encrypted/public event archive if available (latest matching-kind event
