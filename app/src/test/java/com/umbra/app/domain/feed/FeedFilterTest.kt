@@ -1,6 +1,7 @@
 package com.umbra.app.domain.feed
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -35,6 +36,15 @@ class FeedFilterTest {
         val merged = mergeActiveFeedFilters(listOf(a, b))
 
         assertEquals(setOf("nlogpost:", "ncomment:"), merged.excludedContentPrefixes)
+    }
+
+    @Test
+    fun `given one active filter hiding NSFW and one allowing it when merging then NSFW stays hidden`() {
+        val hiding = DefaultFeedFilters.create(name = "A").copy(hideNsfw = true)
+        val allowing = DefaultFeedFilters.create(name = "B").copy(hideNsfw = false)
+
+        assertTrue(mergeActiveFeedFilters(listOf(hiding, allowing)).hideNsfw)
+        assertFalse(mergeActiveFeedFilters(listOf(allowing)).hideNsfw)
     }
 
     @Test

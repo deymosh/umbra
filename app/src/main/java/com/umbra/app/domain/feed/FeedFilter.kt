@@ -75,7 +75,9 @@ fun mergeActiveFeedFilters(filters: List<FeedFilter>): FeedFilter {
     return FeedFilter(
         id = "merged_active",
         name = if (filters.size == 1) filters.first().name else "Active Filters",
-        hideNsfw = filters.all { it.hideNsfw },
+        // Hiding unions like every other hiding field below: one active filter that hides NSFW
+        // keeps it hidden, rather than any filter that allows it opening it up for all of them.
+        hideNsfw = filters.any { it.hideNsfw },
         mutedPubkeys = combinedMuted,
         excludedTags = combinedExcludedTags,
         excludedHashtags = combinedExcludedHashtags,
