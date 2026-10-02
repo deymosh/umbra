@@ -137,6 +137,9 @@ object Bech32Encoder {
      * had no way to know "the sender who shared this link is telling you to check these relays
      * for this profile."
      */
+    /** NIP-19 pubkeys and event ids are exactly 32 bytes; anything else isn't one. */
+    private fun key32Hex(bytes: ByteArray): String? = if (bytes.size == 32) byteArrayToHex(bytes) else null
+
     fun decodeNprofile(nprofile: String): NprofileData? {
         return try {
             val (hrp, bytes) = decodeBech32(nprofile) ?: return null
@@ -145,9 +148,9 @@ object Bech32Encoder {
                 return null
             }
             val tlv = parseTlv(bytes)
-            val pubkeyBytes = tlv[0]?.firstOrNull() ?: return null
+            val pubkey = tlv[0]?.firstOrNull()?.let(::key32Hex) ?: return null
             val relays = tlv[1].orEmpty().map { it.toString(Charsets.UTF_8) }
-            NprofileData(pubkey = byteArrayToHex(pubkeyBytes), relays = relays)
+            NprofileData(pubkey = pubkey, relays = relays)
         } catch (e: Exception) {
             logger.d { "Error decoding nprofile: ${scrubThrowableMessageForLogs(e)}" }
             null
@@ -167,12 +170,13 @@ object Bech32Encoder {
                 return null
             }
             val tlv = parseTlv(bytes)
-            val eventBytes = tlv[0]?.firstOrNull() ?: return null
+            val eventId = tlv[0]?.firstOrNull()?.let(::key32Hex) ?: return null
             val relays = tlv[1].orEmpty().map { it.toString(Charsets.UTF_8) }
-            val authorPubkey = tlv[2]?.firstOrNull()?.let(::byteArrayToHex)
+            // An author hint that isn't a key is dropped, not trusted; the event id still stands.
+            val authorPubkey = tlv[2]?.firstOrNull()?.let(::key32Hex)
             val kind = tlv[3]?.firstOrNull()?.let(::decodeUint32BigEndian)
             NeventData(
-                eventId = byteArrayToHex(eventBytes),
+                eventId = eventId,
                 relays = relays,
                 authorPubkey = authorPubkey,
                 kind = kind
@@ -196,7 +200,7 @@ object Bech32Encoder {
             }
             val tlv = parseTlv(bytes)
             val identifier = tlv[0]?.firstOrNull()?.toString(Charsets.UTF_8).orEmpty()
-            val authorPubkey = tlv[2]?.firstOrNull()?.let(::byteArrayToHex)
+            val authorPubkey = tlv[2]?.firstOrNull()?.let(::key32Hex)
             val kindBytes = tlv[3]?.firstOrNull()
             val kind = kindBytes?.let(::decodeUint32BigEndian)
 
