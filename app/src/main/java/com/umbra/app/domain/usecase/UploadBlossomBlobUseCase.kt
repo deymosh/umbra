@@ -1,6 +1,5 @@
 package com.umbra.app.domain.usecase
 
-import android.util.Base64
 import com.umbra.app.domain.nip01.NostrEventBuilder
 import com.umbra.app.domain.nip55.AmberSignerGateway
 import com.umbra.app.domain.nipb7.BlossomBlobDescriptor
@@ -8,6 +7,7 @@ import com.umbra.app.domain.nipb7.blossomServerDomain
 import com.umbra.app.domain.nipb7.sha256Hex
 import com.umbra.app.domain.preferences.UserPreferences
 import com.umbra.app.domain.repository.MediaUploadRepository
+import java.util.Base64
 
 /** Outcome of [UploadBlossomBlobUseCase] — distinguishes a cancelled Amber signature from an
  * actual upload failure, since callers show a different message for each. */
@@ -49,10 +49,7 @@ class UploadBlossomBlobUseCase(
         val signed = amberSignerGateway.signEvent(authEventJson, currentUserHex)
             ?: return BlossomUploadResult.SignCancelled
 
-        val authorizationHeader = "Nostr " + Base64.encodeToString(
-            signed.toByteArray(Charsets.UTF_8),
-            Base64.NO_WRAP
-        )
+        val authorizationHeader = "Nostr " + Base64.getEncoder().encodeToString(signed.toByteArray(Charsets.UTF_8))
         return mediaUploadRepository.uploadBlob(
             serverUrl = serverUrl,
             bytes = bytes,
