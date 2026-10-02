@@ -122,6 +122,7 @@ class FeedConfigViewModel @Inject constructor(
                 }
                 _state.update {
                     it.copy(
+                        isLoading = false,
                         showAddDialog = false,
                         editingFilter = null,
                         errorMessage = null
