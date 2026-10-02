@@ -32,13 +32,13 @@ class TrafficMeter @Inject constructor() {
         private set
 
     fun recordRelaySent(relayUrl: String, bytes: Int) {
-        val counters = relays.getOrPut(normalizeRelayUrl(relayUrl)) { RelayCounters() }
+        val counters = relays.computeIfAbsent(normalizeRelayUrl(relayUrl)) { RelayCounters() }
         counters.sent.addAndGet(bytes.toLong())
         counters.messagesSent.incrementAndGet()
     }
 
     fun recordRelayReceived(relayUrl: String, bytes: Int) {
-        val counters = relays.getOrPut(normalizeRelayUrl(relayUrl)) { RelayCounters() }
+        val counters = relays.computeIfAbsent(normalizeRelayUrl(relayUrl)) { RelayCounters() }
         counters.received.addAndGet(bytes.toLong())
         counters.messagesReceived.incrementAndGet()
     }
