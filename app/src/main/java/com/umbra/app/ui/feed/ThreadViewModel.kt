@@ -401,7 +401,7 @@ class ThreadViewModel @Inject constructor(
             val referencingEvents = eventRepository.getEventsReferencingIds(frontier.toList())
                 .distinctBy { it.id }
             val directReplies = referencingEvents.filter { event ->
-                event.kind == Event.KIND_TEXT_NOTE && event.isReply() && frontier.contains(event.getParentEventId())
+                event.threadParentId()?.let(frontier::contains) == true
             }
             val newReplies = directReplies.filter { descendantIds.add(it.id) }
             newReplies.forEach { reply -> eventMap[reply.id] = reply }
@@ -578,8 +578,8 @@ class ThreadViewModel @Inject constructor(
         // NIP-10 replies and NIP-22 comments both hang off their parent's id (a comment's
         // lowercase `e` tag is its parent), so one parent map covers both.
         val byParent = allEvents
-            .filter { (it.kind == Event.KIND_TEXT_NOTE && it.isReply()) || it.kind == Event.KIND_COMMENT }
-            .groupBy { it.getParentEventId() }
+            .filter { it.threadParentId() != null }
+            .groupBy { it.threadParentId() }
 
         val out = mutableListOf<Event>()
         val visited = mutableSetOf<String>()
@@ -702,7 +702,7 @@ internal fun reorderTopLevelDescendants(
 
     val branches = mutableListOf<MutableList<Event>>()
     descendants.forEach { event ->
-        if (event.getParentEventId() == anchor.id) {
+        if (event.threadParentId() == anchor.id) {
             branches.add(mutableListOf(event))
         } else {
             (branches.lastOrNull() ?: mutableListOf<Event>().also { branches.add(it) }).add(event)

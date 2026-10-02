@@ -45,7 +45,7 @@ data class EngagementCounts(
  * profile, thread):
  * - a reaction counts toward its NIP-25 target (the last `e` tag); a dislike ("-") counts nowhere;
  * - a reply counts toward every note it replies to — its NIP-10 root and parent, never a
- *   `mention`;
+ *   `mention` — and a NIP-22 comment likewise toward its parent `e` and root `E`;
  * - a repost counts toward the note it reposts;
  * - a zap receipt counts its sats toward the note it paid for, and only when it validates
  *   (NIP-57 Appendix F, see [validateZapReceipt]) — an unvalidated receipt's amount is just a tag
@@ -63,6 +63,14 @@ fun engagementLinksOf(event: Event, verifySignature: (Event) -> Boolean): List<E
     }
     event.kind == Event.KIND_TEXT_NOTE ->
         event.replyTargetIds().map { EngagementLink(it.lowercase(), EngagementType.REPLY) }
+    // A NIP-22 comment replies to its parent (lowercase `e`) within the thread of its root
+    // (uppercase `E`), counted toward both like a NIP-10 reply's parent and root.
+    event.kind == Event.KIND_COMMENT ->
+        (event.getTagValues("e") + event.getTagValues("E"))
+            .filter { it.isNotBlank() }
+            .map { it.lowercase() }
+            .distinct()
+            .map { EngagementLink(it, EngagementType.REPLY) }
     isRepostKind(event.kind) ->
         extractRepostTarget(event).eventId?.takeIf { it.isNotBlank() }
             ?.let { listOf(EngagementLink(it.lowercase(), EngagementType.REPOST)) }

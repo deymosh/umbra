@@ -216,6 +216,18 @@ data class Event(
             getRootEventId()
         }
 
+    /**
+     * The event this one answers in a thread, or null when it isn't a reply: a NIP-22 comment's
+     * parent `e` (its root `E` when it has no parent tag), a NIP-10 reply's parent otherwise.
+     */
+    fun threadParentId(): String? = when {
+        kind == KIND_COMMENT ->
+            (tags.lastOrNull { it.getOrNull(0) == "e" } ?: tags.lastOrNull { it.getOrNull(0) == "E" })
+                ?.getOrNull(1)?.takeIf { it.isNotBlank() }
+        kind == KIND_TEXT_NOTE && isReply() -> getParentEventId()
+        else -> null
+    }
+
     /** Every note this event replies to under NIP-10 (root and parent), never a `mention`. */
     fun replyTargetIds(): List<String> =
         tags.asSequence()

@@ -751,6 +751,9 @@ class EventRepositoryImpl @Inject constructor(
         // only kind 6 left those out of the user's own outbox interactions entirely.
         val ownInteractionKinds = setOf(Event.KIND_REPOST, Event.KIND_GENERIC_REPOST, Event.KIND_REACTION)
         val inboxInteractionKinds = ownInteractionKinds + Event.KIND_ZAP_RECEIPT
+        // NIP-22 comments the user wrote or received: replies arrive as kind 1111 from clients
+        // that use it (Amethyst does on its own new threads), and they never enter the feed.
+        val commentKinds = setOf(Event.KIND_COMMENT)
 
         // Outbox profile/notes/interactions subscriptions: always author=logged user.
         if (!pubkey.isNullOrBlank()) {
@@ -779,7 +782,7 @@ class EventRepositoryImpl @Inject constructor(
                     limit = 80
                 ),
                 EventFilter(
-                    kinds = ownInteractionKinds,
+                    kinds = ownInteractionKinds + commentKinds,
                     authors = setOf(pubkey),
                     since = now - FEED_SINCE_SECONDS,
                     limit = 80
@@ -828,7 +831,7 @@ class EventRepositoryImpl @Inject constructor(
                     limit = 120
                 ),
                 EventFilter(
-                    kinds = inboxInteractionKinds,
+                    kinds = inboxInteractionKinds + commentKinds,
                     tagFilters = pTag,
                     since = now - NOTIF_SINCE_SECONDS,
                     limit = 120

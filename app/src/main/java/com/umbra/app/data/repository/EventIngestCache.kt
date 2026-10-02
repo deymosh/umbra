@@ -65,7 +65,9 @@ internal val USEFUL_PERSISTED_KINDS = setOf(
     Event.KIND_REPOST,
     Event.KIND_GENERIC_REPOST,
     Event.KIND_REACTION,
-    Event.KIND_ZAP_RECEIPT
+    Event.KIND_ZAP_RECEIPT,
+    // NIP-22 comments: replies other clients send as kind 1111, kept like kind-1 replies.
+    Event.KIND_COMMENT
 )
 
 // Control/list kinds that are always persisted once useful-kind-eligible, regardless of the

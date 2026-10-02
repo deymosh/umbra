@@ -20,7 +20,10 @@ class BuildEngagementFiltersUseCase {
             // engagement REQ never asks for them, so their count could never arrive at all.
             Event.KIND_GENERIC_REPOST,
             Event.KIND_REACTION,
-            Event.KIND_ZAP_RECEIPT
+            Event.KIND_ZAP_RECEIPT,
+            // NIP-22 comments reply with kind 1111 too (Amethyst does so on its own new threads);
+            // a direct one carries the note in its lowercase `e`.
+            Event.KIND_COMMENT
         )
     }
 
@@ -30,12 +33,23 @@ class BuildEngagementFiltersUseCase {
         since: Long? = null
     ): List<EventFilter> {
         if (eventIds.isEmpty()) return emptyList()
-        return eventIds.toList().chunked(ENGAGEMENT_KINDS_CHUNK_SIZE).map { idsChunk ->
-            EventFilter(
-                kinds = ENGAGEMENT_KINDS,
-                tagFilters = mapOf("e" to idsChunk.toSet()),
-                since = since,
-                limit = limit
+        return eventIds.toList().chunked(ENGAGEMENT_KINDS_CHUNK_SIZE).flatMap { idsChunk ->
+            listOf(
+                EventFilter(
+                    kinds = ENGAGEMENT_KINDS,
+                    tagFilters = mapOf("e" to idsChunk.toSet()),
+                    since = since,
+                    limit = limit
+                ),
+                // A comment deeper in a NIP-22 thread names the note only in its uppercase root
+                // `E`. Its own filter: tag conditions inside one filter are ANDed, so folding `E`
+                // into the one above would only match comments carrying both.
+                EventFilter(
+                    kinds = setOf(Event.KIND_COMMENT),
+                    tagFilters = mapOf("E" to idsChunk.toSet()),
+                    since = since,
+                    limit = limit
+                )
             )
         }
     }
