@@ -1,5 +1,6 @@
 package com.umbra.app.data.repository
 
+import com.umbra.app.domain.model.NOTE_VIEW_FEED_ORDER
 import com.umbra.app.domain.model.NoteView
 import com.umbra.app.domain.model.PendingRepost
 import com.umbra.app.domain.nip01.Event
@@ -179,11 +180,8 @@ internal fun mergeOwnNotesAndReposts(
             repostView
         }
     }
-    // repostedAt (not event.createdAt) is the display/sort position for a repost entry, matching
-    // the feed's own bump-to-top behavior — event.createdAt there is the target's original
-    // timestamp, which for an old note reposted just now would otherwise sort it as if it were old.
     return byId.values
-        .sortedWith(compareByDescending<NoteView> { it.repostedAt ?: it.event.createdAt }.thenBy { it.event.id })
+        .sortedWith(NOTE_VIEW_FEED_ORDER)
         .take(limit)
 }
 

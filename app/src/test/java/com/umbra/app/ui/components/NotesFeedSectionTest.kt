@@ -31,7 +31,7 @@ class NotesFeedSectionTest {
         val rows = mergeFeedRows(notes, emptyList())
 
         assertEquals(
-            listOf(FeedRow.NoteRow(notes[0]), FeedRow.NoteRow(notes[1])),
+            listOf(FeedRow.NoteRow(notes[0], notes[0].createdAt), FeedRow.NoteRow(notes[1], notes[1].createdAt)),
             rows
         )
     }
@@ -44,7 +44,7 @@ class NotesFeedSectionTest {
         val rows = mergeFeedRows(notes, listOf(pendingRepost))
 
         assertEquals(
-            listOf(FeedRow.PendingRow(pendingRepost), FeedRow.NoteRow(notes[0]), FeedRow.NoteRow(notes[1])),
+            listOf(FeedRow.PendingRow(pendingRepost), FeedRow.NoteRow(notes[0], notes[0].createdAt), FeedRow.NoteRow(notes[1], notes[1].createdAt)),
             rows
         )
     }
@@ -57,7 +57,7 @@ class NotesFeedSectionTest {
         val rows = mergeFeedRows(notes, listOf(pendingRepost))
 
         assertEquals(
-            listOf(FeedRow.NoteRow(notes[0]), FeedRow.NoteRow(notes[1]), FeedRow.PendingRow(pendingRepost)),
+            listOf(FeedRow.NoteRow(notes[0], notes[0].createdAt), FeedRow.NoteRow(notes[1], notes[1].createdAt), FeedRow.PendingRow(pendingRepost)),
             rows
         )
     }
@@ -70,7 +70,7 @@ class NotesFeedSectionTest {
         val rows = mergeFeedRows(notes, listOf(pendingRepost))
 
         assertEquals(
-            listOf(FeedRow.NoteRow(notes[0]), FeedRow.PendingRow(pendingRepost), FeedRow.NoteRow(notes[1])),
+            listOf(FeedRow.NoteRow(notes[0], notes[0].createdAt), FeedRow.PendingRow(pendingRepost), FeedRow.NoteRow(notes[1], notes[1].createdAt)),
             rows
         )
     }
@@ -85,7 +85,29 @@ class NotesFeedSectionTest {
         val rows = mergeFeedRows(notes, listOf(older, newer))
 
         assertEquals(
-            listOf(FeedRow.PendingRow(newer), FeedRow.PendingRow(older), FeedRow.NoteRow(notes[0])),
+            listOf(FeedRow.PendingRow(newer), FeedRow.PendingRow(older), FeedRow.NoteRow(notes[0], notes[0].createdAt)),
+            rows
+        )
+    }
+
+    @Test
+    fun `given a resolved repost of an old note when merging then it sits at the repost time, not the note's`() {
+        // An old note reposted 1 minute ago, a plain note from 10 minutes ago, and a repost from
+        // an hour ago whose target hasn't resolved yet.
+        val now = 10_000L
+        val repostedOldNote = event("old", now - 7_200)
+        val freshNote = event("fresh", now - 600)
+        val notes = listOf(repostedOldNote, freshNote)
+        val hourOldRepost = pending("p", now - 3_600)
+
+        val rows = mergeFeedRows(notes, listOf(hourOldRepost)) { id -> if (id == "old") now - 60 else null }
+
+        assertEquals(
+            listOf(
+                FeedRow.NoteRow(repostedOldNote, now - 60),
+                FeedRow.NoteRow(freshNote, freshNote.createdAt),
+                FeedRow.PendingRow(hourOldRepost)
+            ),
             rows
         )
     }

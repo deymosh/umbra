@@ -33,44 +33,37 @@ import com.umbra.app.ui.feed.EventCard
 import com.umbra.app.ui.feed.zapReceiptDisplayFor
 import com.umbra.app.ui.common.UrlMetadata
 
-/**
- * A row in the merged feed sequence — either a resolved note or a repost still waiting on its
- * target (see [mergeFeedRows]'s doc comment for the ordering trade-off this makes).
- */
+/** A row in the feed timeline — a resolved note, or a repost still waiting on its target. */
 internal sealed interface FeedRow {
-    data class NoteRow(val event: Event) : FeedRow
-    data class PendingRow(val pending: PendingRepost) : FeedRow
+    val sortAt: Long
+
+    data class NoteRow(val event: Event, override val sortAt: Long) : FeedRow
+    data class PendingRow(val pending: PendingRepost) : FeedRow {
+        override val sortAt: Long get() = pending.feedSortAt
+    }
 }
 
 /**
- * Interleaves [pendingReposts] into [notes] for display, without disturbing [notes]' own
- * (already-correct — see NoteView/ResolvedFeedEvent's repost-bump-to-top ordering) relative order:
- * walks [notes] once, inserting each pending item (sorted newest-repost-first) right before the
- * first note it should sort ahead of. Deliberately NOT pixel-perfect against an *already-resolved*
- * repost's own bump-to-top position — that note's `createdAt` is its ORIGINAL target timestamp,
- * not its repost time (only [PendingRepost.repostedAt] is directly available here), so a pending
- * item can occasionally land one slot off relative to a neighboring resolved repost. Pending items
- * are typically few and short-lived (they resolve within seconds, or drop off after one failed
- * fetch attempt), so this is an accepted, narrowly-scoped trade-off rather than threading a
- * parallel repostedAt-per-event map through to re-derive [notes]' order from scratch here.
+ * One timeline out of [notes] and [pendingReposts], every row positioned by the created_at of
+ * the feed event that put it there (NoteView.feedSortAt): a note by its own time, a repost —
+ * resolved or not — by the repost's time. [repostedAtFor] supplies that time for a note that
+ * arrived through a repost; [notes] itself carries only the target event. Newest first, ties by
+ * key, so resolved and pending rows can never interleave out of order.
  */
-internal fun mergeFeedRows(notes: List<Event>, pendingReposts: List<PendingRepost>): List<FeedRow> {
-    if (pendingReposts.isEmpty()) return notes.map { FeedRow.NoteRow(it) }
-    val pendingSorted = pendingReposts.sortedByDescending { it.repostedAt }
-    val rows = ArrayList<FeedRow>(notes.size + pendingReposts.size)
-    var pendingIndex = 0
-    notes.forEach { event ->
-        while (pendingIndex < pendingSorted.size && pendingSorted[pendingIndex].repostedAt >= event.createdAt) {
-            rows += FeedRow.PendingRow(pendingSorted[pendingIndex])
-            pendingIndex++
-        }
-        rows += FeedRow.NoteRow(event)
-    }
-    while (pendingIndex < pendingSorted.size) {
-        rows += FeedRow.PendingRow(pendingSorted[pendingIndex])
-        pendingIndex++
-    }
-    return rows
+internal fun mergeFeedRows(
+    notes: List<Event>,
+    pendingReposts: List<PendingRepost>,
+    repostedAtFor: (String) -> Long? = { null }
+): List<FeedRow> {
+    val noteRows = notes.map { FeedRow.NoteRow(it, repostedAtFor(it.id) ?: it.createdAt) }
+    if (pendingReposts.isEmpty()) return noteRows
+    return (noteRows + pendingReposts.map { FeedRow.PendingRow(it) })
+        .sortedWith(compareByDescending<FeedRow> { it.sortAt }.thenBy { it.key() })
+}
+
+private fun FeedRow.key(): String = when (this) {
+    is FeedRow.NoteRow -> event.id
+    is FeedRow.PendingRow -> "pending:${pending.repostId}"
 }
 
 fun LazyListScope.notesFeedSection(
@@ -153,15 +146,10 @@ fun LazyListScope.notesFeedSection(
     // Not remember()'d: notesFeedSection is a plain LazyListScope builder function, not itself
     // @Composable — same non-remembered treatment threadDepthByEventId's default param already
     // gets above, computed fresh whenever the caller (which IS @Composable) recomposes this block.
-    val feedRows = mergeFeedRows(notes, pendingReposts.toList())
+    val feedRows = mergeFeedRows(notes, pendingReposts.toList()) { id -> repostedAtForEvent[id] }
     items(
         items = feedRows,
-        key = { row ->
-            when (row) {
-                is FeedRow.NoteRow -> row.event.id
-                is FeedRow.PendingRow -> "pending:${row.pending.repostId}"
-            }
-        },
+        key = { row -> row.key() },
         contentType = { row ->
             when (row) {
                 is FeedRow.NoteRow -> row.event.kind

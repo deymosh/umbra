@@ -47,4 +47,11 @@ data class NoteView(
      * can offer the exact same actions a normal note's menu does (copy content/json, pin, delete).
      */
     val repostEvent: Event? = null
-)
+) {
+    /**
+     * Where this row sits in a feed: the created_at of the feed event that put it there — the
+     * note's own for a plain note, the repost event's for a repost. Every feed row, resolved or
+     * pending, is ordered by this one value.
+     */
+    val feedSortAt: Long get() = repostedAt ?: event.createdAt
+}

@@ -31,6 +31,7 @@ import com.umbra.app.domain.model.EventCacheStats
 import com.umbra.app.domain.model.FeedNotesResult
 import com.umbra.app.domain.model.NoteView
 import com.umbra.app.domain.model.PendingRepost
+import com.umbra.app.domain.model.orderedFeedNotesResult
 import com.umbra.app.domain.relay.Relay
 import com.umbra.app.domain.relay.RelayIssue
 import com.umbra.app.domain.relay.RelayRequestInfo
@@ -2285,7 +2286,7 @@ class EventRepositoryImpl @Inject constructor(
             val cachedEngagement = eventIngestCache.engagementSnapshot()
             val engagement = mergeEngagementCounts(cachedEngagement, ownEngagementSnapshot)
             emit(
-                FeedNotesResult(
+                orderedFeedNotesResult(
                     notes = buildIndexedNoteViews(resolved, profiles, engagement),
                     pendingReposts = toPendingReposts(resolution.unresolvedReposts)
                 )
@@ -2431,10 +2432,10 @@ class EventRepositoryImpl @Inject constructor(
                 // Fast path: the overwhelming common case (no reposts) does none of the extra
                 // resolution work below and matches today's exact behavior/perf.
                 if (ownReposts.isEmpty()) {
-                    FeedNotesResult(notes = ownNoteViews.take(limit))
+                    orderedFeedNotesResult(notes = ownNoteViews.take(limit))
                 } else {
                     val (repostNoteViews, pendingReposts) = resolveOwnRepostNoteViews(ownReposts, cachedEvents)
-                    FeedNotesResult(
+                    orderedFeedNotesResult(
                         notes = mergeOwnNotesAndReposts(ownNoteViews, repostNoteViews, limit),
                         pendingReposts = pendingReposts
                     )
@@ -2467,7 +2468,7 @@ class EventRepositoryImpl @Inject constructor(
                     resolved.map { it.targetEvent.pubkey } + resolved.mapNotNull { it.repostedByPubkey } + pubkey
                     ).distinct()
                 val profiles = userRepository.getProfilesByPubkey(neededPubkeys)
-                FeedNotesResult(
+                orderedFeedNotesResult(
                     notes = buildCachedNoteViews(allEvents, profiles, selected),
                     pendingReposts = toPendingReposts(resolution.unresolvedReposts)
                 )
