@@ -208,6 +208,7 @@ class ProfileObserversCoordinatorTest {
         override fun clearBackfillAnchors(pubkey: String): Unit = throw NotImplementedError()
         override fun activateUserSession(pubkey: String?, feedFilter: FeedFilter, authors: Set<String>): Unit =
             throw NotImplementedError()
+        override fun setFollowedHashtags(hashtags: Set<String>): Unit = throw NotImplementedError()
         override fun setSubscriptionNamespace(namespace: String): Unit = throw NotImplementedError()
         override fun subscribeToEvents(filters: List<EventFilter>): Flow<Event> = throw NotImplementedError()
 
@@ -281,7 +282,7 @@ class ProfileObserversCoordinatorTest {
             hideNsfw: Boolean,
             currentNpub: String?,
             currentUserPubkey: String?,
-            desiredTagsLower: Set<String>
+            followedHashtagsLower: Set<String>
         ): Flow<FeedNotesResult> = throw NotImplementedError()
 
         override fun observeProfileNotes(pubkey: String, kind: Int, limit: Int): Flow<FeedNotesResult> =

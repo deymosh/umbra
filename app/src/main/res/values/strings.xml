@@ -751,6 +751,8 @@
     <string name="hashtag_loading">Looking for #%1$s over Tor…</string>
     <string name="hashtag_empty">No notes tagged #%1$s yet</string>
     <string name="hashtag_empty_message">Notes appear as your relays return them. Your feed filters and mutes apply here too.</string>
+    <string name="hashtag_follow">Follow</string>
+    <string name="hashtag_unfollow">Unfollow</string>
     <string name="external_url_tracking_removed">Tracking parameters removed from this link.</string>
     <string name="settings_panic_wipe_title">Panic wipe</string>
     <string name="settings_panic_wipe_subtitle">Long-press the umbra wordmark to wipe everything instantly, no confirmation</string>

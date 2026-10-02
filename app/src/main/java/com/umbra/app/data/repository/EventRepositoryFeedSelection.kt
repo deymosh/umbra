@@ -19,17 +19,23 @@ internal fun selectHybridFeedNotes(
     hideNsfw: Boolean,
     currentNpub: String?,
     currentUserPubkey: String?,
-    desiredTagsLower: Set<String>
+    followedHashtagsLower: Set<String>
 ): List<Event> {
     val normalizedAuthors = authors.mapTo(HashSet(authors.size)) { it.lowercase() }
     val normalizedMuted = mutedPubkeys.mapTo(HashSet(mutedPubkeys.size)) { it.lowercase() }
     val normalizedExcluded = excludedHashtagsLower.mapTo(HashSet(excludedHashtagsLower.size)) { it.lowercase() }
-    val normalizedDesired = desiredTagsLower.mapTo(HashSet(desiredTagsLower.size)) { it.lowercase() }
+    val normalizedFollowedTags = followedHashtagsLower.mapTo(HashSet(followedHashtagsLower.size)) { it.lowercase() }
     val normalizedCurrentUser = currentUserPubkey?.lowercase()
 
     val filtered = events.asSequence()
         .filter { isFeedEligibleKind(it.kind) && it.createdAt > since }
-        .filter { normalizedAuthors.isEmpty() || it.pubkey.lowercase() in normalizedAuthors }
+        // A follows-scoped feed also takes a post from anyone carrying a followed hashtag
+        // (NIP-51 interests). Reposts only ever come from followed authors.
+        .filter { event ->
+            normalizedAuthors.isEmpty() || event.pubkey.lowercase() in normalizedAuthors ||
+                (isHashtagTaggableKind(event.kind) && normalizedFollowedTags.isNotEmpty() &&
+                    event.getHashtags().any { it in normalizedFollowedTags })
+        }
         .filter { event ->
             // Hashtag/NSFW filters read the event's own content — a repost's is either empty or
             // NIP-18's embedded original-event JSON, never the actual post text, so these checks
@@ -39,8 +45,7 @@ internal fun selectHybridFeedNotes(
             if (event.kind != Event.KIND_TEXT_NOTE) return@filter true
             val hashtags = event.getHashtags().toHashSet()
             (!hideNsfw || "nsfw" !in hashtags) &&
-                (normalizedExcluded.isEmpty() || hashtags.none { it in normalizedExcluded }) &&
-                (normalizedDesired.isEmpty() || hashtags.any { it in normalizedDesired })
+                (normalizedExcluded.isEmpty() || hashtags.none { it in normalizedExcluded })
         }
         .filter { event ->
             val isOwn = normalizedCurrentUser != null && event.pubkey.equals(normalizedCurrentUser, ignoreCase = true)
@@ -61,6 +66,9 @@ internal fun selectHybridFeedNotes(
 
 private fun isFeedEligibleKind(kind: Int): Boolean =
     kind == Event.KIND_TEXT_NOTE || kind == Event.KIND_PICTURE || kind == Event.KIND_REPOST || kind == Event.KIND_GENERIC_REPOST
+
+private fun isHashtagTaggableKind(kind: Int): Boolean =
+    kind == Event.KIND_TEXT_NOTE || kind == Event.KIND_PICTURE
 
 /**
  * Collapses multiple reposts (kind 6/16) of the same target event down to the single newest one
@@ -102,7 +110,7 @@ internal fun updateFeedNotesIncrementally(
     hideNsfw: Boolean,
     currentNpub: String?,
     currentUserPubkey: String?,
-    desiredTagsLower: Set<String>
+    followedHashtagsLower: Set<String>
 ): List<Event> = selectHybridFeedNotes(
     events = currentNotes + incomingEvents,
     since = since,
@@ -114,7 +122,7 @@ internal fun updateFeedNotesIncrementally(
     hideNsfw = hideNsfw,
     currentNpub = currentNpub,
     currentUserPubkey = currentUserPubkey,
-    desiredTagsLower = desiredTagsLower
+    followedHashtagsLower = followedHashtagsLower
 )
 
 /**

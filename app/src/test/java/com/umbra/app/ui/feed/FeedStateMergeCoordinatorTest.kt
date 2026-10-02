@@ -77,7 +77,7 @@ class FeedStateMergeCoordinatorTest {
             hideNsfw: Boolean,
             currentNpub: String?,
             currentUserPubkey: String?,
-            desiredTagsLower: Set<String>
+            followedHashtagsLower: Set<String>
         ): Flow<FeedNotesResult> = notes
     }
 
@@ -88,6 +88,7 @@ class FeedStateMergeCoordinatorTest {
         muteListRepository: MuteListRepository = FakeMuteListRepository(),
         contactListRepository: ContactListRepository = FakeContactListRepository(),
         userPreferences: FakeUserPreferences = FakeUserPreferences(initialPubkey = ownerPubkey),
+        followedHashtags: Flow<Set<String>> = flowOf(emptySet()),
         displayLimit: MutableStateFlow<Int> = MutableStateFlow(300),
         uiState: MutableStateFlow<FeedState> = MutableStateFlow(FeedState(isLoading = true)),
         onVisibleNotesComputed: (List<NoteView>) -> Unit = {}
@@ -97,6 +98,7 @@ class FeedStateMergeCoordinatorTest {
         muteListRepository = muteListRepository,
         contactListRepository = contactListRepository,
         userPreferences = userPreferences,
+        followedHashtagsFlow = followedHashtags,
         scope = scope,
         displayLimit = displayLimit,
         uiState = uiState,

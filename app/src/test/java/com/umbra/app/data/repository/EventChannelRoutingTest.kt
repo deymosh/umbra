@@ -310,6 +310,33 @@ class EventChannelRoutingTest {
         assertEquals(setOf(authorA, authorC), sentAuthors)
     }
 
+    @Test
+    fun `given a followed-hashtag filter when applyChannelToRelay then only the user's own relays get it`() {
+        val discoveredUrl = "wss://discovered.example"
+        val generalUrl = "wss://general.example"
+        val author = "a".repeat(64)
+        val nostrClient = FakeNostrClient()
+        val connectedRelays = ConcurrentHashMap(
+            mapOf(discoveredUrl to relay(discoveredUrl, isDiscovered = true), generalUrl to relay(generalUrl, isDiscovered = false))
+        )
+        val subject = routing(
+            nostrClient,
+            connectedRelays,
+            activeSessionAuthors = setOf(author),
+            feedAuthorsPerRelay = mapOf(discoveredUrl to setOf(author), generalUrl to setOf(author)),
+            authorsWithKnownOutbox = setOf(author)
+        )
+        val authorFilter = EventFilter(authors = setOf(author), kinds = setOf(Event.KIND_TEXT_NOTE))
+        val hashtagFilter = EventFilter(kinds = setOf(Event.KIND_TEXT_NOTE), tagFilters = mapOf("t" to setOf("nostr")))
+
+        subject.applyChannelToRelay(discoveredUrl, NostrChannels.FEED_NOTES, listOf(authorFilter, hashtagFilter))
+        subject.applyChannelToRelay(generalUrl, NostrChannels.FEED_NOTES, listOf(authorFilter, hashtagFilter))
+
+        val sent = nostrClient.applyChannelCalls.associate { it.first to it.third }
+        assertEquals(listOf(authorFilter), sent[discoveredUrl])
+        assertEquals(listOf(authorFilter, hashtagFilter), sent[generalUrl])
+    }
+
     // ── Already-tried exclusion ────────────────────────────────────────────
 
     @Test

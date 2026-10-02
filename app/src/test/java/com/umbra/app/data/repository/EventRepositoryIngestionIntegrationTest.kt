@@ -613,7 +613,7 @@ class EventRepositoryIngestionIntegrationTest {
         hideNsfw = false,
         currentNpub = null,
         currentUserPubkey = null,
-        desiredTagsLower = emptySet()
+        followedHashtagsLower = emptySet()
     )
 
     @Test

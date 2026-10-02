@@ -82,6 +82,7 @@ internal class FakeEventRepository(
     }
 
     override fun activateUserSession(pubkey: String?, feedFilter: FeedFilter, authors: Set<String>) = Unit
+    override fun setFollowedHashtags(hashtags: Set<String>) = Unit
     override fun setSubscriptionNamespace(namespace: String) = Unit
     override fun subscribeToEvents(filters: List<EventFilter>): Flow<Event> = emptyFlow()
 
@@ -156,7 +157,7 @@ internal class FakeEventRepository(
         hideNsfw: Boolean,
         currentNpub: String?,
         currentUserPubkey: String?,
-        desiredTagsLower: Set<String>
+        followedHashtagsLower: Set<String>
     ): Flow<FeedNotesResult> = flowOf(FeedNotesResult())
 
     override fun observeProfileNotes(pubkey: String, kind: Int, limit: Int): Flow<FeedNotesResult> = flowOf(FeedNotesResult())

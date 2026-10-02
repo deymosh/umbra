@@ -1,11 +1,13 @@
 package com.umbra.app.ui.hashtag
 
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,6 +15,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.Alignment
 import com.umbra.app.ui.components.LoadMoreEffect
 import com.umbra.app.ui.components.LoadingSpinner
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -25,6 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.umbra.app.R
@@ -34,6 +39,7 @@ import com.umbra.app.ui.components.UmbraTopAppBar
 import com.umbra.app.ui.components.UmbraTopAppBarDefaults
 import com.umbra.app.ui.components.shareEventUrl
 import com.umbra.app.ui.feed.EventCard
+import com.umbra.app.ui.theme.UmbraTheme
 
 /**
  * Opens the feed for a hashtag. Provided once at the navigation root so every note card — feed,
@@ -58,16 +64,12 @@ fun HashtagScreen(
 
     Scaffold(
         topBar = {
-            UmbraTopAppBar(
-                title = {
-                    Text(
-                        buildAnnotatedString {
-                            withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) { append("#") }
-                            append(state.tag)
-                        }
-                    )
-                },
-                navigationIcon = { UmbraTopAppBarDefaults.BackNavigationIcon(onClick = onNavigateBack) }
+            HashtagTopBar(
+                tag = state.tag,
+                isFollowed = state.isFollowed,
+                canFollow = state.canFollow,
+                onNavigateBack = onNavigateBack,
+                onToggleFollow = viewModel::toggleFollow
             )
         }
     ) { padding ->
@@ -118,4 +120,47 @@ fun HashtagScreen(
             }
         }
     }
+}
+
+/** The hashtag as the title, with a button to follow it into the user's feed (NIP-51 interests). */
+@Composable
+internal fun HashtagTopBar(
+    tag: String,
+    isFollowed: Boolean,
+    canFollow: Boolean,
+    onNavigateBack: () -> Unit,
+    onToggleFollow: () -> Unit
+) {
+    UmbraTopAppBar(
+        title = {
+            Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) { append("#") }
+                    append(tag)
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        navigationIcon = { UmbraTopAppBarDefaults.BackNavigationIcon(onClick = onNavigateBack) },
+        actions = {
+            if (canFollow) {
+                Button(
+                    onClick = onToggleFollow,
+                    colors = if (isFollowed) {
+                        ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
+                    } else {
+                        ButtonDefaults.buttonColors(containerColor = UmbraTheme.colors.corona)
+                    },
+                    border = if (isFollowed) BorderStroke(1.dp, MaterialTheme.colorScheme.outline) else null,
+                    modifier = Modifier.padding(end = 12.dp).height(40.dp)
+                ) {
+                    Text(
+                        stringResource(if (isFollowed) R.string.hashtag_unfollow else R.string.hashtag_follow),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                }
+            }
+        }
+    )
 }

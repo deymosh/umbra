@@ -10,11 +10,13 @@ import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip01.EventFilter
 import com.umbra.app.domain.nip01.NostrEventBuilder
 import com.umbra.app.domain.nip30.CustomEmoji
+import com.umbra.app.domain.nip51.ListEdit
 import com.umbra.app.domain.preferences.UserPreferences
 import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.domain.repository.EventRepository
 import com.umbra.app.domain.repository.MuteListRepository
 import com.umbra.app.domain.repository.UserRepository
+import com.umbra.app.domain.usecase.ObserveFollowedHashtagsUseCase
 import com.umbra.app.domain.usecase.TrackReferencedAuthorUseCase
 import com.umbra.app.ui.common.InteractionActionsCoordinator
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -41,7 +43,10 @@ data class HashtagState(
     val isLoading: Boolean = true,
     val isLoadingMore: Boolean = false,
     /** A page came back with nothing older than what was already shown. */
-    val olderExhausted: Boolean = false
+    val olderExhausted: Boolean = false,
+    /** The tag is on the user's NIP-51 interests list, so their follows feed shows it too. */
+    val isFollowed: Boolean = false,
+    val canFollow: Boolean = false
 )
 
 /**
@@ -58,6 +63,7 @@ class HashtagViewModel @Inject constructor(
     muteListRepository: MuteListRepository,
     private val trackReferencedAuthor: TrackReferencedAuthorUseCase,
     private val videoCacheDataSourceProvider: VideoCacheDataSourceProvider,
+    observeFollowedHashtags: ObserveFollowedHashtagsUseCase,
     coordinatorFactory: InteractionActionsCoordinator.Factory
 ) : ViewModel() {
 
@@ -65,7 +71,7 @@ class HashtagViewModel @Inject constructor(
     private val channelId = NostrChannels.hashtag(tag)
     private val actions = coordinatorFactory.create(viewModelScope)
 
-    private val _state = MutableStateFlow(HashtagState(tag = tag))
+    private val _state = MutableStateFlow(HashtagState(tag = tag, canFollow = actions.canSignEvents()))
     val state: StateFlow<HashtagState> = _state.asStateFlow()
 
     private val _shareUrl = MutableSharedFlow<String>()
@@ -75,6 +81,9 @@ class HashtagViewModel @Inject constructor(
     val mediaDataSourceFactory get() = videoCacheDataSourceProvider.getCacheDataSourceFactory()
 
     init {
+        viewModelScope.launch {
+            observeFollowedHashtags.listed().collect { listed -> _state.update { it.copy(isFollowed = tag in listed) } }
+        }
         eventRepository.subscribeChannel(
             channelId,
             listOf(EventFilter(kinds = setOf(Event.KIND_TEXT_NOTE), tagFilters = mapOf("t" to setOf(tag)), limit = FETCH_LIMIT))
@@ -127,6 +136,16 @@ class HashtagViewModel @Inject constructor(
     }
 
     fun currentUserPubkey(): String? = userPreferences.getPublicKey()
+
+    /** Adds the tag to the user's interests list, or takes it off when it is already there. */
+    fun toggleFollow() {
+        if (!actions.canSignEvents()) return
+        val edit = if (_state.value.isFollowed) ListEdit("t", remove = setOf(tag)) else ListEdit("t", add = setOf(tag))
+        actions.requestSignAndPublish(
+            buildEventJson = { actions.buildListEdit(Event.KIND_INTERESTS_LIST, edit, fallbackValues = emptySet()) },
+            currentUserHex = userPreferences.getPublicKey()
+        )
+    }
 
     fun like(event: Event, content: String, emoji: CustomEmoji?): Boolean {
         if (!actions.canSignEvents()) return false

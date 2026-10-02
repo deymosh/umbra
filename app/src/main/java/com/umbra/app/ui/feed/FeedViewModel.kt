@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import com.umbra.app.domain.nip01.NostrEventBuilder
+import com.umbra.app.domain.usecase.ObserveFollowedHashtagsUseCase
 import com.umbra.app.domain.usecase.TrackReferencedAuthorUseCase
 import com.umbra.app.domain.usecase.CheckTorStatusUseCase
 import com.umbra.app.domain.tor.TorRuntimeController
@@ -262,6 +263,7 @@ class FeedViewModel @Inject constructor(
     private val buildEngagementFiltersUseCase: BuildEngagementFiltersUseCase,
     private val trackReferencedAuthorUseCase: TrackReferencedAuthorUseCase,
     private val throwawayAuthSigner: ThrowawayAuthSigner,
+    observeFollowedHashtags: ObserveFollowedHashtagsUseCase,
 ) : ViewModel() {
     val mediaCacheDataSourceFactory get() = videoCacheDataSourceProvider.getCacheDataSourceFactory()
 
@@ -387,6 +389,7 @@ class FeedViewModel @Inject constructor(
         muteListRepository = muteListRepository,
         contactListRepository = contactListRepository,
         userPreferences = userPreferences,
+        followedHashtagsFlow = observeFollowedHashtags(),
         scope = viewModelScope,
         displayLimit = _displayLimit,
         uiState = _uiState,

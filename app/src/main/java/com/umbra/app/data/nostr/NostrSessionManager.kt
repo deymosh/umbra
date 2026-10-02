@@ -20,6 +20,7 @@ import com.umbra.app.data.repository.RelayListDecryptionCoordinator
 import com.umbra.app.domain.repository.RelayRepository
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.usecase.BootstrapOwnProfileUseCase
+import com.umbra.app.domain.usecase.ObserveFollowedHashtagsUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -60,7 +61,8 @@ class NostrSessionManager @Inject constructor(
     private val relayInfoRepository: RelayInfoRepository,
     private val backfillAnchorStore: BackfillAnchorStore,
     private val bootstrapOwnProfileUseCase: BootstrapOwnProfileUseCase,
-    private val relayListDecryptionCoordinator: RelayListDecryptionCoordinator
+    private val relayListDecryptionCoordinator: RelayListDecryptionCoordinator,
+    private val observeFollowedHashtags: ObserveFollowedHashtagsUseCase
 ) : NostrSessionController {
     companion object {
         private const val TAG = "UmbraNostrSession"
@@ -160,6 +162,7 @@ class NostrSessionManager @Inject constructor(
     private var bootstrapJob: Job? = null
     private var autoDisableRelayJob: Job? = null
     private var torCircuitRecoveryJob: Job? = null
+    private var followedHashtagsJob: Job? = null
     private val retryJob = AtomicReference<Job?>(null)
     private var appStartMs: Long = 0L
     // The five fields below are all read and written from reconcile()'s two genuinely-concurrent
@@ -255,6 +258,14 @@ class NostrSessionManager @Inject constructor(
                 }
         }
 
+        // NIP-51 interests: the follows-scoped feed also asks relays for notes carrying a
+        // hashtag the user follows. Kept apart from activateUserSession, whose several callers
+        // only know the follow list.
+        followedHashtagsJob?.cancel()
+        followedHashtagsJob = scope.launch {
+            observeFollowedHashtags().collect { hashtags -> eventRepository.setFollowedHashtags(hashtags) }
+        }
+
         bootstrapJob = scope.launch {
             combine(
                 relayRepository.getAllRelays(),
@@ -316,9 +327,12 @@ class NostrSessionManager @Inject constructor(
         userBackfillJob.getAndSet(null)?.cancel()
         autoDisableRelayJob?.cancel()
         torCircuitRecoveryJob?.cancel()
+        followedHashtagsJob?.cancel()
         bootstrapJob = null
         autoDisableRelayJob = null
         torCircuitRecoveryJob = null
+        followedHashtagsJob = null
+        eventRepository.setFollowedHashtags(emptySet())
         backfillPubkey = null
         relaysConnected = false
         // Not suspend (NostrSessionController.stop() is a plain fun), so this cannot acquire

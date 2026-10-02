@@ -135,6 +135,8 @@ internal class FeedStateMergeCoordinator(
     private val muteListRepository: MuteListRepository,
     private val contactListRepository: ContactListRepository,
     private val userPreferences: UserPreferences,
+    /** Hashtags the user follows (NIP-51 interests): a follows-scoped feed also shows posts carrying them. */
+    private val followedHashtagsFlow: Flow<Set<String>>,
     private val scope: CoroutineScope,
     private val displayLimit: MutableStateFlow<Int>,
     private val uiState: MutableStateFlow<FeedState>,
@@ -179,8 +181,8 @@ internal class FeedStateMergeCoordinator(
         userPreferences.getPublicKeyFlow(),
         activeFiltersFlow,
         syncedMutedPubkeysFlow,
-        followedPubkeysFlow
-    ) { limit, currentPubkeyRaw, activeFilters, syncedMutedPubkeys, followedPubkeys ->
+        combine(followedPubkeysFlow, followedHashtagsFlow.distinctUntilChanged(), ::Pair)
+    ) { limit, currentPubkeyRaw, activeFilters, syncedMutedPubkeys, (followedPubkeys, followedHashtags) ->
         val currentUserPubkey = currentPubkeyRaw?.takeIf { it.length == 64 }
         val currentNpub = currentUserPubkey?.let {
             runCatching { Bech32Encoder.encodeNpub(it).lowercase() }.getOrNull()
@@ -195,7 +197,7 @@ internal class FeedStateMergeCoordinator(
             hideNsfw = mergedFilter.hideNsfw,
             currentNpub = currentNpub,
             currentUserPubkey = currentUserPubkey,
-            desiredTagsLower = emptySet()
+            followedHashtagsLower = if (mergedFilter.scopeToFollows) followedHashtags else emptySet()
         )
     }
         .flatMapLatest { it }

@@ -134,6 +134,8 @@ class EventRepositoryImpl @Inject constructor(
         // without acting as a practical constraint in ordinary use).
         private const val MAX_IN_MEMORY_EVENT_CACHE = 50000
         private const val OWN_LIST_SETS_LIMIT = 300
+        // Followed hashtags asked for in the feed's one `#t` filter; relays cap filter sizes.
+        private const val MAX_FOLLOWED_HASHTAGS_PER_FILTER = 100
         // Separate from the above: an UPPER CEILING on encryptedEventDao.observeRecentEvents(),
         // i.e. how many rows of the CURRENT USER's own archive can ever be pulled into the feed
         // merge — an unrelated tradeoff (Room query size/merge cost) from the public cache size.
@@ -375,6 +377,9 @@ class EventRepositoryImpl @Inject constructor(
     private var activeFeedFilter: FeedFilter = DefaultFeedFilters.DEFAULT
     @Volatile
     private var activeSessionAuthors: Set<String> = emptySet()
+    // Set by setFollowedHashtags(): asked for on top of the follow list in a follows-scoped feed.
+    @Volatile
+    private var activeFollowedHashtags: Set<String> = emptySet()
     // Precise relay -> authors-it-covers routing, for the subset of activeSessionAuthors whose
     // own outbox is already cached — recomputed whenever the session's follow list changes or a
     // tracked author's NIP-65 relay list arrives; see computeAuthorsPerRelay(). Authors NOT in
@@ -615,6 +620,16 @@ class EventRepositoryImpl @Inject constructor(
         scheduleNegentropySync()
     }
 
+    override fun setFollowedHashtags(hashtags: Set<String>) {
+        val normalized = hashtags.mapNotNullTo(HashSet(hashtags.size)) { tag -> tag.lowercase().takeIf { it.isNotBlank() } }
+        if (normalized == activeFollowedHashtags) return
+        activeFollowedHashtags = normalized
+        // Before the session's first activation there is no feed subscription to widen yet;
+        // applySessionChannelsToRelay() picks the hashtags up then.
+        if (channelFilters[NostrChannels.FEED_NOTES].isNullOrEmpty()) return
+        subscribeChannel(NostrChannels.FEED_NOTES, feedNotesFilters(System.currentTimeMillis() / 1000))
+    }
+
     // NIP-77: makes sure the signed-in user's own event history is fully synced across their
     // write-relay set. NegentropySyncOrchestrator itself is generic over any EventFilter/local
     // snapshot — the "own events only, not a general backfill feature" scoping is a deliberate
@@ -727,6 +742,44 @@ class EventRepositoryImpl @Inject constructor(
         )?.cancel()
     }
 
+    /**
+     * feed-notes: use cached since (skip already-stored events) or fall back to initial window.
+     * When scoped to follows, request only those authors instead of an unscoped firehose —
+     * this is the actual NIP-65 "outbox model" read-side scoping; see activateUserSession().
+     * A large follow list is split into multiple filters within the same REQ (chunked by
+     * MAX_AUTHORS_PER_FEED_FILTER) rather than one filter with an unbounded authors list.
+     * cachedFeedSince is derived from a cached/stored event's created_at (connectToEnabledRelays),
+     * which is relay/author-controlled data — a bogus or clock-skewed future timestamp there
+     * must not leak into the REQ filter, or the feed subscription silently stops matching
+     * anything until real time catches up to it.
+     *
+     * A follows-scoped feed also asks for posts carrying a followed hashtag (NIP-51 interests).
+     * That filter has no authors, so precise routing leaves it on the user's general relays.
+     */
+    private fun feedNotesFilters(now: Long): List<EventFilter> {
+        val feedKinds = FEED_NOTE_KINDS + Event.KIND_EVENT_DELETION
+        val feedSince = (cachedFeedSince ?: (now - INITIAL_FEED_WINDOW_SECS)).coerceAtMost(now)
+        if (activeSessionAuthors.isEmpty()) {
+            return listOf(EventFilter(kinds = feedKinds, since = feedSince, limit = 100))
+        }
+        val authorFilters = activeSessionAuthors.chunked(MAX_AUTHORS_PER_FEED_FILTER).map { authorChunk ->
+            EventFilter(
+                kinds = feedKinds,
+                authors = authorChunk.toSet(),
+                since = feedSince,
+                limit = 100
+            )
+        }
+        val hashtags = activeFollowedHashtags
+        if (hashtags.isEmpty()) return authorFilters
+        return authorFilters + EventFilter(
+            kinds = setOf(Event.KIND_TEXT_NOTE, Event.KIND_PICTURE),
+            tagFilters = mapOf("t" to hashtags.sorted().take(MAX_FOLLOWED_HASHTAGS_PER_FILTER).toSet()),
+            since = feedSince,
+            limit = 100
+        )
+    }
+
     private fun applySessionChannelsToRelay() {
         val now = System.currentTimeMillis() / 1000
         // Validate and normalize pubkey to hex-64 lowercase
@@ -753,6 +806,7 @@ class EventRepositoryImpl @Inject constructor(
             Event.KIND_RELAY_LIST_METADATA, // 10002 — NIP-65 relay list
             Event.KIND_BOOKMARK_LIST,      // 10003 — NIP-51 bookmarks
             Event.KIND_SEARCH_RELAYS,      // 10007 — NIP-51 search relay list
+            Event.KIND_INTERESTS_LIST,     // 10015 — NIP-51 followed hashtags
             Event.KIND_DM_RELAY_LIST,      // 10050 — NIP-17 DM relay list
             Event.KIND_INDEX_RELAYS,       // 10086 — index relay list
             Event.KIND_BLOSSOM_SERVER_LIST // 10063 — BUD-03 Blossom server list
@@ -815,29 +869,7 @@ class EventRepositoryImpl @Inject constructor(
             clearChannel(NostrChannels.OUTBOX_NOTES)
         }
 
-        // feed-notes: use cached since (skip already-stored events) or fall back to initial window.
-        // When scoped to follows, request only those authors instead of an unscoped firehose —
-        // this is the actual NIP-65 "outbox model" read-side scoping; see activateUserSession().
-        // A large follow list is split into multiple filters within the same REQ (chunked by
-        // MAX_AUTHORS_PER_FEED_FILTER) rather than one filter with an unbounded authors list.
-        // cachedFeedSince is derived from a cached/stored event's created_at (connectToEnabledRelays),
-        // which is relay/author-controlled data — a bogus or clock-skewed future timestamp there
-        // must not leak into the REQ filter, or the feed subscription silently stops matching
-        // anything until real time catches up to it.
-        val feedSince = (cachedFeedSince ?: (now - INITIAL_FEED_WINDOW_SECS)).coerceAtMost(now)
-        val feedNotesFilters = if (activeSessionAuthors.isEmpty()) {
-            listOf(EventFilter(kinds = feedKinds, since = feedSince, limit = 100))
-        } else {
-            activeSessionAuthors.chunked(MAX_AUTHORS_PER_FEED_FILTER).map { authorChunk ->
-                EventFilter(
-                    kinds = feedKinds,
-                    authors = authorChunk.toSet(),
-                    since = feedSince,
-                    limit = 100
-                )
-            }
-        }
-        subscribeChannel(NostrChannels.FEED_NOTES, feedNotesFilters)
+        subscribeChannel(NostrChannels.FEED_NOTES, feedNotesFilters(now))
 
         // Inbox notes subscription: one subscription, two filters — notes/deletions and
         // reactions/reposts that #p-tag the logged-in user. Formerly two separate
@@ -2308,7 +2340,7 @@ class EventRepositoryImpl @Inject constructor(
         hideNsfw: Boolean,
         currentNpub: String?,
         currentUserPubkey: String?,
-        desiredTagsLower: Set<String>
+        followedHashtagsLower: Set<String>
     ): Flow<FeedNotesResult> = flow {
         val externalEvents = LinkedHashMap<String, Event>(MAX_IN_MEMORY_EVENT_CACHE)
         var ownEvents = emptyList<Event>()
@@ -2362,7 +2394,7 @@ class EventRepositoryImpl @Inject constructor(
                 hideNsfw = hideNsfw,
                 currentNpub = currentNpub,
                 currentUserPubkey = currentUserPubkey,
-                desiredTagsLower = desiredTagsLower
+                followedHashtagsLower = followedHashtagsLower
             )
             emitCurrentFeed()
         }
@@ -2392,7 +2424,7 @@ class EventRepositoryImpl @Inject constructor(
                         hideNsfw = hideNsfw,
                         currentNpub = currentNpub,
                         currentUserPubkey = currentUserPubkey,
-                        desiredTagsLower = desiredTagsLower
+                        followedHashtagsLower = followedHashtagsLower
                     )
                 }
                 is FeedCacheUpdate.OwnSnapshot -> {
@@ -2420,7 +2452,7 @@ class EventRepositoryImpl @Inject constructor(
                             hideNsfw = hideNsfw,
                             currentNpub = currentNpub,
                             currentUserPubkey = currentUserPubkey,
-                            desiredTagsLower = desiredTagsLower
+                            followedHashtagsLower = followedHashtagsLower
                         )
                     } else {
                         val added = addedOwnEvents(newOwnEvents, ownEventIds)
@@ -2437,7 +2469,7 @@ class EventRepositoryImpl @Inject constructor(
                                 hideNsfw = hideNsfw,
                                 currentNpub = currentNpub,
                                 currentUserPubkey = currentUserPubkey,
-                                desiredTagsLower = desiredTagsLower
+                                followedHashtagsLower = followedHashtagsLower
                             )
                         }
                     }
@@ -2458,7 +2490,7 @@ class EventRepositoryImpl @Inject constructor(
                         hideNsfw = hideNsfw,
                         currentNpub = currentNpub,
                         currentUserPubkey = currentUserPubkey,
-                        desiredTagsLower = desiredTagsLower
+                        followedHashtagsLower = followedHashtagsLower
                     )
                 }
                 // Same notes, new counts: only the emission below is needed.

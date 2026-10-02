@@ -15,9 +15,9 @@ import kotlinx.coroutines.flow.first
 
 /**
  * Builds the next version of one of the user's replaceable lists (kind 3 contacts, 10000 mutes,
- * 10001 pins, 10003 bookmarks) as an edit of their latest published version: only [ListEdit]'s
- * values change, and every other tag is carried over untouched. [fallbackValues] seeds the list
- * only when no previous version exists.
+ * 10001 pins, 10003 bookmarks, 10015 interests, and NIP-51 sets) as an edit of their latest
+ * published version: only [ListEdit]'s values change, and every other tag is carried over
+ * untouched. [fallbackValues] seeds the list only when no previous version exists.
  *
  * NIP-51 private items live encrypted in `content`. With [privately], the edit's added values go
  * there instead of into the public tags; either way an added value is taken out of the other

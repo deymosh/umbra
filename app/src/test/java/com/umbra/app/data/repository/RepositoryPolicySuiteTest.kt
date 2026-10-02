@@ -96,7 +96,7 @@ class RepositoryPolicySuiteTest {
             hideNsfw = true,
             currentNpub = null,
             currentUserPubkey = "a".repeat(64),
-            desiredTagsLower = emptySet()
+            followedHashtagsLower = emptySet()
         )
 
         assertEquals(listOf("visible"), result.map { it.id })
@@ -122,7 +122,7 @@ class RepositoryPolicySuiteTest {
             hideNsfw = true,
             currentNpub = null,
             currentUserPubkey = null,
-            desiredTagsLower = emptySet()
+            followedHashtagsLower = emptySet()
         )
 
         assertEquals(listOf("followed"), result.map { it.id })
@@ -151,7 +151,7 @@ class RepositoryPolicySuiteTest {
             hideNsfw = true,
             currentNpub = null,
             currentUserPubkey = null,
-            desiredTagsLower = emptySet()
+            followedHashtagsLower = emptySet()
         )
 
         assertEquals(listOf("repost"), result.map { it.id })
@@ -174,7 +174,7 @@ class RepositoryPolicySuiteTest {
             hideNsfw = true,
             currentNpub = null,
             currentUserPubkey = null,
-            desiredTagsLower = emptySet()
+            followedHashtagsLower = emptySet()
         )
 
         assertTrue(result.isEmpty())
@@ -533,7 +533,7 @@ class RepositoryPolicySuiteTest {
             hideNsfw = false,
             currentNpub = null,
             currentUserPubkey = null,
-            desiredTagsLower = emptySet()
+            followedHashtagsLower = emptySet()
         )
 
         assertEquals(listOf("newer", "older"), result.map { it.id })
@@ -556,10 +556,40 @@ class RepositoryPolicySuiteTest {
             hideNsfw = false,
             currentNpub = null,
             currentUserPubkey = null,
-            desiredTagsLower = emptySet()
+            followedHashtagsLower = emptySet()
         )
 
         assertEquals(listOf("newest", "same"), result.map { it.id })
+    }
+
+    @Test
+    fun `given followed hashtags when selecting a follows feed then strangers' posts carrying one join, nothing else`() {
+        val followed = "b".repeat(64)
+        val stranger = "c".repeat(64)
+        val muted = "d".repeat(64)
+
+        val result = selectHybridFeedNotes(
+            events = listOf(
+                event("followed", followed, 50),
+                event("tagged", stranger, 40, tags = listOf(listOf("t", "Kotlin"))),
+                event("untagged", stranger, 35),
+                event("excluded", stranger, 30, tags = listOf(listOf("t", "kotlin"), listOf("t", "spam"))),
+                event("muted", muted, 25, tags = listOf(listOf("t", "kotlin"))),
+                event("repost", stranger, 20, kind = Event.KIND_REPOST, tags = listOf(listOf("e", "f".repeat(64)), listOf("t", "kotlin")))
+            ),
+            since = 0,
+            limit = 10,
+            authors = setOf(followed),
+            mutedPubkeys = setOf(muted),
+            excludedHashtagsLower = setOf("spam"),
+            includeMentions = true,
+            hideNsfw = false,
+            currentNpub = null,
+            currentUserPubkey = null,
+            followedHashtagsLower = setOf("kotlin")
+        )
+
+        assertEquals(listOf("followed", "tagged"), result.map { it.id })
     }
 
     @Test
@@ -568,7 +598,7 @@ class RepositoryPolicySuiteTest {
         val mutedAuthor = "c".repeat(64)
         val current = listOf(event("current", visibleAuthor, 10))
         val incoming = listOf(
-            event("desired", visibleAuthor, 30, tags = listOf(listOf("t", "kotlin"))),
+            event("tagged", visibleAuthor, 30, tags = listOf(listOf("t", "kotlin"))),
             event("muted", mutedAuthor, 25, tags = listOf(listOf("t", "kotlin"))),
             event("excluded", visibleAuthor, 20, tags = listOf(listOf("t", "spam")))
         )
@@ -585,7 +615,7 @@ class RepositoryPolicySuiteTest {
             hideNsfw = true,
             currentNpub = null,
             currentUserPubkey = "a".repeat(64),
-            desiredTagsLower = setOf("kotlin")
+            followedHashtagsLower = setOf("kotlin")
         )
         val full = selectHybridFeedNotes(
             events = current + incoming,
@@ -598,7 +628,7 @@ class RepositoryPolicySuiteTest {
             hideNsfw = true,
             currentNpub = null,
             currentUserPubkey = "a".repeat(64),
-            desiredTagsLower = setOf("kotlin")
+            followedHashtagsLower = setOf("kotlin")
         )
 
         assertEquals(full, incremental)

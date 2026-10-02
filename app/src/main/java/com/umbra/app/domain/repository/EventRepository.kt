@@ -76,6 +76,12 @@ interface EventRepository {
     fun activateUserSession(pubkey: String?, feedFilter: FeedFilter, authors: Set<String> = emptySet())
 
     /**
+     * Hashtags the signed-in user follows (NIP-51 interests). While the feed is scoped to
+     * follows, the feed-notes subscription also asks for notes carrying one of them.
+     */
+    fun setFollowedHashtags(hashtags: Set<String>)
+
+    /**
      * Set a stable namespace for REQ subscription IDs (e.g. per logged user session).
      */
     fun setSubscriptionNamespace(namespace: String)
@@ -411,6 +417,8 @@ interface EventRepository {
      *                Use 0 to return all cached events.
      * @param limit   Maximum number of notes to return, sorted newest-first.
      * @param authors When non-empty, restricts results to this author set (follow list / curation).
+     * @param followedHashtagsLower With [authors], also lets in notes from anyone that carry one
+     *                of these hashtags (NIP-51 interests).
      *
      * Returns [FeedNotesResult] (not a bare `List<NoteView>`) since a resolution pass can also
      * surface reposts whose target isn't available yet — see [FeedNotesResult.pendingReposts].
@@ -425,7 +433,7 @@ interface EventRepository {
         hideNsfw: Boolean = true,
         currentNpub: String? = null,
         currentUserPubkey: String? = null,
-        desiredTagsLower: Set<String> = emptySet()
+        followedHashtagsLower: Set<String> = emptySet()
     ): Flow<FeedNotesResult>
 
     /**

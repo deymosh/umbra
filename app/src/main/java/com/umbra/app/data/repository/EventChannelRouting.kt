@@ -230,6 +230,9 @@ internal class EventChannelRouting(
         if (authorScoped.isEmpty()) return filters
 
         val isDiscoveredRelay = connectedRelays[relayUrl]?.isDiscovered == true
+        // An author-less filter (the feed's followed hashtags) isn't about the authors a
+        // discovered relay was added for, so it stays on the user's own relays.
+        val unscopedForRelay = if (isDiscoveredRelay) emptyList() else unscoped
         val requestedAuthors = authorScoped.flatMap { it.authors }.toSet()
         val scopedAuthors = scopeAuthorsForRelay(
             relayUrl = normalizeRelayUrl(relayUrl),
@@ -238,7 +241,7 @@ internal class EventChannelRouting(
             authorsPerRelay = feedAuthorsPerRelay(),
             includeUnknownAuthors = !isDiscoveredRelay
         )
-        if (scopedAuthors == requestedAuthors) return filters
+        if (scopedAuthors == requestedAuthors) return if (unscopedForRelay.size == unscoped.size) filters else authorScoped
 
         val template = authorScoped.first()
         val reScopedAuthorFilters = when {
@@ -246,7 +249,7 @@ internal class EventChannelRouting(
             scopedAuthors.size <= MAX_AUTHORS_PER_FEED_FILTER -> listOf(template.copy(authors = scopedAuthors))
             else -> scopedAuthors.chunked(MAX_AUTHORS_PER_FEED_FILTER).map { chunk -> template.copy(authors = chunk.toSet()) }
         }
-        return unscoped + reScopedAuthorFilters
+        return unscopedForRelay + reScopedAuthorFilters
     }
 
     /**
