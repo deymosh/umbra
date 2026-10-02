@@ -17,6 +17,7 @@ import com.umbra.app.domain.relay.normalizeRelayUrl
 import com.umbra.app.domain.util.hexToBytes
 import com.umbra.app.domain.util.toHex
 import com.umbra.app.util.logging.LogScrubber
+import com.umbra.app.util.logging.LogScrubber.scrubMessageForLogs
 import com.umbra.app.util.logging.UmbraLog
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -152,7 +153,7 @@ internal class NegentropySyncOrchestrator(
                 val signal = withTimeoutOrNull(ROUND_TIMEOUT_MS) { incoming.first() } ?: break
                 when (signal) {
                     is NegSignal.Err -> {
-                        logger.d { "NIP-77 sync aborted by relay: ${signal.reason}" }
+                        logger.d { "NIP-77 sync aborted by relay: ${scrubMessageForLogs(signal.reason)}" }
                         return
                     }
                     is NegSignal.Msg -> {
