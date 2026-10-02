@@ -77,6 +77,9 @@ fun parseBolt11(invoice: String): Bolt11Invoice? {
     if (!HRP_REGEX.matches(hrp)) return null
 
     val amountMsat = parseAmountMsat(hrp)
+    // An amount no real invoice can carry (beyond what a Long holds, or a pico amount that isn't
+    // a whole msat) means the invoice is malformed, not "any amount".
+    if (amountMsat == INVALID_AMOUNT) return null
     val decodedFields = runCatching { parseTaggedFields(words) }.getOrNull()
 
     return Bolt11Invoice(
@@ -88,22 +91,29 @@ fun parseBolt11(invoice: String): Bolt11Invoice? {
     )
 }
 
+/** The amount in msat, null for an "any amount" invoice, [INVALID_AMOUNT] for one that can't be right. */
 private fun parseAmountMsat(hrp: String): Long? {
     val match = HRP_REGEX.find(hrp) ?: return null
     val digits = match.groupValues[2]
     if (digits.isEmpty()) return null // no amount segment == "any amount" invoice
-    val value = digits.toLongOrNull() ?: return null
-    return when (match.groupValues[3].lowercase()) {
-        "" -> value * MSAT_PER_BTC
-        "m" -> value * MSAT_PER_MILLI_BTC
-        "u" -> value * MSAT_PER_MICRO_BTC
-        "n" -> value * MSAT_PER_NANO_BTC
-        // 'p' = pico-BTC (10^-12 BTC = 0.1 msat); BOLT11 requires the value be a multiple of 10
-        // so it always lands on a whole msat.
-        "p" -> value / 10L
-        else -> null
+    val value = digits.toLongOrNull() ?: return INVALID_AMOUNT
+    return try {
+        when (match.groupValues[3].lowercase()) {
+            "" -> Math.multiplyExact(value, MSAT_PER_BTC)
+            "m" -> Math.multiplyExact(value, MSAT_PER_MILLI_BTC)
+            "u" -> Math.multiplyExact(value, MSAT_PER_MICRO_BTC)
+            "n" -> Math.multiplyExact(value, MSAT_PER_NANO_BTC)
+            // 'p' = pico-BTC (10^-12 BTC = 0.1 msat); BOLT11 requires the value be a multiple of 10
+            // so it always lands on a whole msat.
+            "p" -> if (value % 10L == 0L) value / 10L else INVALID_AMOUNT
+            else -> null
+        }
+    } catch (_: ArithmeticException) {
+        INVALID_AMOUNT
     }
 }
+
+private const val INVALID_AMOUNT = -1L
 
 /**
  * Decodes the leading 35-bit creation timestamp and walks the BOLT11 data part's tagged fields

@@ -37,6 +37,13 @@ class Bolt11Test {
     }
 
     @Test
+    fun `given an amount a Long can't hold or a fractional msat when parsing then the invoice is rejected`() {
+        assertNull(parseBolt11(encodeTestInvoice(hrp = "lnbc999999999999999999")))
+        assertNull(parseBolt11(encodeTestInvoice(hrp = "lnbc92233720368547758")))
+        assertNull(parseBolt11(encodeTestInvoice(hrp = "lnbc25p")))
+    }
+
+    @Test
     fun `given no amount segment when parsing then amount is null`() {
         val invoice = encodeTestInvoice(hrp = "lnbc")
         val decoded = parseBolt11(invoice)
