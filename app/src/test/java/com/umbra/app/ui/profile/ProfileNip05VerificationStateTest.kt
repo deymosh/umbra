@@ -170,7 +170,15 @@ class ProfileNip05VerificationStateTest {
                 deleteNoteUseCase = DeleteNoteUseCase(),
                 removeDeletedNoteFromCacheUseCase = RemoveDeletedNoteFromCacheUseCase(eventRepository),
                 buildEventShareUrlUseCase = BuildEventShareUrlUseCase(),
-                buildOwnListEdit = BuildOwnListEditUseCase(eventRepository, FakeUserPreferences(pubkey))
+                buildOwnListEdit = FakeUserPreferences(pubkey).let { prefs ->
+                    val nip44 = com.umbra.app.testutil.fakes.FakeNip44Gateway()
+                    BuildOwnListEditUseCase(
+                        eventRepository,
+                        prefs,
+                        com.umbra.app.domain.usecase.DecryptOwnListItemsUseCase(nip44, prefs),
+                        nip44
+                    )
+                }
             ),
             mediaDataSourceProvider = FakeMediaDataSourceProvider(),
             videoCacheDataSourceProvider = FakeVideoCacheDataSourceProvider(),

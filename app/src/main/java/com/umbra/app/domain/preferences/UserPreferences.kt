@@ -73,4 +73,9 @@ interface UserPreferences {
     fun getPanicWipeEnabledFlow(): StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false)
 
     fun setPanicWipeEnabled(enabled: Boolean) {}
+
+    /** Whether new bookmarks go into the list's encrypted private part. On by default. */
+    fun getPrivateBookmarksFlow(): StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(true)
+
+    fun setPrivateBookmarks(private: Boolean) {}
 }

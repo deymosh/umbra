@@ -29,6 +29,7 @@ import com.umbra.app.domain.usecase.PublishSignedEventUseCase
 import com.umbra.app.domain.usecase.PublishAuthEventUseCase
 import com.umbra.app.util.logging.UmbraLog
 import com.umbra.app.domain.usecase.DeleteNoteUseCase
+import com.umbra.app.domain.usecase.DecryptOwnListItemsUseCase
 import com.umbra.app.domain.usecase.RemoveDeletedNoteFromCacheUseCase
 import com.umbra.app.domain.usecase.BackfillProfileUseCase
 import com.umbra.app.domain.usecase.ResolveProfileRelayHintsUseCase
@@ -280,7 +281,8 @@ object UseCaseModule {
         contactListRepository: ContactListRepository,
         muteListRepository: MuteListRepository,
         pinListRepository: PinListRepository,
-        nostrSessionController: NostrSessionController
+        nostrSessionController: NostrSessionController,
+        decryptOwnListItems: DecryptOwnListItemsUseCase
     ): LogoutUseCase = LogoutUseCase(
         eventRepository,
         userRepository,
@@ -289,7 +291,8 @@ object UseCaseModule {
         muteListRepository,
         pinListRepository,
         nostrSessionController,
-        UmbraLog.tag("UmbraLogout")
+        UmbraLog.tag("UmbraLogout"),
+        decryptOwnListItems
     )
 
     @Provides

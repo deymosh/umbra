@@ -19,7 +19,8 @@ class LogoutUseCase(
     private val muteListRepository: MuteListRepository,
     private val pinListRepository: PinListRepository,
     private val nostrSessionController: NostrSessionController,
-    private val logger: UmbraLogger
+    private val logger: UmbraLogger,
+    private val decryptOwnListItems: DecryptOwnListItemsUseCase? = null
 ) {
     suspend operator fun invoke() {
         withContext(Dispatchers.IO) {
@@ -76,6 +77,9 @@ class LogoutUseCase(
                 } catch (e: Exception) {
                     logger.e(e) { "pinListRepository.clearAll() failed during logout" }
                 }
+
+                // Private list items (bookmarks, mutes) decrypted this session.
+                decryptOwnListItems?.clear()
 
                 if (!pubkey.isNullOrBlank()) {
                     try {

@@ -17,7 +17,9 @@ import com.umbra.app.domain.usecase.PublishSignedEventUseCase
 import com.umbra.app.domain.usecase.RemoveDeletedNoteFromCacheUseCase
 import com.umbra.app.domain.nip51.MuteList
 import com.umbra.app.domain.nip51.PinList
+import com.umbra.app.domain.usecase.DecryptOwnListItemsUseCase
 import com.umbra.app.testutil.fakes.FakeEventRepository
+import com.umbra.app.testutil.fakes.FakeNip44Gateway
 import com.umbra.app.testutil.fakes.FakeUserPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -90,7 +92,9 @@ class InteractionActionsCoordinatorTest {
         deleteNoteUseCase = deleteNoteUseCase,
         removeDeletedNoteFromCacheUseCase = RemoveDeletedNoteFromCacheUseCase(eventRepository),
         buildEventShareUrlUseCase = BuildEventShareUrlUseCase(),
-        buildOwnListEdit = BuildOwnListEditUseCase(eventRepository, userPreferences),
+        buildOwnListEdit = FakeNip44Gateway().let { nip44 ->
+            BuildOwnListEditUseCase(eventRepository, userPreferences, DecryptOwnListItemsUseCase(nip44, userPreferences), nip44)
+        },
         scope = scope
     )
 

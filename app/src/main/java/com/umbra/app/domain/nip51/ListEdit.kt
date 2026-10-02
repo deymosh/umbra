@@ -21,9 +21,12 @@ data class ListEdit(
  * Replaceable lists are shared with every other Nostr client the user runs; rebuilding one from
  * only the values Umbra tracks would silently delete everything else on it.
  */
-fun applyListEdit(base: Event?, edit: ListEdit, fallbackValues: Set<String> = emptySet()): List<List<String>> {
+fun applyListEdit(base: Event?, edit: ListEdit, fallbackValues: Set<String> = emptySet()): List<List<String>> =
+    applyListEdit(base?.tags ?: fallbackValues.map { listOf(edit.tagName, it) }, edit)
+
+/** [applyListEdit] over a plain tag list, e.g. a list's decrypted private items. */
+fun applyListEdit(baseTags: List<List<String>>, edit: ListEdit): List<List<String>> {
     val removeKeys = edit.remove.mapTo(HashSet()) { it.lowercase() }
-    val baseTags = base?.tags ?: fallbackValues.map { listOf(edit.tagName, it) }
     val kept = baseTags.filterNot { tag ->
         tag.size >= 2 && tag[0] == edit.tagName && tag[1].lowercase() in removeKeys
     }

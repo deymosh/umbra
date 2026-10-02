@@ -130,7 +130,7 @@ private fun eventActionItems(
     val bookmarks = LocalBookmarks.current
     return buildList {
         if (bookmarks != null) {
-            val bookmarked = bookmarks.isBookmarked(target.id)
+            val bookmarked = bookmarks.isBookmarked(target)
             add(
                 ActionItem(
                     icon = if (bookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,

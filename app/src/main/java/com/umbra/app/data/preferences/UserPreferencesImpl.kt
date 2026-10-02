@@ -24,6 +24,7 @@ class UserPreferencesImpl @Inject constructor(
         RelayAuthMode.fromStored(encryptedPreferences.getString(KEY_RELAY_AUTH_MODE))
     )
     private val panicWipeEnabled = MutableStateFlow(encryptedPreferences.getString(KEY_PANIC_WIPE) == "1")
+    private val privateBookmarks = MutableStateFlow(encryptedPreferences.getString(KEY_PRIVATE_BOOKMARKS) != "0")
     private val notificationsSeenAt = MutableStateFlow(
         encryptedPreferences.getString(KEY_NOTIFICATIONS_SEEN_AT)?.toLongOrNull() ?: 0L
     )
@@ -62,6 +63,7 @@ class UserPreferencesImpl @Inject constructor(
         pubkeyFlow.value = null
         notificationsSeenAt.value = 0L
         panicWipeEnabled.value = false
+        privateBookmarks.value = true
         relayAuthModeFlow.value = RelayAuthMode.THROWAWAY_KEY
     }
 
@@ -94,6 +96,13 @@ class UserPreferencesImpl @Inject constructor(
         panicWipeEnabled.value = enabled
     }
 
+    override fun getPrivateBookmarksFlow(): StateFlow<Boolean> = privateBookmarks.asStateFlow()
+
+    override fun setPrivateBookmarks(private: Boolean) {
+        encryptedPreferences.putString(KEY_PRIVATE_BOOKMARKS, if (private) "1" else "0")
+        privateBookmarks.value = private
+    }
+
     override fun getRelayAuthModeFlow(): StateFlow<RelayAuthMode> = relayAuthModeFlow.asStateFlow()
 
     override fun setRelayAuthMode(mode: RelayAuthMode) {
@@ -105,5 +114,6 @@ class UserPreferencesImpl @Inject constructor(
         const val KEY_RELAY_AUTH_MODE = "relay_auth_mode"
         const val KEY_PANIC_WIPE = "panic_wipe_enabled"
         const val KEY_NOTIFICATIONS_SEEN_AT = "notifications_seen_at"
+        const val KEY_PRIVATE_BOOKMARKS = "private_bookmarks"
     }
 }

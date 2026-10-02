@@ -764,10 +764,16 @@
     <string name="network_usage_activity_reactions">Reactions</string>
     <string name="network_usage_activity_reposts">Reposts</string>
     <string name="bookmarks_title">Bookmarks</string>
-    <string name="bookmark_add">Bookmark (public, synced)</string>
+    <string name="bookmark_add">Bookmark</string>
     <string name="bookmark_remove">Remove bookmark</string>
     <string name="bookmarks_empty">No bookmarks</string>
-    <string name="bookmarks_empty_message">Bookmarks are your public NIP-51 list: signed by your signer, stored on your relays and shared with your other Nostr apps. For something only this device keeps, use Read later.</string>
+    <string name="bookmarks_empty_message">Bookmarks are your NIP-51 list, signed by your signer, kept on your relays and shared with your other Nostr apps. Bookmark notes and articles from their menu. For something only this device keeps, use Read later.</string>
+    <string name="bookmarks_private_default">Keep new bookmarks private</string>
+    <string name="bookmarks_private_default_body">Encrypted so only you can read them. Relays still see that you keep a bookmark list.</string>
+    <string name="bookmarks_private_locked">Private bookmarks are hidden until your signer opens them.</string>
+    <string name="bookmarks_private_show">Show</string>
+    <string name="bookmarks_private_unreadable">Some private bookmarks can\'t be opened here. They stay on your list.</string>
+    <string name="bookmarks_private_label">Private</string>
     <string name="profile_tab_pictures">Pictures</string>
     <string name="event_kind_picture">Picture</string>
 </resources>

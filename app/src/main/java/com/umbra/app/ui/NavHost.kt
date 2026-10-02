@@ -367,10 +367,10 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
         ReadLaterActions(isSaved = { it in savedReadLaterIds }, toggle = readLaterViewModel::toggle)
     }
     val bookmarksViewModel: BookmarksViewModel = hiltViewModel()
-    val bookmarkedIds by bookmarksViewModel.bookmarkedIds.collectAsStateWithLifecycle()
-    val bookmarkActions = remember(bookmarkedIds) {
+    val bookmarkList by bookmarksViewModel.bookmarks.collectAsStateWithLifecycle()
+    val bookmarkActions = remember(bookmarkList) {
         if (bookmarksViewModel.canBookmark) {
-            BookmarkActions(isBookmarked = { it in bookmarkedIds }, toggle = bookmarksViewModel::toggle)
+            BookmarkActions(isBookmarked = bookmarksViewModel::isBookmarked, toggle = bookmarksViewModel::toggle)
         } else {
             null
         }
