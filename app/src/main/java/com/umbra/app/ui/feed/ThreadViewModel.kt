@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.umbra.app.domain.nip18.isRepostKind
 import com.umbra.app.domain.nip19.Bech32Encoder
+import com.umbra.app.domain.model.EngagementCounts
 import com.umbra.app.domain.model.NostrChannels
 import com.umbra.app.ui.common.InteractionActionsCoordinator
 import com.umbra.app.domain.nip01.Event
@@ -15,7 +16,6 @@ import com.umbra.app.domain.nip01.NostrEventBuilder
 import com.umbra.app.domain.profile.UserProfile
 import com.umbra.app.domain.preferences.UserPreferences
 import com.umbra.app.domain.nip25.ReactionEmoji
-import com.umbra.app.domain.nip25.isDislikeReactionContent
 import com.umbra.app.domain.nip30.CustomEmoji
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.repository.ReactionEmojiRepository
@@ -70,6 +70,7 @@ data class ThreadState(
     val replyCounts: ImmutableMapSnapshot<String, Int> = ImmutableMapSnapshot(),
     val reactionCounts: ImmutableMapSnapshot<String, Int> = ImmutableMapSnapshot(),
     val repostCounts: ImmutableMapSnapshot<String, Int> = ImmutableMapSnapshot(),
+    val zapSats: ImmutableMapSnapshot<String, Long> = ImmutableMapSnapshot(),
     val profiles: ImmutableMapSnapshot<String, UserProfile> = ImmutableMapSnapshot(),
     val isLoading: Boolean = true,
     val notFound: Boolean = false,
@@ -249,6 +250,7 @@ class ThreadViewModel @Inject constructor(
                         replyCounts = bootstrappedGraph.replyCounts.toImmutableSnapshot(),
                         reactionCounts = bootstrappedGraph.reactionCounts.toImmutableSnapshot(),
                         repostCounts = bootstrappedGraph.repostCounts.toImmutableSnapshot(),
+                        zapSats = bootstrappedGraph.zapSats.toImmutableSnapshot(),
                         profiles = bootstrappedGraph.profileSlice.toImmutableSnapshot(),
                         isLoading = false,
                         notFound = false,
@@ -271,6 +273,7 @@ class ThreadViewModel @Inject constructor(
         val replyCounts: Map<String, Int>,
         val reactionCounts: Map<String, Int>,
         val repostCounts: Map<String, Int>,
+        val zapSats: Map<String, Long>,
         val profileSlice: Map<String, UserProfile>,
         val signature: ThreadGraphSignature
     )
@@ -310,6 +313,7 @@ class ThreadViewModel @Inject constructor(
                             replyCounts = result.replyCounts.toImmutableSnapshot(),
                             reactionCounts = result.reactionCounts.toImmutableSnapshot(),
                             repostCounts = result.repostCounts.toImmutableSnapshot(),
+                            zapSats = result.zapSats.toImmutableSnapshot(),
                             profiles = current.profiles + result.profileSlice,
                             isLoading = !hasLoadedInitialGraph,
                             notFound = hasLoadedInitialGraph && result.anchor == null,
@@ -463,6 +467,7 @@ class ThreadViewModel @Inject constructor(
                 replyCounts = emptyMap(),
                 reactionCounts = emptyMap(),
                 repostCounts = emptyMap(),
+                zapSats = emptyMap(),
                 profileSlice = emptyMap(),
                 signature = ThreadGraphSignature(
                     eventIds = emptySet(),
@@ -498,45 +503,22 @@ class ThreadViewModel @Inject constructor(
         // UserProfile.pubkey is itself always lowercase by construction, but removes the implicit
         // assumption instead of relying on it.
         val profileSlice = userRepository.getProfilesByPubkey(pubkeys)
-        val threadIds = thread.map { it.id }
-        val replyCounts = mutableMapOf<String, Int>()
-        val reactionCounts = mutableMapOf<String, Int>()
-        val repostCounts = mutableMapOf<String, Int>()
+        // Same counts, from the same rule, as the feed shows for these notes.
+        val engagement = eventRepository.getEngagementCounts(thread.map { it.id })
+        val replyCounts = engagement.mapValues { it.value.replies }.filterValues { it > 0 }
+        val reactionCounts = engagement.mapValues { it.value.reactions }.filterValues { it > 0 }
+        val repostCounts = engagement.mapValues { it.value.reposts }.filterValues { it > 0 }
+        val zapSats = engagement.mapValues { it.value.zapSats }.filterValues { it > 0 }
 
-        eventRepository.getEventsReferencingIds(threadIds)
-            .asSequence()
-            .distinctBy { it.id }
-            .filter { event ->
-                event.kind == Event.KIND_REACTION ||
-                    isRepostKind(event.kind) ||
-                    (event.kind == Event.KIND_TEXT_NOTE && event.isReply())
-            }
-            .forEach { event ->
-                val targetEventId = event.getParentEventId() ?: event.getTagValue("e") ?: return@forEach
-                if (!threadIds.contains(targetEventId)) return@forEach
+        val engagementChecksum = engagement.hashCode()
 
-                when {
-                    event.kind == Event.KIND_REACTION -> if (!isDislikeReactionContent(event.content)) {
-                        reactionCounts[targetEventId] = (reactionCounts[targetEventId] ?: 0) + 1
-                    }
-                    isRepostKind(event.kind) -> repostCounts[targetEventId] = (repostCounts[targetEventId] ?: 0) + 1
-                    event.kind == Event.KIND_TEXT_NOTE -> replyCounts[targetEventId] = (replyCounts[targetEventId] ?: 0) + 1
-                }
-            }
-
-        val engagementChecksum =
-            31 * replyCounts.hashCode() + 17 * reactionCounts.hashCode() + repostCounts.hashCode()
-
-        // Reorders only the anchor's direct-reply branches by popularity (replies + likes +
-        // reposts on that top-level reply itself), now that counts are known — nested replies
-        // within a branch stay chronological (collectDescendants' own DFS order), since ranking
-        // deep reply chains by popularity would make them harder to follow, not easier.
-        val reorderedDescendants = reorderTopLevelDescendantsByPopularity(
+        // Reorders only the anchor's direct-reply branches, now that counts are known — nested
+        // replies within a branch stay chronological (collectDescendants' own DFS order), since
+        // ranking deep reply chains would make them harder to follow, not easier.
+        val reorderedDescendants = reorderTopLevelDescendants(
             descendants = descendants,
-            anchorId = anchor.id,
-            replyCounts = replyCounts,
-            reactionCounts = reactionCounts,
-            repostCounts = repostCounts
+            anchor = anchor,
+            engagement = engagement
         )
         val finalThread = (parentChain.asReversed() + anchor + reorderedDescendants).distinctBy { it.id }
 
@@ -546,6 +528,7 @@ class ThreadViewModel @Inject constructor(
             replyCounts = replyCounts,
             reactionCounts = reactionCounts,
             repostCounts = repostCounts,
+            zapSats = zapSats,
             profileSlice = profileSlice,
             signature = ThreadGraphSignature(
                 eventIds = finalThread.map { it.id }.toSet(),
@@ -696,45 +679,54 @@ class ThreadViewModel @Inject constructor(
 }
 
 /**
- * Reorders the top-level branches of [descendants] (each branch = a direct reply to [anchorId]
- * plus its own nested replies, kept contiguous) by descending popularity (replies + likes +
- * reposts on that top-level reply itself — `// TODO: fold in zap sats once available`). Nested
- * replies within a branch stay in their existing (chronological) order — only which branch
- * appears first changes.
+ * Orders the top-level branches of [descendants] (each branch = a direct reply to [anchor] plus
+ * its own nested replies, kept contiguous):
+ * 1. the anchor author's own replies first, oldest first — an author answering their own note is
+ *    adding to the post, so those read in the order they were written;
+ * 2. then everyone else's by descending [replyPopularity], newest first on a tie.
+ * Nested replies within a branch keep their existing (chronological) order.
  *
  * [descendants] is expected to be [ThreadViewModel]'s own `collectDescendants`'s DFS pre-order
  * output, which already guarantees each top-level branch's events are contiguous (a branch's
  * nested replies always immediately follow their branch root, before the next sibling root) — so
- * branches can be recovered by splitting on "parent == anchorId" without re-walking the reply
+ * branches can be recovered by splitting on "parent == anchor" without re-walking the reply
  * graph. Top-level (file-scope), not a private method, so it's directly unit-testable without
  * constructing a full ThreadViewModel.
  */
-internal fun reorderTopLevelDescendantsByPopularity(
+internal fun reorderTopLevelDescendants(
     descendants: List<Event>,
-    anchorId: String,
-    replyCounts: Map<String, Int>,
-    reactionCounts: Map<String, Int>,
-    repostCounts: Map<String, Int>
+    anchor: Event,
+    engagement: Map<String, EngagementCounts>
 ): List<Event> {
     if (descendants.size <= 1) return descendants
 
     val branches = mutableListOf<MutableList<Event>>()
     descendants.forEach { event ->
-        if (event.getParentEventId() == anchorId) {
+        if (event.getParentEventId() == anchor.id) {
             branches.add(mutableListOf(event))
         } else {
             (branches.lastOrNull() ?: mutableListOf<Event>().also { branches.add(it) }).add(event)
         }
     }
 
-    fun popularity(event: Event): Int =
-        (replyCounts[event.id] ?: 0) + (reactionCounts[event.id] ?: 0) + (repostCounts[event.id] ?: 0)
+    val (byAuthor, byOthers) = branches.partition { it.first().pubkey.equals(anchor.pubkey, ignoreCase = true) }
+    return (
+        byAuthor.sortedBy { it.first().createdAt } +
+            byOthers.sortedWith(
+                compareByDescending<List<Event>> { replyPopularity(engagement[it.first().id]) }
+                    .thenByDescending { it.first().createdAt }
+            )
+        ).flatten()
+}
 
-    return branches
-        .sortedWith(
-            compareByDescending<List<Event>> { popularity(it.first()) }
-                .thenByDescending { it.first().createdAt }
-        )
-        .flatten()
+/**
+ * How much attention a reply drew: each reply, reaction and repost counts one, and zaps count
+ * one per 100 sats with any zap worth at least one — so a zapped reply ranks with a liked one
+ * without a single large zap burying everything else.
+ */
+internal fun replyPopularity(counts: EngagementCounts?): Long {
+    if (counts == null) return 0
+    val zapScore = if (counts.zapSats > 0) maxOf(1L, counts.zapSats / 100) else 0L
+    return counts.replies + counts.reactions + counts.reposts + zapScore
 }
 

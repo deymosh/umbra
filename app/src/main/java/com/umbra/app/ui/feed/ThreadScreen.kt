@@ -225,6 +225,7 @@ fun ThreadScreen(
                     replyCount = state.replyCounts[event.id] ?: 0,
                     reactionCount = state.reactionCounts[event.id] ?: 0,
                     repostCount = state.repostCounts[event.id] ?: 0,
+                    zapSats = state.zapSats[event.id] ?: 0,
                     torDataSourceFactory = viewModel.mediaDataSourceFactory,
                     onEventClick = {},
                     onProfileClick = onProfileClickStable,

@@ -50,6 +50,7 @@ internal data class ComputedFeedSnapshot(
     val reactionCounts: Map<String, Int> = emptyMap(),
     val replyCounts: Map<String, Int> = emptyMap(),
     val repostCounts: Map<String, Int> = emptyMap(),
+    val zapSats: Map<String, Long> = emptyMap(),
     /** Event id -> reposter pubkey, for the notes in [events] that arrived via a NIP-18 repost. */
     val repostedByPubkeys: Map<String, String> = emptyMap(),
     /** Event id -> the repost event's own created_at, for the notes in [events] that arrived via a NIP-18 repost. */
@@ -86,6 +87,7 @@ private fun ComputedFeedSnapshot.stableFingerprint(): Int {
     hash = 31 * hash + reactionCounts.valueFingerprint()
     hash = 31 * hash + replyCounts.valueFingerprint()
     hash = 31 * hash + repostCounts.valueFingerprint()
+    hash = 31 * hash + zapSats.longValueFingerprint()
     hash = 31 * hash + repostedByPubkeys.stringValueFingerprint()
     hash = 31 * hash + repostedAtByEvent.longValueFingerprint()
     hash = 31 * hash + repostEventByEvent.eventValueFingerprint()
@@ -271,6 +273,7 @@ internal class FeedStateMergeCoordinator(
             reactionCounts = visibleNotes.associate { it.event.id to it.reactionCount },
             replyCounts = visibleNotes.associate { it.event.id to it.replyCount },
             repostCounts = visibleNotes.associate { it.event.id to it.repostCount },
+            zapSats = visibleNotes.filter { it.zapSats > 0 }.associate { it.event.id to it.zapSats },
             repostedByPubkeys = visibleNotes.mapNotNull { n ->
                 n.repostedByPubkey?.let { n.event.id to it }
             }.toMap(),
@@ -311,6 +314,7 @@ internal class FeedStateMergeCoordinator(
             reactionCounts = computed.reactionCounts.toImmutableSnapshot(),
             replyCounts = computed.replyCounts.toImmutableSnapshot(),
             repostCounts = computed.repostCounts.toImmutableSnapshot(),
+            zapSats = computed.zapSats.toImmutableSnapshot(),
             repostedByPubkeys = computed.repostedByPubkeys.toImmutableSnapshot(),
             repostedAtByEvent = computed.repostedAtByEvent.toImmutableSnapshot(),
             repostEventByEvent = computed.repostEventByEvent.toImmutableSnapshot(),

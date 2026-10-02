@@ -75,6 +75,8 @@ fun LazyListScope.notesFeedSection(
     replyCounts: ImmutableMapSnapshot<String, Int>,
     reactionCounts: ImmutableMapSnapshot<String, Int>,
     repostCounts: ImmutableMapSnapshot<String, Int>,
+    // Event id -> sum of validated zap receipts for it, in sats.
+    zapSatsForEvent: ImmutableMapSnapshot<String, Long> = ImmutableMapSnapshot(),
     // Event id -> reposter pubkey, for a note that arrived via a NIP-18 repost — drives EventCard's
     // "reposted by" banner. Reposter's own profile is resolved the same way authorProfile already
     // is, via profileForPubkey below.
@@ -199,6 +201,7 @@ fun LazyListScope.notesFeedSection(
                     replyCount = replyCounts[event.id] ?: 0,
                     reactionCount = reactionCounts[event.id] ?: 0,
                     repostCount = repostCounts[event.id] ?: 0,
+                    zapSats = zapSatsForEvent[event.id] ?: 0,
                     repostedByPubkey = repostedByPubkey,
                     repostedByProfile = repostedByPubkey?.let { profileForPubkey(it) },
                     repostedAt = repostedAtForEvent[event.id],

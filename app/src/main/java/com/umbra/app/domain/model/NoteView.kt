@@ -31,6 +31,8 @@ data class NoteView(
     val reactionCount: Int,
     val replyCount: Int,
     val repostCount: Int,
+    /** Sum of validated NIP-57 zap receipts paid for this note, in sats. */
+    val zapSats: Long = 0,
     /** Reposter's pubkey (NIP-18 kind 6/16 event author) — null when this note wasn't reposted. */
     val repostedByPubkey: String? = null,
     /** null when the author's kind-0 metadata has not yet been fetched/cached. */

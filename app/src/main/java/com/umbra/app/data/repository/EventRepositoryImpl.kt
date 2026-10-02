@@ -30,8 +30,10 @@ import com.umbra.app.domain.feed.FeedFilter
 import com.umbra.app.domain.model.EventCacheStats
 import com.umbra.app.domain.model.FeedNotesResult
 import com.umbra.app.domain.model.NoteView
+import com.umbra.app.domain.model.EngagementCounts
 import com.umbra.app.domain.model.PendingRepost
 import com.umbra.app.domain.model.orderedFeedNotesResult
+import com.umbra.app.domain.model.toEngagementCounts
 import com.umbra.app.domain.relay.Relay
 import com.umbra.app.domain.relay.RelayIssue
 import com.umbra.app.domain.relay.RelayRequestInfo
@@ -1123,7 +1125,8 @@ class EventRepositoryImpl @Inject constructor(
             ).distinct()
         val profiles = userRepository.getProfilesByPubkey(neededPubkeys)
 
-        return buildCachedNoteViews(allCachedAndResolvedEvents, profiles, ownReposts) to pendingReposts
+        val engagement = eventIngestCache.engagementFor(resolution.resolved.map { it.targetEvent.id })
+        return buildIndexedNoteViews(resolution.resolved, profiles, engagement) to pendingReposts
     }
 
     // normalizeIncomingEvent moved to EventIngestCache.kt — see
@@ -1525,6 +1528,25 @@ class EventRepositoryImpl @Inject constructor(
                 (cached + encrypted).distinctBy { it.id }
             }
         }
+
+    override suspend fun getEngagementCounts(targetIds: Collection<String>): Map<String, EngagementCounts> {
+        if (targetIds.isEmpty()) return emptyMap()
+        val others = eventIngestCache.engagementFor(targetIds)
+        // The user's own reactions/replies/reposts are archived, never cached, so they're counted
+        // here with the same rule and added on top.
+        val own = withContext(Dispatchers.IO) {
+            encryptedEventDao.getEventsReferencingIds(targetIds.toList())
+                .map { it.toDomain() }
+                .filter { isCurrentUserPubkey(it.pubkey) }
+        }
+        if (own.isEmpty()) return others
+        val wanted = targetIds.associateBy { it.lowercase() }
+        val ownCounts = own.flatMap(::engagementLinksOf)
+            .toEngagementCounts()
+            .mapNotNull { (target, counts) -> wanted[target]?.let { it to counts } }
+            .toMap()
+        return mergeEngagementCounts(others, ownCounts)
+    }
 
     override fun observeEventsByPubkeyAndKind(pubkey: String, kind: Int, limit: Int): Flow<List<Event>> =
         if (isCurrentUserPubkey(pubkey)) {
@@ -2428,7 +2450,20 @@ class EventRepositoryImpl @Inject constructor(
                 // reactively recomputes once a background fetch (scheduleRepostTargetFetch) lands
                 // an initially-unresolvable target — see resolveOwnRepostNoteViews.
                 eventIngestCache.cachedEventsFlow.conflate()
-            ) { ownNoteViews, ownReposts, cachedEvents ->
+            ) { sqlNoteViews, ownReposts, cachedEvents ->
+                // The SQL counts cover only the own-events archive, i.e. the user's own engagement;
+                // everyone else's reactions, replies, reposts and zap receipts live in the cache
+                // index. The two sets never overlap (own events are never cached), so they add.
+                val othersByNote = eventIngestCache.engagementFor(sqlNoteViews.map { it.event.id })
+                val ownNoteViews = sqlNoteViews.map { view ->
+                    val others = othersByNote[view.event.id] ?: return@map view
+                    view.copy(
+                        reactionCount = view.reactionCount + others.reactions,
+                        replyCount = view.replyCount + others.replies,
+                        repostCount = view.repostCount + others.reposts,
+                        zapSats = view.zapSats + others.zapSats
+                    )
+                }
                 // Fast path: the overwhelming common case (no reposts) does none of the extra
                 // resolution work below and matches today's exact behavior/perf.
                 if (ownReposts.isEmpty()) {
@@ -2468,8 +2503,9 @@ class EventRepositoryImpl @Inject constructor(
                     resolved.map { it.targetEvent.pubkey } + resolved.mapNotNull { it.repostedByPubkey } + pubkey
                     ).distinct()
                 val profiles = userRepository.getProfilesByPubkey(neededPubkeys)
+                val engagement = eventIngestCache.engagementFor(resolved.map { it.targetEvent.id })
                 orderedFeedNotesResult(
-                    notes = buildCachedNoteViews(allEvents, profiles, selected),
+                    notes = buildIndexedNoteViews(resolved, profiles, engagement),
                     pendingReposts = toPendingReposts(resolution.unresolvedReposts)
                 )
             }

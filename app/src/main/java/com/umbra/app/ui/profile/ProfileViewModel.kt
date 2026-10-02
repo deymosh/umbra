@@ -89,6 +89,7 @@ data class ProfileState(
     val replyCounts: ImmutableMapSnapshot<String, Int> = ImmutableMapSnapshot(),
     val reactionCounts: ImmutableMapSnapshot<String, Int> = ImmutableMapSnapshot(),
     val repostCounts: ImmutableMapSnapshot<String, Int> = ImmutableMapSnapshot(),
+    val zapSats: ImmutableMapSnapshot<String, Long> = ImmutableMapSnapshot(),
     /** Event id -> reposter pubkey, for a note in [notes] that arrived via a NIP-18 repost. */
     val repostedByPubkeys: ImmutableMapSnapshot<String, String> = ImmutableMapSnapshot(),
     /** Event id -> the repost event's own created_at, for the repost banner's relative-time label. */
@@ -156,6 +157,7 @@ class ProfileViewModel @Inject constructor(
         val replyCounts: ImmutableMapSnapshot<String, Int>,
         val reactionCounts: ImmutableMapSnapshot<String, Int>,
         val repostCounts: ImmutableMapSnapshot<String, Int>,
+        val zapSats: ImmutableMapSnapshot<String, Long>,
         val repostedByPubkeys: ImmutableMapSnapshot<String, String>,
         val repostedAtByEvent: ImmutableMapSnapshot<String, Long>,
         val repostEventByEvent: ImmutableMapSnapshot<String, Event>,
@@ -293,6 +295,7 @@ class ProfileViewModel @Inject constructor(
                             replyCounts = noteViews.associate { it.event.id to it.replyCount }.toImmutableSnapshot(),
                             reactionCounts = noteViews.associate { it.event.id to it.reactionCount }.toImmutableSnapshot(),
                             repostCounts = noteViews.associate { it.event.id to it.repostCount }.toImmutableSnapshot(),
+                            zapSats = noteViews.filter { it.zapSats > 0 }.associate { it.event.id to it.zapSats }.toImmutableSnapshot(),
                             repostedByPubkeys = noteViews.mapNotNull { n ->
                                 n.repostedByPubkey?.let { n.event.id to it }
                             }.toMap().toImmutableSnapshot(),
@@ -325,6 +328,7 @@ class ProfileViewModel @Inject constructor(
                             replyCounts = snapshot.replyCounts,
                             reactionCounts = snapshot.reactionCounts,
                             repostCounts = snapshot.repostCounts,
+                            zapSats = snapshot.zapSats,
                             repostedByPubkeys = snapshot.repostedByPubkeys,
                             repostedAtByEvent = snapshot.repostedAtByEvent,
                             repostEventByEvent = snapshot.repostEventByEvent,

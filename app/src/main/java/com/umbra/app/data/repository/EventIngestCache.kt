@@ -6,6 +6,8 @@ import com.umbra.app.data.nostr.launchReplacing
 import com.umbra.app.data.repository.cache.EventLruCache
 import com.umbra.app.domain.crypto.EventCrypto
 import com.umbra.app.domain.feed.FeedFilter
+import com.umbra.app.domain.model.EngagementCounts
+import com.umbra.app.domain.model.EngagementLink
 import com.umbra.app.domain.model.EventCacheStats
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip01.ReplaceableEventKey
@@ -234,8 +236,10 @@ internal class EventIngestCache(
      */
     suspend fun ingest(event: Event, relayUrl: String, currentUserPubkey: String?): IngestOutcome {
         return if (shouldStoreInMemoryCache(event.pubkey, currentUserPubkey)) {
+            // Outside the lock: a zap receipt's links need a signature check.
+            val links = engagementLinksOf(event)
             cachedEventsMutex.withLock {
-                val stored = storeEventLocked(event)
+                val stored = storeEventLocked(event, links)
                 if (stored) {
                     cachedEvents.recordRelay(event.id, relayUrl)
                 }
@@ -255,7 +259,7 @@ internal class EventIngestCache(
      * repost participates in the exact same one-revision-per-slot invariant as a directly-ingested
      * one, rather than bypassing it via a plain id-keyed `cachedEvents.put`.
      */
-    private fun storeEventLocked(event: Event): Boolean {
+    private fun storeEventLocked(event: Event, links: List<EngagementLink>): Boolean {
         val replaceableKey = event.replaceableKey()
         val supersededId = replaceableKey?.let { latestReplaceableEventId[it] }
         val superseded = supersededId?.let(cachedEvents::get)
@@ -270,9 +274,8 @@ internal class EventIngestCache(
         if (replaceableKey != null) {
             if (supersededId != null && supersededId != event.id) {
                 // Evict the superseded revision now rather than waiting for
-                // the LRU to reclaim it. EventEngagementIndex only tracks
-                // kind 1/6/7 (see EventEngagementIndex.add), never the
-                // replaceable kinds this branch handles, so no
+                // the LRU to reclaim it. Replaceable kinds never engage with
+                // a note (see engagementLinksOf), so no
                 // cachedEngagementIndex.remove() is needed for it.
                 cachedEvents.remove(supersededId)
             }
@@ -281,7 +284,7 @@ internal class EventIngestCache(
         // Order matters: index the new event before it's inserted, so if this
         // put() evicts an older entry, EventLruCache's onEvicted callback removing
         // that entry from the index can't race the new entry's own indexing.
-        cachedEngagementIndex.add(event)
+        cachedEngagementIndex.add(event.id, links)
         cachedEvents.put(event)
         return true
     }
@@ -306,7 +309,8 @@ internal class EventIngestCache(
      * recorded here — unlike [ingest], this event wasn't delivered by any specific relay.
      */
     suspend fun cacheRepostTarget(target: Event) {
-        cachedEventsMutex.withLock { storeEventLocked(target) }
+        val links = engagementLinksOf(target)
+        cachedEventsMutex.withLock { storeEventLocked(target, links) }
     }
 
     suspend fun getCached(id: String): Event? = cachedEventsMutex.withLock { cachedEvents.get(id) }
@@ -321,6 +325,9 @@ internal class EventIngestCache(
 
     suspend fun engagementSnapshot(): Map<String, EngagementCounts> =
         cachedEventsMutex.withLock { cachedEngagementIndex.snapshot() }
+
+    suspend fun engagementFor(ids: Collection<String>): Map<String, EngagementCounts> =
+        cachedEventsMutex.withLock { cachedEngagementIndex.countsFor(ids) }
 
     suspend fun cacheStats(): EventCacheStats =
         cachedEventsMutex.withLock { EventCacheStats(cachedEvents.size, cachedEvents.maxSize) }

@@ -483,6 +483,7 @@ fun FeedScreen(
                             replyCounts = feedState.replyCounts,
                             reactionCounts = feedState.reactionCounts,
                             repostCounts = feedState.repostCounts,
+                            zapSatsForEvent = feedState.zapSats,
                             repostedByPubkeyForEvent = feedState.repostedByPubkeys,
                             repostedAtForEvent = feedState.repostedAtByEvent,
                             repostEventForEvent = feedState.repostEventByEvent,

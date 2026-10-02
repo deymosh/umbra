@@ -216,6 +216,14 @@ data class Event(
             getRootEventId()
         }
 
+    /** Every note this event replies to under NIP-10 (root and parent), never a `mention`. */
+    fun replyTargetIds(): List<String> =
+        tags.asSequence()
+            .filter { it.isNotEmpty() && it[0] == "e" && resolveETagMarker(it) != "mention" }
+            .mapNotNull { it.getOrNull(1)?.takeIf(String::isNotBlank) }
+            .distinct()
+            .toList()
+
     fun getParentEventId(): String? {
         val eTags = tags.filter { it.isNotEmpty() && it[0] == "e" }
         val explicitReply = eTags.lastOrNull { resolveETagMarker(it) == "reply" }?.getOrNull(1)

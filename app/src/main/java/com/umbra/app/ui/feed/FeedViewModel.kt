@@ -88,6 +88,7 @@ data class FeedState(
     val replyCounts: ImmutableMapSnapshot<String, Int> = ImmutableMapSnapshot(),
     val reactionCounts: ImmutableMapSnapshot<String, Int> = ImmutableMapSnapshot(),
     val repostCounts: ImmutableMapSnapshot<String, Int> = ImmutableMapSnapshot(),
+    val zapSats: ImmutableMapSnapshot<String, Long> = ImmutableMapSnapshot(),
     /** Event id -> reposter pubkey, for notes that arrived via a NIP-18 repost (see EventCard's repost banner). */
     val repostedByPubkeys: ImmutableMapSnapshot<String, String> = ImmutableMapSnapshot(),
     /** Event id -> the repost event's own created_at, for the repost banner's relative-time label. */

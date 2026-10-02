@@ -404,6 +404,7 @@ fun ProfileScreen(
                         replyCounts = state.replyCounts,
                         reactionCounts = state.reactionCounts,
                         repostCounts = state.repostCounts,
+                        zapSatsForEvent = state.zapSats,
                         repostedByPubkeyForEvent = state.repostedByPubkeys,
                         repostedAtForEvent = state.repostedAtByEvent,
                         repostEventForEvent = state.repostEventByEvent,

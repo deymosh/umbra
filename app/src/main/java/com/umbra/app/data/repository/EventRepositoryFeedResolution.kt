@@ -1,12 +1,15 @@
 package com.umbra.app.data.repository
 
+import com.umbra.app.domain.crypto.EventCrypto
+import com.umbra.app.domain.model.EngagementCounts
+import com.umbra.app.domain.model.EngagementLink
 import com.umbra.app.domain.model.NOTE_VIEW_FEED_ORDER
 import com.umbra.app.domain.model.NoteView
 import com.umbra.app.domain.model.PendingRepost
+import com.umbra.app.domain.model.engagementLinksOf
+import com.umbra.app.domain.model.toCounts
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip18.extractRepostTarget
-import com.umbra.app.domain.nip18.isRepostKind
-import com.umbra.app.domain.nip25.isDislikeReactionContent
 
 internal fun mergeHybridEvents(
     cachedEvents: List<Event>,
@@ -110,47 +113,6 @@ internal fun resolveFeedEvents(selected: List<Event>, eventsById: (String) -> Ev
     return FeedEventResolution(byTargetId.values.toList(), unresolvedReposts)
 }
 
-internal fun buildCachedNoteViews(
-    allEvents: List<Event>,
-    profilesByPubkey: Map<String, com.umbra.app.domain.profile.UserProfile>,
-    selectedNotes: List<Event>
-): List<NoteView> {
-    val eventsById = allEvents.associateBy { it.id }
-    val resolved = resolveFeedEvents(selectedNotes) { eventsById[it] }.resolved
-    val selectedIds = resolved.mapTo(HashSet(resolved.size)) { it.targetEvent.id }
-    val engagement = HashMap<String, IntArray>()
-    val seenLinks = HashSet<Triple<String, String, Int>>()
-    allEvents.forEach { event ->
-        if (event.kind != Event.KIND_TEXT_NOTE &&
-            !isRepostKind(event.kind) &&
-            event.kind != Event.KIND_REACTION
-        ) return@forEach
-        event.getTagValues("e").forEach { targetId ->
-            if (targetId !in selectedIds || !seenLinks.add(Triple(event.id, targetId, event.kind))) return@forEach
-            val counts = engagement.getOrPut(targetId) { IntArray(3) }
-            when {
-                event.kind == Event.KIND_REACTION -> if (!isDislikeReactionContent(event.content)) counts[0] += 1
-                event.kind == Event.KIND_TEXT_NOTE -> counts[1] += 1
-                isRepostKind(event.kind) -> counts[2] += 1
-            }
-        }
-    }
-    return resolved.map { r ->
-        val counts = engagement[r.targetEvent.id]
-        NoteView(
-            event = r.targetEvent,
-            authorProfile = profilesByPubkey[r.targetEvent.pubkey.lowercase()],
-            reactionCount = counts?.get(0) ?: 0,
-            replyCount = counts?.get(1) ?: 0,
-            repostCount = counts?.get(2) ?: 0,
-            repostedByPubkey = r.repostedByPubkey,
-            repostedByProfile = r.repostedByPubkey?.let { profilesByPubkey[it.lowercase()] },
-            repostedAt = r.repostedAt,
-            repostEvent = r.repostEvent
-        )
-    }
-}
-
 /**
  * Merges the self-profile's SQL-JOIN-computed text notes ([ownNoteViews] — accurate engagement,
  * full Room scope) with its separately-resolved repost [NoteView]s ([repostNoteViews] — engagement
@@ -185,47 +147,31 @@ internal fun mergeOwnNotesAndReposts(
         .take(limit)
 }
 
-internal data class EngagementCounts(
-    val reactions: Int = 0,
-    val replies: Int = 0,
-    val reposts: Int = 0
-)
 
+/**
+ * Live per-target engagement over a changing set of events, using the one shared rule
+ * ([engagementLinksOf]). Links are computed by the caller (zap validation verifies a signature,
+ * so ingestion does it outside any lock) and remembered per event, so [remove] undoes exactly
+ * what [add] did.
+ */
 internal class EventEngagementIndex {
-    private data class Link(val targetId: String, val kind: Int)
+    private val countsByTarget = HashMap<String, EngagementCounts>()
+    private val linksByEvent = HashMap<String, List<EngagementLink>>()
 
-    private val countsByTarget = HashMap<String, IntArray>()
-    private val linksByEvent = HashMap<String, List<Link>>()
-
-    fun add(event: Event) {
-        remove(event.id)
-        if (event.kind != Event.KIND_TEXT_NOTE &&
-            !isRepostKind(event.kind) &&
-            event.kind != Event.KIND_REACTION
-        ) return
-        // A dislike gets no link at all, so remove() stays symmetric without remembering why.
-        if (event.kind == Event.KIND_REACTION && isDislikeReactionContent(event.content)) return
-
-        val links = event.getTagValues("e")
-            .asSequence()
-            .filter { it.isNotBlank() }
-            .distinct()
-            .map { Link(it, event.kind) }
-            .toList()
+    fun add(eventId: String, links: List<EngagementLink>) {
+        remove(eventId)
         if (links.isEmpty()) return
-
-        linksByEvent[event.id] = links
+        linksByEvent[eventId] = links
         links.forEach { link ->
-            val counts = countsByTarget.getOrPut(link.targetId) { IntArray(3) }
-            counts.increment(link.kind)
+            countsByTarget[link.targetId] = (countsByTarget[link.targetId] ?: EngagementCounts()) + link.toCounts()
         }
     }
 
     fun remove(eventId: String) {
         linksByEvent.remove(eventId)?.forEach { link ->
             val counts = countsByTarget[link.targetId] ?: return@forEach
-            counts.decrement(link.kind)
-            if (counts.all { it == 0 }) countsByTarget.remove(link.targetId)
+            val reduced = counts - link.toCounts()
+            if (reduced.isEmpty) countsByTarget.remove(link.targetId) else countsByTarget[link.targetId] = reduced
         }
     }
 
@@ -234,43 +180,29 @@ internal class EventEngagementIndex {
         linksByEvent.clear()
     }
 
-    fun snapshot(): Map<String, EngagementCounts> = countsByTarget.mapValues { (_, counts) ->
-        EngagementCounts(
-            reactions = counts[0],
-            replies = counts[1],
-            reposts = counts[2]
-        )
-    }
+    fun snapshot(): Map<String, EngagementCounts> = HashMap(countsByTarget)
 
-    private fun IntArray.increment(kind: Int) {
-        when {
-            kind == Event.KIND_REACTION -> this[0] += 1
-            kind == Event.KIND_TEXT_NOTE -> this[1] += 1
-            isRepostKind(kind) -> this[2] += 1
-        }
-    }
-
-    private fun IntArray.decrement(kind: Int) {
-        when {
-            kind == Event.KIND_REACTION -> this[0] = (this[0] - 1).coerceAtLeast(0)
-            kind == Event.KIND_TEXT_NOTE -> this[1] = (this[1] - 1).coerceAtLeast(0)
-            isRepostKind(kind) -> this[2] = (this[2] - 1).coerceAtLeast(0)
-        }
-    }
+    fun countsFor(ids: Collection<String>): Map<String, EngagementCounts> =
+        ids.mapNotNull { id -> countsByTarget[id.lowercase()]?.let { id to it } }.toMap()
 }
+
+/** The engagement links of [event] under the shared rule, with Umbra's own signature verifier. */
+internal fun engagementLinksOf(event: Event): List<EngagementLink> =
+    engagementLinksOf(event, EventCrypto::verifySignature)
 
 internal fun buildIndexedNoteViews(
     resolved: List<ResolvedFeedEvent>,
     profilesByPubkey: Map<String, com.umbra.app.domain.profile.UserProfile>,
     engagement: Map<String, EngagementCounts>
 ): List<NoteView> = resolved.map { r ->
-    val counts = engagement[r.targetEvent.id]
+    val counts = engagement[r.targetEvent.id.lowercase()]
     NoteView(
         event = r.targetEvent,
         authorProfile = profilesByPubkey[r.targetEvent.pubkey.lowercase()],
         reactionCount = counts?.reactions ?: 0,
         replyCount = counts?.replies ?: 0,
         repostCount = counts?.reposts ?: 0,
+        zapSats = counts?.zapSats ?: 0,
         repostedByPubkey = r.repostedByPubkey,
         repostedByProfile = r.repostedByPubkey?.let { profilesByPubkey[it.lowercase()] },
         repostedAt = r.repostedAt,
@@ -287,7 +219,7 @@ internal fun buildIndexedNoteViews(
 internal fun buildAdditionalEngagementSnapshot(events: Collection<Event>): Map<String, EngagementCounts> {
     if (events.isEmpty()) return emptyMap()
     val index = EventEngagementIndex()
-    events.forEach(index::add)
+    events.forEach { index.add(it.id, engagementLinksOf(it)) }
     return index.snapshot()
 }
 
@@ -298,12 +230,7 @@ internal fun mergeEngagementCounts(
     if (additionalSnapshot.isEmpty()) return cachedCounts
     val merged = cachedCounts.toMutableMap()
     additionalSnapshot.forEach { (targetId, additional) ->
-        val cached = merged[targetId] ?: EngagementCounts()
-        merged[targetId] = EngagementCounts(
-            reactions = cached.reactions + additional.reactions,
-            replies = cached.replies + additional.replies,
-            reposts = cached.reposts + additional.reposts
-        )
+        merged[targetId] = (merged[targetId] ?: EngagementCounts()) + additional
     }
     return merged
 }

@@ -50,8 +50,11 @@ fun ReactionBar(
     // Null hides the chip entirely — quoting is currently scoped to kind-1 text notes only, see
     // EventCard's onQuote wiring.
     onQuote: (() -> Unit)? = null,
-    // Null hides the chip: shown only when the author has a Lightning address to zap.
+    // Null when the author has no Lightning address to zap; the chip still shows when the note
+    // already received zaps, so their total is visible either way.
     onZap: (() -> Unit)? = null,
+    // Sum of validated zap receipts for this note, in sats.
+    zapSats: Long = 0,
     isReposted: Boolean = false,
     eventKindLabel: String? = null
 ) {
@@ -67,31 +70,32 @@ fun ReactionBar(
         ActionChip(
             icon = Icons.Outlined.ChatBubbleOutline,
             contentDescription = stringResource(R.string.event_reply),
-            count = replyCount,
+            count = replyCount.toLong(),
             tint = idle,
             onClick = onReply
         )
         ActionChip(
             icon = if (isReposted) Icons.Filled.RepeatFilled else Icons.Outlined.RepeatOutlined,
             contentDescription = stringResource(R.string.event_repost_cd),
-            count = repostCount,
+            count = repostCount.toLong(),
             tint = if (isReposted) UmbraTheme.colors.repost else writeIdle,
             onClick = onRepost
         )
         ActionChip(
             icon = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
             contentDescription = stringResource(R.string.event_like_cd),
-            count = reactionCount,
+            count = reactionCount.toLong(),
             tint = if (isLiked) UmbraTheme.colors.like else writeIdle,
             onClick = onLike
         )
-        onZap?.let { zapAction ->
+        if (onZap != null || zapSats > 0) {
             ActionChip(
                 icon = Icons.Outlined.Bolt,
                 contentDescription = stringResource(R.string.zap_cd),
-                tint = UmbraTheme.colors.zap.copy(alpha = if (canSign) 1f else 0.6f),
-                showCount = false,
-                onClick = zapAction
+                tint = UmbraTheme.colors.zap.copy(alpha = if (canSign && onZap != null) 1f else 0.6f),
+                count = zapSats,
+                enabled = onZap != null,
+                onClick = onZap ?: {}
             )
         }
         onQuote?.let { quoteAction ->
@@ -127,8 +131,9 @@ private fun ActionChip(
     icon: ImageVector,
     contentDescription: String,
     tint: Color,
-    count: Int = 0,
+    count: Long = 0,
     showCount: Boolean = true,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     Row(
@@ -136,7 +141,7 @@ private fun ActionChip(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier
             .clip(CircleShape)
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .defaultMinSize(minHeight = 36.dp, minWidth = 40.dp)
             .padding(horizontal = 8.dp)
     ) {
@@ -162,13 +167,15 @@ private fun ActionChip(
     }
 }
 
-internal fun formatCount(count: Int): String = when {
+internal fun formatCount(count: Int): String = formatCount(count.toLong())
+
+internal fun formatCount(count: Long): String = when {
     count >= 1_000_000 -> formatScaled(count, 1_000_000, "M")
     count >= 1_000 -> formatScaled(count, 1_000, "k")
     else -> count.toString()
 }
 
-private fun formatScaled(count: Int, unit: Int, suffix: String): String {
+private fun formatScaled(count: Long, unit: Long, suffix: String): String {
     val whole = count / unit
     val tenth = (count % unit) / (unit / 10)
     return if (whole < 10 && tenth > 0) "$whole.$tenth$suffix" else "$whole$suffix"

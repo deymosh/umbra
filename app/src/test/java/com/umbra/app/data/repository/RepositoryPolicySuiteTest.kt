@@ -2,6 +2,7 @@ package com.umbra.app.data.repository
 
 import com.umbra.app.data.repository.policy.OutboxProfilePolicy
 import com.umbra.app.data.repository.policy.RelayConnectionPolicy
+import com.umbra.app.domain.model.EngagementCounts
 import com.umbra.app.domain.model.NoteView
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip01.EventFilter
@@ -309,10 +310,11 @@ class RepositoryPolicySuiteTest {
         val repost = event(id = "repost", pubkey = reposter, createdAt = 20, kind = Event.KIND_REPOST, tags = listOf(listOf("e", target.id)))
         val reaction = event(id = "reaction", pubkey = "d".repeat(64), createdAt = 25, kind = Event.KIND_REACTION, tags = listOf(listOf("e", target.id)))
 
-        val result = buildCachedNoteViews(
-            allEvents = listOf(target, repost, reaction),
+        val resolved = resolveFeedEvents(listOf(repost)) { id -> if (id == target.id) target else null }.resolved
+        val result = buildIndexedNoteViews(
+            resolved = resolved,
             profilesByPubkey = emptyMap(),
-            selectedNotes = listOf(repost)
+            engagement = buildAdditionalEngagementSnapshot(listOf(repost, reaction))
         )
 
         val noteView = result.single()
@@ -400,10 +402,11 @@ class RepositoryPolicySuiteTest {
             tags = listOf(listOf("e", note.id), listOf("e", note.id))
         )
 
-        val result = buildCachedNoteViews(
-            allEvents = listOf(note, reaction),
+        val resolved = resolveFeedEvents(listOf(note)) { null }.resolved
+        val result = buildIndexedNoteViews(
+            resolved = resolved,
             profilesByPubkey = emptyMap(),
-            selectedNotes = listOf(note)
+            engagement = buildAdditionalEngagementSnapshot(listOf(reaction))
         )
 
         assertEquals(1, result.single().reactionCount)
@@ -423,7 +426,7 @@ class RepositoryPolicySuiteTest {
         )
         val index = EventEngagementIndex()
 
-        index.add(reaction)
+        index.add(reaction.id, engagementLinksOf(reaction))
 
         assertEquals(EngagementCounts(reactions = 1), index.snapshot()[targetId])
     }
@@ -438,7 +441,7 @@ class RepositoryPolicySuiteTest {
             tags = listOf(listOf("e", targetId))
         )
         val index = EventEngagementIndex()
-        index.add(reply)
+        index.add(reply.id, engagementLinksOf(reply))
 
         index.remove(reply.id)
 

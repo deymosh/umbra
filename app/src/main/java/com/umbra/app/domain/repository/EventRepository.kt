@@ -4,6 +4,7 @@ import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip01.EventFilter
 import com.umbra.app.domain.feed.FeedFilter
 import com.umbra.app.domain.nip45.RelayCountResult
+import com.umbra.app.domain.model.EngagementCounts
 import com.umbra.app.domain.model.EventCacheStats
 import com.umbra.app.domain.model.FeedNotesResult
 import com.umbra.app.domain.model.NoteView
@@ -190,6 +191,13 @@ interface EventRepository {
      * or has since been evicted. Transport provenance only, not a Nostr protocol property.
      */
     suspend fun getEventRelays(eventId: String): Set<String>
+
+    /**
+     * Reactions, replies, reposts and zapped sats known for each of [targetIds], counted with the
+     * same rule ([com.umbra.app.domain.model.engagementLinksOf]) the feed uses. Ids with nothing
+     * known are absent. The default is empty so test doubles needn't implement it.
+     */
+    suspend fun getEngagementCounts(targetIds: Collection<String>): Map<String, EngagementCounts> = emptyMap()
 
     /**
      * Like [getEventById], but falls back to a one-shot relay lookup (a short-lived REQ for

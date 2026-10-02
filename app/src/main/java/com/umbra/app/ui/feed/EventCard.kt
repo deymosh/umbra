@@ -252,6 +252,7 @@ fun EventCard(
     replyCount: Int = 0,
     reactionCount: Int = 0,
     repostCount: Int = 0,
+    zapSats: Long = 0,
     // Non-null when this note arrived via a NIP-18 repost — drives the "reposted by" banner and
     // avatar badge above NoteHeader. event/userProfile above stay the ORIGINAL note/author either
     // way (see NoteView's doc comment); this is purely additive chrome.
@@ -832,6 +833,7 @@ fun EventCard(
                     onRepost = repostAction,
                     onQuote = quoteAction,
                     onZap = zapAction,
+                    zapSats = zapSats,
                     onShare = shareAction,
                     // Pull the first chip's touch padding back so its icon lines up with the text.
                     modifier = Modifier
