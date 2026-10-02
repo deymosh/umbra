@@ -73,6 +73,10 @@ class EventLruCache(
         return event
     }
 
+    /** [get] without counting toward the hit/miss telemetry, for bookkeeping lookups that are
+     * not a reader asking for content. */
+    fun peek(id: String): Event? = map[id]
+
     fun put(event: Event) {
         map[event.id] = event
     }

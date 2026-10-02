@@ -12,6 +12,7 @@ import com.umbra.app.domain.relay.Relay
 import com.umbra.app.domain.relay.RelayIssue
 import com.umbra.app.domain.relay.RelayRequestInfo
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 /**
  * Repository for managing Nostr events
@@ -198,6 +199,12 @@ interface EventRepository {
      * known are absent. The default is empty so test doubles needn't implement it.
      */
     suspend fun getEngagementCounts(targetIds: Collection<String>): Map<String, EngagementCounts> = emptyMap()
+
+    /**
+     * Fires when [getEngagementCounts] would answer differently although no event arrived — a
+     * zap recipient's receipt signer was just verified, so their zaps start counting.
+     */
+    fun observeEngagementChanges(): Flow<Unit> = emptyFlow()
 
     /**
      * Like [getEventById], but falls back to a one-shot relay lookup (a short-lived REQ for

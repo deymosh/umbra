@@ -9,6 +9,8 @@ import com.umbra.app.domain.feed.FeedFilter
 import com.umbra.app.domain.model.EngagementCounts
 import com.umbra.app.domain.model.EngagementLink
 import com.umbra.app.domain.model.EventCacheStats
+import com.umbra.app.domain.model.zapCountsToward
+import com.umbra.app.domain.model.zapRecipientsOf
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip01.ReplaceableEventKey
 import com.umbra.app.domain.nip01.replaceableKey
@@ -152,7 +154,9 @@ internal class EventIngestCache(
     private val isPendingEventLookupId: (String) -> Boolean,
     private val isRequestedBySubscription: (Event) -> Boolean,
     private val isPinnedProfileAuthor: (String) -> Boolean,
-    private val isWiping: () -> Boolean
+    private val isWiping: () -> Boolean,
+    private val zapSignerOf: (String) -> ZapReceiptSignerDirectory.Lookup = { ZapReceiptSignerDirectory.Lookup.Unknown },
+    private val requestZapSigners: (Set<String>) -> Unit = {}
 ) {
     private companion object {
         private const val TAG = "EventIngestCache"
@@ -325,11 +329,48 @@ internal class EventIngestCache(
 
     suspend fun snapshot(): List<Event> = cachedEventsMutex.withLock { cachedEvents.snapshot() }
 
-    suspend fun engagementSnapshot(): Map<String, EngagementCounts> =
-        cachedEventsMutex.withLock { cachedEngagementIndex.snapshot() }
+    /** Engagement for [ids], zaps included only once [zapCountsToward] accepts them. A zap whose
+     * recipient's receipt signer isn't known yet starts that lookup; [engagementChanges] fires
+     * when one lands so callers can read again. */
+    suspend fun engagementFor(ids: Collection<String>): Map<String, EngagementCounts> {
+        val unknownRecipients = HashSet<String>()
+        val counts = cachedEventsMutex.withLock {
+            cachedEngagementIndex.countsFor(ids, zapTrustLocked(unknownRecipients))
+        }
+        if (unknownRecipients.isNotEmpty()) requestZapSigners(unknownRecipients)
+        return counts
+    }
 
-    suspend fun engagementFor(ids: Collection<String>): Map<String, EngagementCounts> =
-        cachedEventsMutex.withLock { cachedEngagementIndex.countsFor(ids) }
+    /** Must be used while holding [cachedEventsMutex]: it reads [cachedEvents]. */
+    private fun zapTrustLocked(unknownRecipients: MutableSet<String>) = ZapTrust { targetId, link ->
+        val recipient = link.zapRecipient ?: return@ZapTrust false
+        val target = cachedEvents.peek(targetId)
+        // Skip the network lookup for a zap that could never count toward this note anyway.
+        val payable = if (target == null) isCurrentUserPubkey(recipient) else recipient in zapRecipientsOf(target)
+        if (!payable) return@ZapTrust false
+        when (val lookup = zapSignerOf(recipient)) {
+            is ZapReceiptSignerDirectory.Lookup.Known ->
+                zapCountsToward(link, target, lookup.signer, isCurrentUserPubkey)
+            ZapReceiptSignerDirectory.Lookup.Unknown -> {
+                unknownRecipients += recipient
+                false
+            }
+        }
+    }
+
+    private val _engagementChanges = MutableSharedFlow<Unit>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+
+    /** Fires when counts change without any event arriving — a zap recipient's receipt signer was
+     * just learned. Collectors re-read engagement; [cachedEventsFlow] is re-emitted too. */
+    val engagementChanges: SharedFlow<Unit> = _engagementChanges.asSharedFlow()
+
+    fun signalEngagementChanged() {
+        _engagementChanges.tryEmit(Unit)
+        scheduleSnapshotEmit()
+    }
 
     suspend fun cacheStats(): EventCacheStats =
         cachedEventsMutex.withLock { EventCacheStats(cachedEvents.size, cachedEvents.maxSize) }

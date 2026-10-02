@@ -3,6 +3,7 @@ package com.umbra.app.data.repository
 import com.umbra.app.domain.crypto.EventCrypto
 import com.umbra.app.domain.model.EngagementCounts
 import com.umbra.app.domain.model.EngagementLink
+import com.umbra.app.domain.model.EngagementType
 import com.umbra.app.domain.model.NOTE_VIEW_FEED_ORDER
 import com.umbra.app.domain.model.NoteView
 import com.umbra.app.domain.model.PendingRepost
@@ -153,9 +154,14 @@ internal fun mergeOwnNotesAndReposts(
  * ([engagementLinksOf]). Links are computed by the caller (zap validation verifies a signature,
  * so ingestion does it outside any lock) and remembered per event, so [remove] undoes exactly
  * what [add] did.
+ *
+ * Zaps are kept as links rather than folded into a total: whether a zap counts depends on its
+ * recipient's LNURL key, which is learned later (see [zapCountsToward]), so each read sums only
+ * the zaps the given [ZapTrust] accepts, and none without one.
  */
 internal class EventEngagementIndex {
     private val countsByTarget = HashMap<String, EngagementCounts>()
+    private val zapsByTarget = HashMap<String, HashMap<String, EngagementLink>>()
     private val linksByEvent = HashMap<String, List<EngagementLink>>()
 
     fun add(eventId: String, links: List<EngagementLink>) {
@@ -163,12 +169,22 @@ internal class EventEngagementIndex {
         if (links.isEmpty()) return
         linksByEvent[eventId] = links
         links.forEach { link ->
-            countsByTarget[link.targetId] = (countsByTarget[link.targetId] ?: EngagementCounts()) + link.toCounts()
+            if (link.type == EngagementType.ZAP) {
+                zapsByTarget.getOrPut(link.targetId) { HashMap() }[eventId] = link
+            } else {
+                countsByTarget[link.targetId] = (countsByTarget[link.targetId] ?: EngagementCounts()) + link.toCounts()
+            }
         }
     }
 
     fun remove(eventId: String) {
         linksByEvent.remove(eventId)?.forEach { link ->
+            if (link.type == EngagementType.ZAP) {
+                val zaps = zapsByTarget[link.targetId] ?: return@forEach
+                zaps.remove(eventId)
+                if (zaps.isEmpty()) zapsByTarget.remove(link.targetId)
+                return@forEach
+            }
             val counts = countsByTarget[link.targetId] ?: return@forEach
             val reduced = counts - link.toCounts()
             if (reduced.isEmpty) countsByTarget.remove(link.targetId) else countsByTarget[link.targetId] = reduced
@@ -177,13 +193,40 @@ internal class EventEngagementIndex {
 
     fun clear() {
         countsByTarget.clear()
+        zapsByTarget.clear()
         linksByEvent.clear()
     }
 
-    fun snapshot(): Map<String, EngagementCounts> = HashMap(countsByTarget)
+    fun snapshot(zapTrust: ZapTrust? = null): Map<String, EngagementCounts> {
+        val out = HashMap(countsByTarget)
+        if (zapTrust != null) {
+            zapsByTarget.keys.forEach { target ->
+                val sats = trustedZapSats(target, zapTrust)
+                if (sats > 0) out[target] = (out[target] ?: EngagementCounts()) + EngagementCounts(zapSats = sats)
+            }
+        }
+        return out
+    }
 
-    fun countsFor(ids: Collection<String>): Map<String, EngagementCounts> =
-        ids.mapNotNull { id -> countsByTarget[id.lowercase()]?.let { id to it } }.toMap()
+    fun countsFor(ids: Collection<String>, zapTrust: ZapTrust? = null): Map<String, EngagementCounts> =
+        ids.mapNotNull { id ->
+            val key = id.lowercase()
+            val sats = if (zapTrust == null) 0 else trustedZapSats(key, zapTrust)
+            val counts = countsByTarget[key]
+            when {
+                sats > 0 -> id to (counts ?: EngagementCounts()) + EngagementCounts(zapSats = sats)
+                counts != null -> id to counts
+                else -> null
+            }
+        }.toMap()
+
+    private fun trustedZapSats(target: String, zapTrust: ZapTrust): Long =
+        zapsByTarget[target]?.values?.sumOf { link -> if (zapTrust.accepts(target, link)) link.sats else 0L } ?: 0L
+}
+
+/** Decides, per read, whether one zap link's sats count toward its target. */
+internal fun interface ZapTrust {
+    fun accepts(targetId: String, link: EngagementLink): Boolean
 }
 
 /** The engagement links of [event] under the shared rule, with Umbra's own signature verifier. */

@@ -2,6 +2,7 @@ package com.umbra.app.domain.model
 
 import com.umbra.app.domain.nip01.Event
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -80,5 +81,47 @@ class EngagementTest {
 
         assertEquals(EngagementCounts(reactions = 1, zapSats = 121), counts["a"])
         assertEquals(EngagementCounts(replies = 1), counts["b"])
+    }
+
+    private val author = "a".repeat(64)
+    private val wallet = "w".repeat(64)
+    private val note = event(Event.KIND_TEXT_NOTE, emptyList())
+    private fun zap(recipient: String = author, signer: String = wallet) =
+        EngagementLink(note.id, EngagementType.ZAP, sats = 21, zapRecipient = recipient, zapSigner = signer)
+    private val nobodySignedIn: (String) -> Boolean = { false }
+
+    @Test
+    fun `given a zap to the author signed by their wallet key when checking then it counts`() {
+        assertTrue(zapCountsToward(zap(), note, recipientSigner = wallet, isSignedInUser = nobodySignedIn))
+    }
+
+    @Test
+    fun `given a zap signed by any other key when checking then it does not count`() {
+        assertFalse(zapCountsToward(zap(signer = "f".repeat(64)), note, recipientSigner = wallet, isSignedInUser = nobodySignedIn))
+    }
+
+    @Test
+    fun `given the recipient's wallet key is not known yet when checking then it does not count`() {
+        assertFalse(zapCountsToward(zap(), note, recipientSigner = null, isSignedInUser = nobodySignedIn))
+    }
+
+    @Test
+    fun `given a forger naming themselves as recipient with their own wallet when checking then it does not count`() {
+        val forger = "b".repeat(64)
+        assertFalse(zapCountsToward(zap(recipient = forger), note, recipientSigner = wallet, isSignedInUser = nobodySignedIn))
+    }
+
+    @Test
+    fun `given a recipient named in the note's zap split when checking then it counts`() {
+        val splitRecipient = "c".repeat(64)
+        val splitNote = event(Event.KIND_TEXT_NOTE, listOf(listOf("zap", splitRecipient, "wss://relay.example", "1")))
+
+        assertTrue(zapCountsToward(zap(recipient = splitRecipient), splitNote, recipientSigner = wallet, isSignedInUser = nobodySignedIn))
+    }
+
+    @Test
+    fun `given the note is not known when checking then only a zap to the signed-in user counts`() {
+        assertTrue(zapCountsToward(zap(), target = null, recipientSigner = wallet, isSignedInUser = { it == author }))
+        assertFalse(zapCountsToward(zap(), target = null, recipientSigner = wallet, isSignedInUser = nobodySignedIn))
     }
 }

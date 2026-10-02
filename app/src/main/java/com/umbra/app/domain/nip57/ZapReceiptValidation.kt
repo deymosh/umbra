@@ -18,12 +18,17 @@ sealed interface ZapReceiptValidation {
      * [senderPubkey] is the zap REQUEST's author — the payer — never the receipt's own pubkey
      * (that is the recipient's wallet server). [amountMsat] comes from the invoice itself,
      * already cross-checked against the request's `amount` tag when that tag exists.
+     * [recipientPubkey] is the request's `p` (who was paid) and [receiptSigner] the receipt's own
+     * pubkey, kept so a caller that later learns the recipient's LNURL `nostrPubkey` can apply
+     * the receipt-signer rule then.
      */
     data class Valid(
         val senderPubkey: String,
         val amountMsat: Long,
         val targetEventId: String?,
-        val comment: String?
+        val comment: String?,
+        val recipientPubkey: String? = null,
+        val receiptSigner: String = ""
     ) : ZapReceiptValidation
 
     enum class Reason {
@@ -145,7 +150,9 @@ fun validateZapReceipt(
         senderPubkey = sender,
         amountMsat = invoice.amountMsat,
         targetEventId = eventTargetId(requestEvent),
-        comment = requestEvent.content.takeIf { it.isNotBlank() }
+        comment = requestEvent.content.takeIf { it.isNotBlank() },
+        recipientPubkey = pTarget,
+        receiptSigner = receipt.pubkey.lowercase()
     )
 }
 

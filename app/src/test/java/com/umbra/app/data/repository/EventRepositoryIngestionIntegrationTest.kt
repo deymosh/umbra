@@ -375,7 +375,17 @@ class EventRepositoryIngestionIntegrationTest {
             userPreferences = userPreferences,
             userRepository = userRepository,
             backfillAnchorStore = backfillAnchorClearer,
-            syncPreferences = FakeSyncPreferences()
+            syncPreferences = FakeSyncPreferences(),
+            lightningRepository = object : com.umbra.app.domain.repository.LightningRepository {
+                override suspend fun resolvePayInfo(addressOrLnurl: String) =
+                    Result.failure<com.umbra.app.domain.nip57.LnurlPayInfo>(IllegalStateException("offline"))
+                override suspend fun requestInvoice(
+                    payInfo: com.umbra.app.domain.nip57.LnurlPayInfo,
+                    amountMsat: Long,
+                    signedZapRequestJson: String?,
+                    comment: String?
+                ) = Result.failure<String>(IllegalStateException("offline"))
+            }
         )
         return Harness(repository, nostrClient, eventDao, eventTagDao, userRepository, userPreferences, backfillAnchorClearer)
     }

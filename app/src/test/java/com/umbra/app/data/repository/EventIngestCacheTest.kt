@@ -281,7 +281,7 @@ class EventIngestCacheTest {
         val secondReaction = reactionEvent(id = "r2", targetId = "target-2")
 
         cache.ingest(firstReaction, relayA, currentUserPubkey = null)
-        assertEquals(1, cache.engagementSnapshot()[target]?.reactions)
+        assertEquals(1, cache.engagementFor(listOf(target))[target]?.reactions)
 
         // maxInMemoryEvents = 1: ingesting a second, unrelated event evicts the first
         // synchronously via EventLruCache's onEvicted callback.
@@ -290,7 +290,7 @@ class EventIngestCacheTest {
         // No advanceUntilIdle()/extra dispatch between ingest() returning and this assertion --
         // the eviction bookkeeping must already be visible synchronously, not on a later dispatch,
         // or this assertion would still see the (by-then-stale) engagement entry.
-        assertNull(cache.engagementSnapshot()[target])
+        assertNull(cache.engagementFor(listOf(target))[target])
         assertNull(cache.getCached(firstReaction.id))
     }
 
@@ -431,7 +431,7 @@ class EventIngestCacheTest {
         advanceUntilIdle()
 
         assertEquals(0, cache.snapshot().size)
-        assertTrue(cache.engagementSnapshot().isEmpty())
+        assertTrue(cache.engagementFor(listOf("target-1")).isEmpty())
         assertEquals(1, snapshots.size)
         assertEquals(emptyList<Event>(), snapshots.single())
 

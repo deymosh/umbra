@@ -11,8 +11,18 @@ import com.umbra.app.domain.nip57.validateZapReceipt
 /** How one event engages with a note it points at. */
 enum class EngagementType { REACTION, REPLY, REPOST, ZAP }
 
-/** One event's contribution to one target note: a count of one, plus the sats for a zap. */
-data class EngagementLink(val targetId: String, val type: EngagementType, val sats: Long = 0)
+/**
+ * One event's contribution to one target note: a count of one, plus the sats for a zap. A zap
+ * also carries who it paid ([zapRecipient]) and who signed its receipt ([zapSigner]), because
+ * whether its sats count depends on facts learned later — see [zapCountsToward].
+ */
+data class EngagementLink(
+    val targetId: String,
+    val type: EngagementType,
+    val sats: Long = 0,
+    val zapRecipient: String? = null,
+    val zapSigner: String? = null
+)
 
 /** Everything known to engage with one note. */
 @Immutable
@@ -47,9 +57,10 @@ data class EngagementCounts(
  * - a reply counts toward every note it replies to — its NIP-10 root and parent, never a
  *   `mention` — and a NIP-22 comment likewise toward its parent `e` and root `E`;
  * - a repost counts toward the note it reposts;
- * - a zap receipt counts its sats toward the note it paid for, and only when it validates
- *   (NIP-57 Appendix F, see [validateZapReceipt]) — an unvalidated receipt's amount is just a tag
- *   anyone can write. [verifySignature] is the BIP-340 verifier the validation needs.
+ * - a zap receipt links its sats to the note it paid for when it validates (NIP-57 Appendix F,
+ *   see [validateZapReceipt]) — an unvalidated receipt's amount is just a tag anyone can write.
+ *   Those sats are only counted once [zapCountsToward] also accepts the link.
+ * [verifySignature] is the BIP-340 verifier the validation needs.
  */
 fun engagementLinksOf(event: Event, verifySignature: (Event) -> Boolean): List<EngagementLink> = when {
     event.kind == Event.KIND_REACTION -> {
@@ -81,13 +92,57 @@ fun engagementLinksOf(event: Event, verifySignature: (Event) -> Boolean): List<E
         if (zap == null || target == null) {
             emptyList()
         } else {
-            listOf(EngagementLink(target, EngagementType.ZAP, sats = zap.amountMsat / 1_000))
+            listOf(
+                EngagementLink(
+                    targetId = target,
+                    type = EngagementType.ZAP,
+                    sats = zap.amountMsat / 1_000,
+                    zapRecipient = zap.recipientPubkey,
+                    zapSigner = zap.receiptSigner
+                )
+            )
         }
     }
     else -> emptyList()
 }
 
-/** Folds [links] into per-target counts. */
+/**
+ * Whether a validated zap [link] may add its sats to [target]'s total.
+ *
+ * A valid receipt still proves nothing about payment on its own: anyone can sign a zap request,
+ * write a receipt around it with an unpaid invoice, and sign that too. Two more rules close it:
+ * - the receipt must be signed by the recipient's LNURL-pay `nostrPubkey` (Appendix F's MUST),
+ *   which only the recipient's wallet server holds. [recipientSigner] is that key once it has
+ *   been looked up; until then (null) the zap does not count, and a recipient whose endpoint
+ *   publishes no key never counts;
+ * - the recipient must be someone the note pays: its author, or a NIP-57 Appendix G `zap` split
+ *   recipient. Otherwise a forger could name themselves as recipient, run their own LNURL server,
+ *   and inflate anyone's note. When [target] is not known, only a zap paying the signed-in user
+ *   counts, since the only uncached notes whose totals are shown are the user's own.
+ */
+fun zapCountsToward(
+    link: EngagementLink,
+    target: Event?,
+    recipientSigner: String?,
+    isSignedInUser: (String) -> Boolean
+): Boolean {
+    val recipient = link.zapRecipient ?: return false
+    val signer = link.zapSigner ?: return false
+    if (recipientSigner == null || !recipientSigner.equals(signer, ignoreCase = true)) return false
+    return if (target == null) isSignedInUser(recipient) else recipient in zapRecipientsOf(target)
+}
+
+/** Who a zap on [event] may pay: its author plus any `zap` split recipients (Appendix G). */
+fun zapRecipientsOf(event: Event): Set<String> =
+    buildSet {
+        add(event.pubkey.lowercase())
+        event.tags.forEach { tag -> if (tag.size >= 2 && tag[0] == "zap") add(tag[1].lowercase()) }
+    }
+
+/**
+ * Folds [links] into per-target counts. Zap sats are summed as given, so this is only for links
+ * already accepted by [zapCountsToward], or for event sets that hold no zap receipts.
+ */
 fun Iterable<EngagementLink>.toEngagementCounts(): Map<String, EngagementCounts> {
     val out = HashMap<String, EngagementCounts>()
     forEach { link -> out[link.targetId] = (out[link.targetId] ?: EngagementCounts()) + link.toCounts() }

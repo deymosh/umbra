@@ -49,6 +49,7 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -288,8 +289,10 @@ class ThreadViewModel @Inject constructor(
                 // Forces periodic re-processing so a reply hidden by isFromFuture() (see
                 // processThreadGraph below) reappears once its timestamp passes, not only when
                 // Room happens to emit for an unrelated reason.
-                futureEventRecheckTicker()
-            ) { roomEvents, seedEvents, _, _ ->
+                futureEventRecheckTicker(),
+                // Counts can change with no new event (a zap's receipt signer just verified).
+                eventRepository.observeEngagementChanges().onStart { emit(Unit) }
+            ) { roomEvents, seedEvents, _, _, _ ->
                 (seedEvents + roomEvents).distinctBy { it.id }
             }
                 .conflate()

@@ -46,6 +46,7 @@ import com.umbra.app.domain.model.NostrChannels
 import com.umbra.app.domain.preferences.SyncPreferences
 import com.umbra.app.domain.preferences.UserPreferences
 import com.umbra.app.domain.repository.EventRepository
+import com.umbra.app.domain.repository.LightningRepository
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.nip17.DmRelayList
 import com.umbra.app.domain.nip18.extractRepostTarget
@@ -84,6 +85,7 @@ private sealed interface FeedCacheUpdate {
     data class ExternalBundle(val events: Set<Event>) : FeedCacheUpdate
     data class OwnSnapshot(val events: List<Event>) : FeedCacheUpdate
     data object Rebuild : FeedCacheUpdate
+    data object EngagementChanged : FeedCacheUpdate
 }
 
 /**
@@ -104,7 +106,8 @@ class EventRepositoryImpl @Inject constructor(
     // SecurePreferences instance and cannot be constructed in a plain JVM unit test. See
     // BackfillAnchorClearer's doc comment.
     private val backfillAnchorStore: BackfillAnchorClearer,
-    private val syncPreferences: SyncPreferences
+    private val syncPreferences: SyncPreferences,
+    private val lightningRepository: LightningRepository
 ) : EventRepository {
 
     companion object {
@@ -293,7 +296,7 @@ class EventRepositoryImpl @Inject constructor(
     // comment). Declared before init{} (unlike its two lazy siblings further down this file)
     // because init{} calls into it synchronously — a `by lazy` property may not be referenced
     // from init{} before its own textual declaration point.
-    private val eventIngestCache by lazy {
+    private val eventIngestCache: EventIngestCache by lazy {
         EventIngestCache(
             repoScope = repoScope,
             maxInMemoryEvents = MAX_IN_MEMORY_EVENT_CACHE,
@@ -304,7 +307,17 @@ class EventRepositoryImpl @Inject constructor(
             isPendingEventLookupId = { it in pendingEventLookupIds },
             isRequestedBySubscription = ::isRequestedByActiveSubscription,
             isPinnedProfileAuthor = { pinnedProfileAuthors.contains(it) },
-            isWiping = { isWiping.get() }
+            isWiping = { isWiping.get() },
+            zapSignerOf = { zapReceiptSigners.signerFor(it) },
+            requestZapSigners = { zapReceiptSigners.request(it) }
+        )
+    }
+    private val zapReceiptSigners: ZapReceiptSignerDirectory by lazy {
+        ZapReceiptSignerDirectory(
+            scope = repoScope,
+            userRepository = userRepository,
+            lightningRepository = lightningRepository,
+            onResolved = { eventIngestCache.signalEngagementChanged() }
         )
     }
     private val _relayRequestsFlow = MutableStateFlow<List<RelayRequestInfo>>(emptyList())
@@ -571,6 +584,7 @@ class EventRepositoryImpl @Inject constructor(
 
             // Clear in-memory caches
             eventIngestCache.clearAll()
+            zapReceiptSigners.clear()
             seenEventIds.clear()
             clearEventTagsCache()
             logger.d { "All databases cleared" }
@@ -1533,6 +1547,8 @@ class EventRepositoryImpl @Inject constructor(
             }
         }
 
+    override fun observeEngagementChanges(): Flow<Unit> = eventIngestCache.engagementChanges
+
     override suspend fun getEngagementCounts(targetIds: Collection<String>): Map<String, EngagementCounts> {
         if (targetIds.isEmpty()) return emptyMap()
         val others = eventIngestCache.engagementFor(targetIds)
@@ -1645,6 +1661,7 @@ class EventRepositoryImpl @Inject constructor(
 
     override suspend fun clearCache(): Unit = withContext(Dispatchers.IO) {
         eventIngestCache.clearAll()
+        zapReceiptSigners.clear()
         seenEventIds.clear()
         eventIngestCache.signalFeedRebuild()
         logger.d { "Cache cleared" }
@@ -2309,7 +2326,7 @@ class EventRepositoryImpl @Inject constructor(
             val neededPubkeys = (resolved.map { it.targetEvent.pubkey } + resolved.mapNotNull { it.repostedByPubkey }).distinct()
             val profiles = userRepository.getProfiles(neededPubkeys)
                 .associateBy { it.pubkey.lowercase() }
-            val cachedEngagement = eventIngestCache.engagementSnapshot()
+            val cachedEngagement = eventIngestCache.engagementFor(resolved.map { it.targetEvent.id })
             val engagement = mergeEngagementCounts(cachedEngagement, ownEngagementSnapshot)
             emit(
                 orderedFeedNotesResult(
@@ -2346,7 +2363,8 @@ class EventRepositoryImpl @Inject constructor(
             eventIngestCache.cachedEventBundles.map { FeedCacheUpdate.ExternalBundle(it) },
             encryptedEventDao.observeRecentEvents(minOf(limit, OWN_ARCHIVE_FEED_MERGE_LIMIT))
                 .map { entities -> FeedCacheUpdate.OwnSnapshot(entities.map { it.toDomain() }) },
-            eventIngestCache.feedRebuildSignals.map { FeedCacheUpdate.Rebuild }
+            eventIngestCache.feedRebuildSignals.map { FeedCacheUpdate.Rebuild },
+            eventIngestCache.engagementChanges.map { FeedCacheUpdate.EngagementChanged }
         ).collect { update ->
             when (update) {
                 is FeedCacheUpdate.ExternalBundle -> {
@@ -2436,6 +2454,8 @@ class EventRepositoryImpl @Inject constructor(
                         desiredTagsLower = desiredTagsLower
                     )
                 }
+                // Same notes, new counts: only the emission below is needed.
+                FeedCacheUpdate.EngagementChanged -> Unit
             }
             emitCurrentFeed()
         }
