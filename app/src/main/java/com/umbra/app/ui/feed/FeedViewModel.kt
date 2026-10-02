@@ -48,6 +48,7 @@ import com.umbra.app.domain.usecase.BuildHydrationAuthorSetUseCase
 import com.umbra.app.domain.usecase.BuildEngagementFiltersUseCase
 import com.umbra.app.ui.common.ImmutableListSnapshot
 import com.umbra.app.ui.common.ImmutableMapSnapshot
+import com.umbra.app.ui.common.nextDisplayLimit
 import com.umbra.app.ui.common.InteractionActionsCoordinator
 import com.umbra.app.ui.common.collectViewportEventIds
 import com.umbra.app.ui.common.collectViewportOldestCreatedAt
@@ -113,6 +114,9 @@ data class FeedState(
     val torStatus: String? = null,
     val interactions: ImmutableMapSnapshot<String, EventInteraction> = ImmutableMapSnapshot(),
     val isLoadingMore: Boolean = false,
+    // Oldest note in the loaded window before per-filter hiding — the anchor loadOlderFeed()
+    // pages back from.
+    val oldestLoadedAt: Long? = null,
     val lastOlderAnchor: Long? = null,
     // True once loadOlderFeed() has paged back to LOAD_OLDER_MAX_LOOKBACK_SECS with nothing
     // further found — drives a "no more notes found" row instead of retrying forever.
@@ -278,6 +282,10 @@ class FeedViewModel @Inject constructor(
         // happen instead of blocking forever.
         private const val LOAD_OLDER_DIFFERENT_ANCHOR_COOLDOWN_MS = 1_200L
         private const val LOAD_OLDER_SAME_ANCHOR_COOLDOWN_MS = 8_000L
+        // The feed's render window: its starting size (and the size it returns to at the top of
+        // the list or when the filters change) and how much each load-more grows it.
+        private const val INITIAL_DISPLAY_LIMIT = 300
+        private const val DISPLAY_PAGE_SIZE = 200
         // How far back loadOlderFeed() is willing to page before giving up and showing "no more
         // notes found" instead of retrying forever — see decideLoadOlderFeed's isExhausted.
         private const val LOAD_OLDER_MAX_LOOKBACK_SECS = 2L * 365L * 24 * 60 * 60L
@@ -332,7 +340,7 @@ class FeedViewModel @Inject constructor(
     // ── SSoT: Room is the single source of truth for events/profiles/counts ──
 
     /** Increasing this value causes notesFlow to re-subscribe and return more rows. */
-    private val _displayLimit = MutableStateFlow(300)
+    private val _displayLimit = MutableStateFlow(INITIAL_DISPLAY_LIMIT)
 
     /** Overlay state — everything that does not come from the Room join. */
     private val _uiState = MutableStateFlow(FeedState(isLoading = true))
@@ -674,6 +682,9 @@ class FeedViewModel @Inject constructor(
             ) { filters, followedPubkeys -> filters to followedPubkeys }
                 .collect { (filters, followedPubkeys) ->
                     val merged = feedStateMergeCoordinator.mergeFilters(filters)
+                    // A deep window loaded under the old filters holds rows the user never saw
+                    // under the new ones; start over from the newest page.
+                    if (merged != activeFeedFilter) resetDisplayWindow()
                     activeFeedFilter = merged
                     feedEngagementSchedulingCoordinator.resetRequestedProfileAuthors()
                     configureReqChannels(merged, followedPubkeys)
@@ -894,7 +905,7 @@ class FeedViewModel @Inject constructor(
         val state = feedState.value
         if (state.isLoading || state.isLoadingMore || state.olderNotesExhausted) return
 
-        val oldest = state.events.minOfOrNull { it.createdAt } ?: return
+        val oldest = state.oldestLoadedAt ?: state.events.minOfOrNull { it.createdAt } ?: return
         val now = System.currentTimeMillis()
         val decision = decideLoadOlderFeed(
             oldest = oldest,
@@ -916,11 +927,9 @@ class FeedViewModel @Inject constructor(
             it.copy(isLoadingMore = true, lastOlderAnchor = oldest)
         }
 
-        // Increase the render window so older rows are included in the next emission — capped
-        // well below MAX_IN_MEMORY_EVENT_CACHE (EventRepositoryImpl, currently 100k) so scrolling
-        // can grow deep into whatever's already in the in-memory pool before loadOlderEvents()
-        // needs to fall back to a fresh relay REQ.
-        _displayLimit.update { (it + 200).coerceAtMost(10000) }
+        // Grow the render window so older rows are included in the next emission; bounded (see
+        // DisplayWindowPolicy) and reset by onFeedAtTop().
+        _displayLimit.update { nextDisplayLimit(it, DISPLAY_PAGE_SIZE) }
 
         eventRepository.loadOlderEvents(CHANNEL_FEED, oldest)
         logger.d { "Loading older feed events before timestamp $oldest" }
@@ -936,6 +945,19 @@ class FeedViewModel @Inject constructor(
                     current
                 }
             }
+        }
+    }
+
+    /**
+     * The user is resting at the very top of the list: the older rows the window grew to hold
+     * are off screen, so shrink it back and stop paying for them on every re-query.
+     */
+    fun onFeedAtTop() = resetDisplayWindow()
+
+    private fun resetDisplayWindow() {
+        if (_displayLimit.value > INITIAL_DISPLAY_LIMIT) {
+            _displayLimit.value = INITIAL_DISPLAY_LIMIT
+            _uiState.update { it.copy(olderNotesExhausted = false, lastOlderAnchor = null) }
         }
     }
 

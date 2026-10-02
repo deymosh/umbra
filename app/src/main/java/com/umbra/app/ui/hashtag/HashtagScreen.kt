@@ -5,9 +5,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.Alignment
+import com.umbra.app.ui.components.LoadMoreEffect
+import com.umbra.app.ui.components.LoadingSpinner
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -77,7 +82,14 @@ fun HashtagScreen(
                 }
                 return@Column
             }
-            LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+            val listState = rememberLazyListState()
+            LoadMoreEffect(
+                listState = listState,
+                itemCount = state.notes.size,
+                enabled = !state.isLoadingMore && !state.olderExhausted,
+                onLoadMore = viewModel::loadOlder
+            )
+            LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 24.dp)) {
                 items(state.notes, key = { it.id }, contentType = { "note" }) { note ->
                     EventCard(
                         event = note,
@@ -95,6 +107,13 @@ fun HashtagScreen(
                         onEventReferenceClick = onOpenThread,
                         getEventJson = viewModel::eventJson
                     )
+                }
+                if (state.isLoadingMore) {
+                    item(key = "loading-more", contentType = "loading") {
+                        Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                            LoadingSpinner(size = 20.dp, strokeWidth = 2.dp)
+                        }
+                    }
                 }
             }
         }

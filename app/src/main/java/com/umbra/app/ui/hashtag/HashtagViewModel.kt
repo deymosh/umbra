@@ -19,6 +19,8 @@ import com.umbra.app.domain.usecase.TrackReferencedAuthorUseCase
 import com.umbra.app.ui.common.InteractionActionsCoordinator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -36,7 +38,10 @@ data class HashtagState(
     val tag: String,
     val notes: List<Event> = emptyList(),
     val profiles: Map<String, UserProfile> = emptyMap(),
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    val isLoadingMore: Boolean = false,
+    /** A page came back with nothing older than what was already shown. */
+    val olderExhausted: Boolean = false
 )
 
 /**
@@ -84,8 +89,40 @@ class HashtagViewModel @Inject constructor(
                 val authors = notes.map { it.pubkey.lowercase() }.toSet()
                 val profiles = userRepository.getProfilesByPubkey(authors)
                 authors.filterNot { it in profiles }.forEach { trackReferencedAuthor(it) }
-                _state.update { it.copy(notes = notes, profiles = profiles, isLoading = false) }
+                _state.update { current ->
+                    val anchor = requestedOlderAnchor
+                    val pageArrived = anchor != null && (notes.minOfOrNull { it.createdAt } ?: Long.MAX_VALUE) < anchor
+                    current.copy(
+                        notes = notes,
+                        profiles = profiles,
+                        isLoading = false,
+                        isLoadingMore = current.isLoadingMore && !pageArrived
+                    )
+                }
             }
+        }
+    }
+
+    private var requestedOlderAnchor: Long? = null
+    private var olderPageTimeout: Job? = null
+
+    /** Asks relays for the page of `#tag` notes just older than the oldest one shown. */
+    fun loadOlder() {
+        val current = _state.value
+        if (current.isLoading || current.isLoadingMore || current.olderExhausted) return
+        val oldest = current.notes.minOfOrNull { it.createdAt } ?: return
+        if (oldest == requestedOlderAnchor) {
+            // The previous page for this same anchor brought nothing older.
+            _state.update { it.copy(olderExhausted = true) }
+            return
+        }
+        requestedOlderAnchor = oldest
+        _state.update { it.copy(isLoadingMore = true) }
+        eventRepository.loadOlderEvents(channelId, oldest, windowSeconds = OLDER_PAGE_WINDOW_SECS, limit = FETCH_LIMIT)
+        olderPageTimeout?.cancel()
+        olderPageTimeout = viewModelScope.launch {
+            delay(OLDER_PAGE_TIMEOUT_MS)
+            _state.update { it.copy(isLoadingMore = false) }
         }
     }
 
@@ -132,5 +169,9 @@ class HashtagViewModel @Inject constructor(
 
     private companion object {
         const val FETCH_LIMIT = 200
+        // Hashtags are sparse compared to a follow feed, so each page looks back a long way.
+        const val OLDER_PAGE_WINDOW_SECS = 90L * 24 * 60 * 60
+        // A page retries once after 15 s (EventRepositoryImpl), so give it both attempts.
+        const val OLDER_PAGE_TIMEOUT_MS = 32_000L
     }
 }

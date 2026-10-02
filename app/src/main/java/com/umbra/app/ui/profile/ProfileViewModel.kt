@@ -45,6 +45,7 @@ import com.umbra.app.ui.common.collectViewportHttpPrefetchUrls
 import com.umbra.app.ui.common.collectViewportImagePrefetchUrls
 import com.umbra.app.ui.common.futureEventRecheckTicker
 import com.umbra.app.ui.common.mergeBounded
+import com.umbra.app.ui.common.nextDisplayLimit
 import com.umbra.app.ui.common.requestViewportMentionedProfiles
 import com.umbra.app.ui.common.resolveViewportQuotedEvents
 import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
@@ -384,7 +385,7 @@ class ProfileViewModel @Inject constructor(
         lastLoadMoreAtMs = now
         lastLoadOlderAnchor = oldest
         _state.update { it.copy(isLoadingMore = true) }
-        _displayLimit.update { it + PAGE_SIZE }
+        _displayLimit.update { nextDisplayLimit(it, PAGE_SIZE) }
 
         // Re-dial relay hints on every retry, not just the initial screen-load one BackfillProfileUseCase
         // already did: that first dial's Tor handshake may not have finished before its page channel's

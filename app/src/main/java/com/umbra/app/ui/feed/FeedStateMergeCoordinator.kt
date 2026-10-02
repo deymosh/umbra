@@ -103,6 +103,7 @@ private fun ComputedFeedSnapshot.stableFingerprint(): Int {
         hash = 31 * hash + pubkey.hashCode()
         hash = 31 * hash + profile.nip05VerificationState.hashCode()
     }
+    hash = 31 * hash + oldestAt.hashCode()
     return hash
 }
 
@@ -282,7 +283,10 @@ internal class FeedStateMergeCoordinator(
             // Not content-filterable against `filters` the way visibleNotes is above — there's no
             // target event yet to check isTopLevelFeedNote()/matchesFilter() against.
             pendingReposts = visiblePendingReposts,
-            oldestAt = visibleNotes.minOfOrNull { it.event.createdAt }
+            // Taken before the per-filter visibility pass: paging back must continue from the
+            // oldest note the window actually loaded, or a stretch of hidden notes at the
+            // bottom would make every page re-request the same span.
+            oldestAt = result.notes.minOfOrNull { it.event.createdAt }
         )
     }
         .conflate()
@@ -313,6 +317,7 @@ internal class FeedStateMergeCoordinator(
             pendingReposts = computed.pendingReposts.toImmutableSnapshot(),
             isLoading = shouldShowInitialLoading,
             isLoadingMore = stillLoading,
+            oldestLoadedAt = computed.oldestAt,
             lastOlderAnchor = if (!stillLoading && computed.oldestAt != null) computed.oldestAt else ui.lastOlderAnchor
         )
     }.stateIn(

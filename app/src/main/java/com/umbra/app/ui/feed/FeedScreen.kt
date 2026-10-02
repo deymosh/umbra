@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -209,7 +210,9 @@ fun FeedScreen(
     val shouldLoadMore by remember(filteredEvents, listState, feedState.isLoading, feedState.isLoadingMore) {
         derivedStateOf {
             if (feedState.isLoading || feedState.isLoadingMore) return@derivedStateOf false
-            if (filteredEvents.size < 20) return@derivedStateOf false
+            // A list shorter than the screen never scrolls, so the "near the end" check below
+            // is the only thing that can ask for more — it must not wait for a minimum size.
+            if (filteredEvents.isEmpty()) return@derivedStateOf false
             val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@derivedStateOf false
             lastVisible >= (filteredEvents.lastIndex - 4)
         }
@@ -230,6 +233,24 @@ fun FeedScreen(
 
     LaunchedEffect(shouldLoadMore) {
         if (shouldLoadMore) viewModel.loadOlderFeed()
+    }
+    // Index 0 with no offset: a fling passing through index 0 still carries an offset, so only a
+    // real rest at the top reads as "at top".
+    val isAtTop by remember {
+        derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
+    }
+    // The newest note the user has seen at the top. Notes arriving above it while they read
+    // further down don't move the list (rows are keyed), they're counted for the pill instead.
+    var newestSeenEventId by rememberSaveable { mutableStateOf<String?>(null) }
+    val newestEventId = filteredEvents.firstOrNull()?.id
+    LaunchedEffect(isAtTop, newestEventId) {
+        if (isAtTop) {
+            newestSeenEventId = newestEventId
+            viewModel.onFeedAtTop()
+        }
+    }
+    val newNotesAbove = remember(filteredEvents, newestSeenEventId) {
+        newestSeenEventId?.let { seen -> filteredEvents.indexOfFirst { it.id == seen } }?.coerceAtLeast(0) ?: 0
     }
     LaunchedEffect(viewModel) {
         viewModel.shareUrlEffect.collect { url -> shareEventUrl(context, url) }
@@ -425,7 +446,8 @@ fun FeedScreen(
                     verticalArrangement = Arrangement.Top,
                     topOverlay = {
                         ScrollToTopPill(
-                            visible = showScrollToTop,
+                            visible = showScrollToTop || newNotesAbove > 0,
+                            newNotesCount = newNotesAbove,
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
                                 .padding(top = 8.dp),
@@ -503,6 +525,7 @@ fun FeedScreen(
 private fun ScrollToTopPill(
     modifier: Modifier = Modifier,
     visible: Boolean,
+    newNotesCount: Int,
     onClick: () -> Unit
 ) {
     AnimatedVisibility(
@@ -532,7 +555,11 @@ private fun ScrollToTopPill(
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Text(
-                    text = stringResource(R.string.back_to_top),
+                    text = if (newNotesCount > 0) {
+                        pluralStringResource(R.plurals.feed_new_notes, newNotesCount, newNotesCount)
+                    } else {
+                        stringResource(R.string.back_to_top)
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )

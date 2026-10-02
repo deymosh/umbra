@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.umbra.app.ui.components.LoadMoreEffect
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -77,7 +79,8 @@ fun NotificationsScreen(
         onNavigateBack = onNavigateBack,
         onFilter = viewModel::setFilter,
         onOpenThread = onOpenThread,
-        onOpenProfile = onOpenProfile
+        onOpenProfile = onOpenProfile,
+        onLoadOlder = viewModel::loadOlder
     )
 }
 
@@ -88,8 +91,16 @@ internal fun NotificationsContent(
     onNavigateBack: () -> Unit,
     onFilter: (NotificationFilter) -> Unit,
     onOpenThread: (String) -> Unit,
-    onOpenProfile: (String) -> Unit
+    onOpenProfile: (String) -> Unit,
+    onLoadOlder: () -> Unit = {}
 ) {
+    val listState = rememberLazyListState()
+    LoadMoreEffect(
+        listState = listState,
+        itemCount = state.visible.size,
+        enabled = !state.isLoading && !state.isLoadingMore && !state.olderExhausted,
+        onLoadMore = onLoadOlder
+    )
     Scaffold(
         topBar = {
             UmbraTopAppBar(
@@ -131,7 +142,7 @@ internal fun NotificationsContent(
                     message = stringResource(R.string.notifications_empty_message),
                     modifier = Modifier.fillMaxSize()
                 )
-                else -> LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+                else -> LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 24.dp)) {
                     items(state.visible, key = { it.key }, contentType = { it.type }) { group ->
                         NotificationRow(
                             group = group,
@@ -145,6 +156,13 @@ internal fun NotificationsContent(
                             onOpenProfile = onOpenProfile
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                    if (state.isLoadingMore) {
+                        item(key = "loading-more", contentType = "loading") {
+                            Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                LoadingSpinner(size = 20.dp, strokeWidth = 2.dp)
+                            }
+                        }
                     }
                 }
             }

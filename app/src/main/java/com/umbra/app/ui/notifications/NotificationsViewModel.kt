@@ -12,8 +12,11 @@ import com.umbra.app.domain.repository.EventRepository
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.usecase.ObserveNotificationsUseCase
 import com.umbra.app.domain.usecase.TrackReferencedAuthorUseCase
+import com.umbra.app.domain.model.NostrChannels
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,7 +40,10 @@ data class NotificationsState(
     /** Rows newer than this were unseen when the screen opened. */
     val seenAt: Long = 0,
     val isLoading: Boolean = true,
-    val isAnonymous: Boolean = false
+    val isAnonymous: Boolean = false,
+    val isLoadingMore: Boolean = false,
+    /** A page came back with nothing older than what was already loaded. */
+    val olderExhausted: Boolean = false
 ) {
     val visible: List<NotificationGroup> get() = groups.filter { it.type in filter.types }
 }
@@ -81,8 +87,34 @@ class NotificationsViewModel @Inject constructor(
 
     fun setFilter(filter: NotificationFilter) = _state.update { it.copy(filter = filter) }
 
+    private var requestedOlderAnchor: Long? = null
+    private var olderPageJob: Job? = null
+
+    /** Asks the inbox relays for the page of notifications just older than the oldest loaded. */
+    fun loadOlder() {
+        val current = _state.value
+        if (current.isAnonymous || current.isLoading || current.isLoadingMore || current.olderExhausted) return
+        val pubkey = userPreferences.getPublicKey() ?: return
+        _state.update { it.copy(isLoadingMore = true) }
+        olderPageJob?.cancel()
+        olderPageJob = viewModelScope.launch {
+            val oldest = eventRepository.getOldestInboxNoteTimestamp(pubkey)
+            if (oldest == null || oldest == requestedOlderAnchor) {
+                // Nothing loaded yet to page from, or the last page for this anchor added nothing.
+                _state.update { it.copy(isLoadingMore = false, olderExhausted = oldest != null) }
+                return@launch
+            }
+            requestedOlderAnchor = oldest
+            eventRepository.loadOlderEvents(NostrChannels.INBOX_NOTES, oldest)
+            delay(OLDER_PAGE_TIMEOUT_MS)
+            _state.update { it.copy(isLoadingMore = false) }
+        }
+    }
+
     private companion object {
         const val MAX_AVATARS = 5
         const val MAX_TARGET_LOOKUPS = 60
+        // Long enough for the page's one retry (EventRepositoryImpl) to finish too.
+        const val OLDER_PAGE_TIMEOUT_MS = 32_000L
     }
 }

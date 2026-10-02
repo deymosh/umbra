@@ -1211,6 +1211,11 @@ class EventRepositoryImpl @Inject constructor(
         nostrClient.subscriptionsForChannel(channelId)
 
     override suspend fun awaitChannelEoseOrTimeout(channelId: String, timeoutMs: Long) {
+        awaitChannelEose(channelId, timeoutMs)
+    }
+
+    /** True when every relay the channel went to answered EOSE within [timeoutMs], false on timeout. */
+    private suspend fun awaitChannelEose(channelId: String, timeoutMs: Long): Boolean =
         withTimeoutOrNull(timeoutMs) {
             // subscribeChannel() debounces (CHANNEL_RESUBSCRIBE_DEBOUNCE_MS) before actually
             // applying to relays, so snapshotChannelRelaySubs may return empty immediately
@@ -1234,8 +1239,7 @@ class EventRepositoryImpl @Inject constructor(
                     remaining.isNotEmpty()
                 }
                 .collect()
-        }
-    }
+        } != null
 
     override fun getCachedEvents(): Flow<List<Event>> {
         return eventIngestCache.cachedEventsFlow
@@ -2112,7 +2116,15 @@ class EventRepositoryImpl @Inject constructor(
             historyPageJobs.compute(pageChannelId) { _, previous: Job? ->
                 previous?.cancel()
                 repoScope.launch(start = CoroutineStart.LAZY) {
-                    awaitChannelEoseOrTimeout(pageChannelId, HISTORY_PAGE_CLOSE_MS)
+                    // A relay that never answered within the window is usually a slow Tor
+                    // circuit rather than an empty history — ask once more before giving up on
+                    // the page, so a single stalled relay doesn't read as "no older notes".
+                    if (!awaitChannelEose(pageChannelId, HISTORY_PAGE_CLOSE_MS)) {
+                        logger.d { "Page channel '$pageChannelId' timed out, retrying once" }
+                        clearChannel(pageChannelId)
+                        subscribeChannel(pageChannelId, pageFilters)
+                        awaitChannelEose(pageChannelId, HISTORY_PAGE_CLOSE_MS)
+                    }
                     clearChannel(pageChannelId)
                     historyPageJobs.remove(pageChannelId, coroutineContext.job)
                     pageRequestFingerprint.remove(pageChannelId)
