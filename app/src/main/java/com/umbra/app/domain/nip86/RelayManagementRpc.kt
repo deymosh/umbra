@@ -39,7 +39,7 @@ object RelayManagementRpc {
      */
     fun decodeResponse(rawBody: String): RelayManagementResult {
         val obj = runCatching { json.parseToJsonElement(rawBody).jsonObject }
-            .getOrElse { return RelayManagementResult.Transport("unparseable NIP-86 response") }
+            .getOrElse { return RelayManagementResult.Transport(RelayManagementCause.UnparseableResponse) }
 
         return when {
             (obj["error"] as? JsonPrimitive)?.content?.isNotBlank() == true ->

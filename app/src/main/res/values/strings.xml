@@ -205,7 +205,10 @@
     <string name="relay_manage_hint">Bans, allows, kinds, IPs and relay details (NIP-86)</string>
     <string name="relay_management_title">Manage relay</string>
     <string name="relay_management_not_authorized">Only this relay\'s admins can manage it.</string>
-    <string name="relay_management_generic_error">The relay refused this request.</string>
+    <string name="relay_management_error_network">Couldn\'t reach the relay. Check your connection and try again.</string>
+    <string name="relay_management_error_http">The relay answered with an error (HTTP %1$d).</string>
+    <string name="relay_management_error_bad_response">The relay sent a response Umbra couldn\'t read.</string>
+
     <string name="relay_management_add">Add</string>
     <string name="relay_management_remove">Remove</string>
     <string name="relay_management_reason_hint">Reason (optional)</string>

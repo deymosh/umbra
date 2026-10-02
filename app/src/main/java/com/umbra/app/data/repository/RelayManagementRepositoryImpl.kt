@@ -4,6 +4,7 @@ import com.umbra.app.TorProxyConfig
 import com.umbra.app.data.network.boundedForOneShotCall
 import com.umbra.app.data.network.logNetworkFailure
 import com.umbra.app.domain.nip55.AmberSignerGateway
+import com.umbra.app.domain.nip86.RelayManagementCause
 import com.umbra.app.domain.nip86.RelayManagementMethod
 import com.umbra.app.domain.nip86.RelayManagementResult
 import com.umbra.app.domain.nip86.RelayManagementRpc
@@ -15,6 +16,8 @@ import com.umbra.app.util.logging.UmbraLog
 import java.util.Base64
 import javax.inject.Inject
 import javax.inject.Named
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -46,12 +49,18 @@ class RelayManagementRepositoryImpl @Inject constructor(
     private val httpClient: OkHttpClient =
         torClient.boundedForOneShotCall(callTimeoutSeconds = 25, readTimeoutSeconds = 20)
 
+    // Blocking OkHttp execute() plus the NIP-55 signing IPC must run off the main thread: callers
+    // are ViewModel coroutines on Dispatchers.Main, and a blocking call there throws
+    // NetworkOnMainThreadException before the request ever reaches Tor. Same IO dispatch the
+    // sibling one-shot repos get from torGuardedCall / withContext(Dispatchers.IO).
     override suspend fun call(
         relayUrl: String,
         method: RelayManagementMethod,
         params: List<String>
-    ): RelayManagementResult {
-        if (!TorProxyConfig.isReady) return RelayManagementResult.Transport("Tor not ready")
+    ): RelayManagementResult = withContext(Dispatchers.IO) {
+        if (!TorProxyConfig.isReady) {
+            return@withContext RelayManagementResult.Transport(RelayManagementCause.TorNotReady)
+        }
 
         // The URL the NIP-98 `u` tag names MUST be the exact URL posted to (NIP-86): the same
         // ws->http / wss->https rewrite the relay-info fetch already does.
@@ -69,7 +78,7 @@ class RelayManagementRepositoryImpl @Inject constructor(
             nowEpochSeconds = System.currentTimeMillis() / 1000
         )
         val signed = amberSignerGateway.signEvent(unsignedAuthEvent, userPreferences.getPublicKey())
-            ?: return RelayManagementResult.Transport("signing cancelled by user")
+            ?: return@withContext RelayManagementResult.Transport(RelayManagementCause.SigningCancelled)
 
         val authorization = Nip98HttpAuth.authorizationHeader(signed)
 
@@ -80,20 +89,20 @@ class RelayManagementRepositoryImpl @Inject constructor(
             .post(bodyBytes.toRequestBody(RPC_CONTENT_TYPE.toMediaType()))
             .build()
 
-        return runCatching {
+        runCatching {
             httpClient.newCall(request).execute().use { response ->
                 val responseBody = response.body.string()
                 when {
                     response.code == HTTP_UNAUTHORIZED || response.code == HTTP_FORBIDDEN ->
                         RelayManagementResult.NotAuthorized
                     !response.isSuccessful ->
-                        RelayManagementResult.Transport("NIP-86 HTTP ${response.code}")
+                        RelayManagementResult.Transport(RelayManagementCause.HttpError(response.code))
                     else -> RelayManagementRpc.decodeResponse(responseBody)
                 }
             }
         }.getOrElse { e ->
             logNetworkFailure(logger, "NIP-86 call failed for ${scrubUrlForLogs(httpUrl)}", e)
-            RelayManagementResult.Transport(e.message ?: "network error")
+            RelayManagementResult.Transport(RelayManagementCause.Network)
         }
     }
 }

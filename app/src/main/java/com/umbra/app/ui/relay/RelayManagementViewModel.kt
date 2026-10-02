@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.umbra.app.R
 import com.umbra.app.domain.nip19.Bech32Encoder
 import com.umbra.app.domain.nip86.RelayManagementCategory
+import com.umbra.app.domain.nip86.RelayManagementCause
 import com.umbra.app.domain.nip86.RelayManagementEntry
 import com.umbra.app.domain.nip86.RelayManagementMethod
 import com.umbra.app.domain.nip86.RelayManagementResult
@@ -78,7 +79,7 @@ class RelayManagementViewModel @Inject constructor(
             val result = runCatchingCancellable {
                 relayManagementRepository.call(relayUrl, RelayManagementMethod.SUPPORTED_METHODS, emptyList())
             }.getOrElse {
-                _state.update { it.copy(supportedTabs = emptyList(), errorMessage = UiMessage.Res(R.string.relay_management_generic_error)) }
+                _state.update { it.copy(supportedTabs = emptyList(), errorMessage = UiMessage.Res(R.string.relay_management_error_network)) }
                 return@launch
             }
             when (result) {
@@ -95,7 +96,7 @@ class RelayManagementViewModel @Inject constructor(
                 is RelayManagementResult.RelayError ->
                     _state.update { it.copy(supportedTabs = emptyList(), errorMessage = UiMessage.Literal(result.error)) }
                 is RelayManagementResult.Transport ->
-                    _state.update { it.copy(supportedTabs = emptyList(), errorMessage = UiMessage.Res(R.string.relay_management_generic_error)) }
+                    _state.update { it.copy(supportedTabs = emptyList(), errorMessage = result.toUiMessage()) }
             }
         }
     }
@@ -132,7 +133,7 @@ class RelayManagementViewModel @Inject constructor(
         viewModelScope.launch {
             val result = runCatchingCancellable {
                 relayManagementRepository.call(_state.value.relayUrl, method, emptyList())
-            }.getOrElse { RelayManagementResult.Transport(it.message ?: "failed") }
+            }.getOrElse { RelayManagementResult.Transport(RelayManagementCause.Network) }
             applyListResult(listKey, result)
         }
     }
@@ -180,7 +181,7 @@ class RelayManagementViewModel @Inject constructor(
                     loadingLists = current.loadingLists - listKey
                 )
                 is RelayManagementResult.Transport -> current.copy(
-                    errorMessage = UiMessage.Res(R.string.relay_management_generic_error),
+                    errorMessage = result.toUiMessage(),
                     loadingLists = current.loadingLists - listKey
                 )
             }
@@ -258,14 +259,14 @@ class RelayManagementViewModel @Inject constructor(
         viewModelScope.launch {
             val result = runCatchingCancellable {
                 relayManagementRepository.call(_state.value.relayUrl, method, params)
-            }.getOrElse { RelayManagementResult.Transport(it.message ?: "failed") }
+            }.getOrElse { RelayManagementResult.Transport(RelayManagementCause.Network) }
             when (result) {
                 is RelayManagementResult.NotAuthorized -> _state.update { it.copy(notAuthorized = true) }
                 is RelayManagementResult.Ok -> refresh()
                 is RelayManagementResult.RelayError ->
                     _state.update { it.copy(errorMessage = UiMessage.Literal(result.error)) }
                 is RelayManagementResult.Transport ->
-                    _state.update { it.copy(errorMessage = UiMessage.Res(R.string.relay_management_generic_error)) }
+                    _state.update { it.copy(errorMessage = result.toUiMessage()) }
             }
         }
     }
@@ -273,6 +274,18 @@ class RelayManagementViewModel @Inject constructor(
     fun clearError() {
         _state.update { it.copy(errorMessage = null) }
     }
+}
+
+/**
+ * User-facing text for a transport-level failure — never the raw exception/message from the data
+ * layer. Tor and signing reuse the app's existing wording; the rest are relay-management specific.
+ */
+private fun RelayManagementResult.Transport.toUiMessage(): UiMessage = when (cause) {
+    RelayManagementCause.TorNotReady -> UiMessage.Res(R.string.tor_waiting_orbot)
+    RelayManagementCause.SigningCancelled -> UiMessage.Res(R.string.error_amber_sign_cancelled)
+    RelayManagementCause.UnparseableResponse -> UiMessage.Res(R.string.relay_management_error_bad_response)
+    is RelayManagementCause.HttpError -> UiMessage.Res(R.string.relay_management_error_http, listOf(cause.code))
+    RelayManagementCause.Network -> UiMessage.Res(R.string.relay_management_error_network)
 }
 
 /**

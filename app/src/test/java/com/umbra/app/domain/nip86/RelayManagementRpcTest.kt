@@ -68,7 +68,10 @@ class RelayManagementRpcTest {
     @Test
     fun `given non-json body when decoded then Transport result`() {
         val result = RelayManagementRpc.decodeResponse("<html>gateway</html>")
-        assertTrue(result is RelayManagementResult.Transport)
+        assertEquals(
+            RelayManagementResult.Transport(RelayManagementCause.UnparseableResponse),
+            result
+        )
     }
 
     @Test

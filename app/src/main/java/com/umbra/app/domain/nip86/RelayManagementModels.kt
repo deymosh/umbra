@@ -28,8 +28,33 @@ sealed interface RelayManagementResult {
     /** The relay answered with a NIP-86 `error` string (unrecognized method, bad params, ...). */
     data class RelayError(val error: String) : RelayManagementResult
 
-    /** Anything that prevented a well-formed response: connection failure, bad JSON, 5xx, ... */
-    data class Transport(val message: String) : RelayManagementResult
+    /**
+     * The call never produced a well-formed relay answer. [cause] is a typed, non-localized reason
+     * — this module is pure Kotlin — so the UI layer owns the user-facing wording rather than a
+     * raw exception/message string surfacing to the user.
+     */
+    data class Transport(val cause: RelayManagementCause) : RelayManagementResult
+}
+
+/**
+ * Why a NIP-86 call didn't yield a relay answer. Typed instead of a free-form message so the UI can
+ * map each case to its own message and never show a Java exception's text.
+ */
+sealed interface RelayManagementCause {
+    /** Orbot/Tor wasn't ready, so no request was attempted. */
+    data object TorNotReady : RelayManagementCause
+
+    /** The external signer declined or was dismissed before the NIP-98 event was signed. */
+    data object SigningCancelled : RelayManagementCause
+
+    /** The relay answered, but the body wasn't a NIP-86 JSON response. */
+    data object UnparseableResponse : RelayManagementCause
+
+    /** The relay answered with a non-2xx status other than 401/403. */
+    data class HttpError(val code: Int) : RelayManagementCause
+
+    /** The request never completed: connection failure, timeout, ... */
+    data object Network : RelayManagementCause
 }
 
 /** Payload of a successful NIP-86 answer, parsed by the shape the relay actually sent. */
