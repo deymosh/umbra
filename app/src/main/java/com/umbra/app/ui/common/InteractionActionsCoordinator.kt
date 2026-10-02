@@ -79,8 +79,14 @@ class InteractionActionsCoordinator(
      * The next version of one of the user's lists as an edit of their latest published one — see
      * BuildOwnListEditUseCase for why other clients' tags and private content must survive.
      */
-    suspend fun buildListEdit(kind: Int, edit: ListEdit, fallbackValues: Set<String>, privately: Boolean = false): String =
-        buildOwnListEdit(kind, edit, fallbackValues, privately)
+    suspend fun buildListEdit(
+        kind: Int,
+        edit: ListEdit,
+        fallbackValues: Set<String>,
+        privately: Boolean = false,
+        identifier: String? = null,
+        newTitle: String? = null
+    ): String = buildOwnListEdit(kind, edit, fallbackValues, privately, identifier, newTitle)
 
     fun canSignEvents(): Boolean = userPreferences.canSignWithAmber()
 

@@ -106,6 +106,9 @@ data class Event(
         // distinct from KIND_SEARCH_RELAYS' NIP-50-search-specific use.
         const val KIND_INDEX_RELAYS = 10086
         const val KIND_INTERESTS_LIST = 10015      // NIP-51 — hashtags/interest sets the user follows
+        const val KIND_FOLLOW_SET = 30000          // NIP-51 — named groups of people
+        const val KIND_BOOKMARK_SET = 30003        // NIP-51 — named groups of bookmarks
+        const val KIND_INTEREST_SET = 30015        // NIP-51 — named groups of hashtags
         const val KIND_BLOSSOM_AUTH = 24242        // Blossom (BUD-01) — HTTP upload/list/delete authorization
         const val KIND_BLOSSOM_SERVER_LIST = 10063 // Blossom (BUD-03) — user's Blossom server list
         // Deprecated: moved to FilterDefaults to centralize defaults

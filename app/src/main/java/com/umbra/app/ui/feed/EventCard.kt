@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -136,6 +137,13 @@ private fun eventActionItems(
                     icon = if (bookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                     label = stringResource(if (bookmarked) R.string.bookmark_remove else R.string.bookmark_add),
                     onClick = { bookmarks.toggle(target) }
+                )
+            )
+            add(
+                ActionItem(
+                    icon = Icons.AutoMirrored.Filled.PlaylistAdd,
+                    label = stringResource(R.string.bookmark_add_to_list),
+                    onClick = { bookmarks.addToList(target) }
                 )
             )
         }

@@ -51,6 +51,7 @@ import com.umbra.app.ui.composer.ComposerScreen
 import com.umbra.app.ui.composer.ComposerViewModel
 import com.umbra.app.ui.zap.ZapHost
 import com.umbra.app.ui.readlater.LocalReadLater
+import com.umbra.app.ui.bookmarks.AddToListSheet
 import com.umbra.app.ui.bookmarks.BookmarkActions
 import com.umbra.app.ui.bookmarks.BookmarksScreen
 import com.umbra.app.ui.bookmarks.BookmarksViewModel
@@ -370,10 +371,24 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
     val bookmarkList by bookmarksViewModel.bookmarks.collectAsStateWithLifecycle()
     val bookmarkActions = remember(bookmarkList) {
         if (bookmarksViewModel.canBookmark) {
-            BookmarkActions(isBookmarked = bookmarksViewModel::isBookmarked, toggle = bookmarksViewModel::toggle)
+            BookmarkActions(
+                isBookmarked = bookmarksViewModel::isBookmarked,
+                toggle = bookmarksViewModel::toggle,
+                addToList = bookmarksViewModel::openPicker
+            )
         } else {
             null
         }
+    }
+    val bookmarkPickerTarget by bookmarksViewModel.pickerTarget.collectAsStateWithLifecycle()
+    bookmarkPickerTarget?.let { target ->
+        val choices by bookmarksViewModel.pickerChoices.collectAsStateWithLifecycle()
+        AddToListSheet(
+            choices = choices,
+            onToggle = { identifier -> bookmarksViewModel.toggleInSet(target, identifier) },
+            onCreate = { title -> bookmarksViewModel.createSet(title, initial = target) },
+            onDismiss = bookmarksViewModel::closePicker
+        )
     }
     // The single collector of the user's NIP-30 emoji catalog (see LocalCustomEmojiGroups): one
     // ViewModel instance feeds the composer and the reaction picker through the local.

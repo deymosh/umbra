@@ -1,6 +1,8 @@
 package com.umbra.app.ui.bookmarks
 
 import android.app.Application
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import com.umbra.app.ui.snapshot.PHONE
 import com.umbra.app.ui.snapshot.SNAPSHOT_SDK
 import com.umbra.app.ui.snapshot.SnapshotFixtures
@@ -16,6 +18,12 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [SNAPSHOT_SDK], application = Application::class, qualifiers = PHONE)
 class BookmarksSnapshotTest {
 
+    private val sets = listOf(
+        BookmarkSetChip("a", "Eclipse photos"),
+        BookmarkSetChip("b", "Relay operators worth following for setup tips"),
+        BookmarkSetChip("c", "Recipes")
+    )
+
     @Test
     fun bookmarks() = snapshot("Bookmarks") {
         BookmarksContent(
@@ -29,12 +37,14 @@ class BookmarksSnapshotTest {
                     SnapshotFixtures.shortNote.pubkey to SnapshotFixtures.bob
                 ),
                 privateState = PrivateBookmarksState.READ,
-                newBookmarksPrivate = true
+                newBookmarksPrivate = true,
+                sets = sets
             ),
             userRepository = SnapshotFixtures.userRepository,
             dataSourceFactory = SnapshotFixtures.tors,
             onNavigateBack = {}, onOpenThread = {}, onOpenProfile = {},
             onNewBookmarksPrivateChange = {}, onUnlockPrivate = {},
+            onSelectSet = {}, onCreateSet = {}, onRenameSet = { _, _ -> }, onDeleteSet = {},
             animateAvatars = false
         )
     }
@@ -47,7 +57,36 @@ class BookmarksSnapshotTest {
             dataSourceFactory = SnapshotFixtures.tors,
             onNavigateBack = {}, onOpenThread = {}, onOpenProfile = {},
             onNewBookmarksPrivateChange = {}, onUnlockPrivate = {},
+            onSelectSet = {}, onCreateSet = {}, onRenameSet = { _, _ -> }, onDeleteSet = {},
             animateAvatars = false
         )
+    }
+
+    @Test
+    fun bookmarkSetEmpty() = snapshot("Bookmarks_set_empty") {
+        BookmarksContent(
+            state = BookmarksState(sets = sets, selectedSet = "a"),
+            userRepository = SnapshotFixtures.userRepository,
+            dataSourceFactory = SnapshotFixtures.tors,
+            onNavigateBack = {}, onOpenThread = {}, onOpenProfile = {},
+            onNewBookmarksPrivateChange = {}, onUnlockPrivate = {},
+            onSelectSet = {}, onCreateSet = {}, onRenameSet = { _, _ -> }, onDeleteSet = {},
+            animateAvatars = false
+        )
+    }
+
+    @Test
+    fun addToList() = snapshot("Bookmarks_add_to_list") {
+        Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
+            AddToListContent(
+                choices = listOf(
+                    BookmarkSetChoice("a", "Eclipse photos", contains = true),
+                    BookmarkSetChoice("b", "Relay operators worth following for setup tips", contains = false),
+                    BookmarkSetChoice("c", "Recipes", contains = false)
+                ),
+                onToggle = {},
+                onNewList = {}
+            )
+        }
     }
 }

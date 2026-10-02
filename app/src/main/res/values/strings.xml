@@ -774,6 +774,21 @@
     <string name="bookmarks_private_show">Show</string>
     <string name="bookmarks_private_unreadable">Some private bookmarks can\'t be opened here. They stay on your list.</string>
     <string name="bookmarks_private_label">Private</string>
+    <string name="bookmark_add_to_list">Add to list…</string>
+    <string name="bookmark_sets_all">All bookmarks</string>
+    <string name="bookmark_sets_new">New list</string>
+    <string name="bookmark_sets_create">Create</string>
+    <string name="bookmark_sets_name_hint">List name</string>
+    <string name="bookmark_sets_rename">Rename list</string>
+    <string name="bookmark_sets_rename_confirm">Rename</string>
+    <string name="bookmark_sets_delete">Delete list</string>
+    <string name="bookmark_sets_delete_title">Delete “%1$s”?</string>
+    <string name="bookmark_sets_delete_message">Your signer asks relays to delete this list. The notes in it aren\'t touched.</string>
+    <string name="bookmark_sets_menu_cd">List options</string>
+    <string name="bookmark_sets_add_title">Add to list</string>
+    <string name="bookmark_sets_none">No lists yet. Start one to group bookmarks by topic.</string>
+    <string name="bookmark_sets_empty">This list is empty</string>
+    <string name="bookmark_sets_empty_message">Add notes and articles to it from their menu with Add to list.</string>
     <string name="profile_tab_pictures">Pictures</string>
     <string name="event_kind_picture">Picture</string>
 </resources>

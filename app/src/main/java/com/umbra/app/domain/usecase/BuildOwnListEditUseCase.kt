@@ -6,6 +6,8 @@ import com.umbra.app.domain.nip44.Nip44Gateway
 import com.umbra.app.domain.nip51.ListEdit
 import com.umbra.app.domain.nip51.applyListEdit
 import com.umbra.app.domain.nip51.encodePrivateTags
+import com.umbra.app.domain.nip51.newListSetTags
+import com.umbra.app.domain.nip51.retitledListSetTags
 import com.umbra.app.domain.preferences.UserPreferences
 import com.umbra.app.domain.repository.EventRepository
 import javax.inject.Inject
@@ -34,21 +36,33 @@ class BuildOwnListEditUseCase @Inject constructor(
     private val decryptOwnListItems: DecryptOwnListItemsUseCase,
     private val nip44Gateway: Nip44Gateway
 ) {
+    /**
+     * [identifier] picks one set (kind 30000-39999) by its `d` tag instead of the kind's single
+     * list; a set that doesn't exist yet is created, titled [newTitle]. [newTitle] on an existing
+     * set renames it.
+     */
     suspend operator fun invoke(
         kind: Int,
         edit: ListEdit,
         fallbackValues: Set<String> = emptySet(),
-        privately: Boolean = false
+        privately: Boolean = false,
+        identifier: String? = null,
+        newTitle: String? = null
     ): String {
         val owner = userPreferences.getPublicKey()?.lowercase()
-        val base = owner?.let { eventRepository.observeEventsByPubkeyAndKind(it, kind, limit = 1).first().firstOrNull() }
+        val base = owner?.let { latest(it, kind, identifier) }
         val content = base?.content.orEmpty()
         val moved = edit.remove + edit.add
         val publicEdit = if (privately) ListEdit(edit.tagName, remove = moved) else edit
         val privateEdit = if (privately) edit else ListEdit(edit.tagName, remove = moved)
 
-        // A follow list has no private items; its content is at most an old relay map.
-        val privateTags = if (kind == Event.KIND_CONTACT_LIST) null else decryptOwnListItems(content, interactive = true)
+        // A follow list has no private items (its content is at most an old relay map), and an
+        // edit that changes no items (a rename) has no reason to ask the signer anything.
+        val privateTags = if (kind == Event.KIND_CONTACT_LIST || moved.isEmpty()) {
+            null
+        } else {
+            decryptOwnListItems(content, interactive = true)
+        }
         val newContent = when {
             privateTags == null && privately -> throw IllegalStateException("Private items could not be read")
             privateTags == null -> content
@@ -61,8 +75,27 @@ class BuildOwnListEditUseCase @Inject constructor(
                 }
             }
         }
-        val tags = applyListEdit(base, publicEdit, if (privately) emptySet() else fallbackValues)
+        val edited = applyListEdit(base, publicEdit, if (privately) emptySet() else fallbackValues)
+        val tags = when {
+            identifier == null -> edited
+            base == null -> newListSetTags(identifier, newTitle ?: identifier) + edited
+            newTitle != null -> retitledListSetTags(edited, newTitle)
+            else -> edited
+        }
         return NostrEventBuilder.listEvent(kind = kind, content = newContent, tags = tags)
+    }
+
+    private suspend fun latest(owner: String, kind: Int, identifier: String?): Event? =
+        if (identifier == null) {
+            eventRepository.observeEventsByPubkeyAndKind(owner, kind, limit = 1).first().firstOrNull()
+        } else {
+            eventRepository.observeEventsByPubkeyAndKind(owner, kind, limit = MAX_SETS).first()
+                .filter { it.getTagValue("d").orEmpty() == identifier }
+                .maxByOrNull { it.createdAt }
+        }
+
+    private companion object {
+        const val MAX_SETS = 500
     }
 
     private suspend fun encrypt(tags: List<List<String>>, owner: String?): String {

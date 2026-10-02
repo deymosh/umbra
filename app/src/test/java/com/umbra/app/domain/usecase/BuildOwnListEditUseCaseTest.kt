@@ -108,6 +108,31 @@ class BuildOwnListEditUseCaseTest {
     }
 
     @Test
+    fun `given a new set when adding to it then it is created with its d tag and title`() = runTest {
+        val json = subject(null)(
+            Event.KIND_BOOKMARK_SET, ListEdit("e", add = setOf(newNote)), identifier = "trips", newTitle = "Trips"
+        )
+        val obj = JsonUtils.NostrJson.parseToJsonElement(json) as JsonObject
+        val tags = (obj["tags"] as JsonArray).map { tag -> tag.jsonArray.map { it.jsonPrimitive.content } }
+
+        assertEquals(listOf(listOf("d", "trips"), listOf("title", "Trips"), listOf("e", newNote)), tags)
+    }
+
+    @Test
+    fun `given a rename when building then the signer is never asked`() = runTest {
+        val existing = bookmarks(existingPrivate, publicNote).copy(
+            kind = Event.KIND_BOOKMARK_SET,
+            tags = listOf(listOf("d", "trips"), listOf("title", "Trips"), listOf("e", publicNote))
+        )
+
+        val built = parse(subject(existing)(Event.KIND_BOOKMARK_SET, ListEdit("e"), identifier = "trips", newTitle = "Holidays"))
+
+        assertEquals(0, nip44.interactiveDecrypts)
+        assertEquals(existing.content, built.content)
+        assertEquals(listOf(publicNote), built.publicIds)
+    }
+
+    @Test
     fun `given a follow list with an old relay map when editing then the signer is never asked`() = runTest {
         val contacts = Event(
             id = "c".repeat(64), pubkey = me, createdAt = 1, kind = Event.KIND_CONTACT_LIST,

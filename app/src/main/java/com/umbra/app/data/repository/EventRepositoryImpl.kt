@@ -133,6 +133,7 @@ class EventRepositoryImpl @Inject constructor(
         // large-but-finite cap so a pathological session can't grow the process without limit,
         // without acting as a practical constraint in ordinary use).
         private const val MAX_IN_MEMORY_EVENT_CACHE = 50000
+        private const val OWN_LIST_SETS_LIMIT = 300
         // Separate from the above: an UPPER CEILING on encryptedEventDao.observeRecentEvents(),
         // i.e. how many rows of the CURRENT USER's own archive can ever be pulled into the feed
         // merge — an unrelated tradeoff (Room query size/merge cost) from the public cache size.
@@ -784,6 +785,12 @@ class EventRepositoryImpl @Inject constructor(
                     // Some relays apply a strict global cap for the channel response.
                     // Keep this limit aligned with the full OUTBOX_PROFILE kind set.
                     limit = OutboxProfilePolicy.socialGraphLimit(profileKinds, socialGraphKinds)
+                ),
+                // NIP-51 sets: any number per kind (one per `d`), so they get their own limit.
+                EventFilter(
+                    kinds = setOf(Event.KIND_FOLLOW_SET, Event.KIND_BOOKMARK_SET, Event.KIND_INTEREST_SET),
+                    authors = setOf(pubkey),
+                    limit = OWN_LIST_SETS_LIMIT
                 )
             ))
             // outbox-notes: one subscription, two filters — notes/deletions (no `since`, relay
