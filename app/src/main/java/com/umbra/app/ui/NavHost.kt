@@ -316,7 +316,9 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
     // NIP-21: consume a pending nostr: deep link (see MainActivity) once bootstrap has landed
     // on the feed — navigating any earlier would race the Tor/login flow's own navigation.
     // Guarded so it only fires once even though currentRoute keeps changing after that.
-    var deepLinkConsumed by remember { mutableStateOf(false) }
+    // Saveable: the Activity re-reads the link from its intent when recreated (e.g. rotation),
+    // and the restored back stack already holds where it led.
+    var deepLinkConsumed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(deepLinkUri, currentRoute) {
         if (deepLinkConsumed || deepLinkUri == null) return@LaunchedEffect
         if (currentRoute != Screen.Feed.route) return@LaunchedEffect
