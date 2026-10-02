@@ -164,7 +164,6 @@ class ProfileNip05VerificationStateTest {
                 userPreferences = FakeUserPreferences(pubkey),
                 muteListRepository = muteListRepository,
                 pinListRepository = FakePinListRepository(),
-                feedRepository = FakeFeedRepository(),
                 amberSignerGateway = FakeAmberSignerGateway(),
                 publishSignedEventUseCase = PublishSignedEventUseCase(eventRepository, FakeBroadcastRepository(), NoOpUmbraLogger),
                 deleteNoteUseCase = DeleteNoteUseCase(),

@@ -6,6 +6,7 @@ import com.umbra.app.domain.feed.FeedFilter
 import com.umbra.app.domain.model.FeedNotesResult
 import com.umbra.app.domain.model.NoteView
 import com.umbra.app.domain.model.PendingRepost
+import com.umbra.app.domain.nip51.MuteList
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip01.isTimestampFromFuture
 import com.umbra.app.domain.nip19.Bech32Encoder
@@ -150,14 +151,19 @@ internal class FeedStateMergeCoordinator(
         .shareIn(scope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
     // NIP-51 published mute list (kind 10000) for the logged-in user — a global, network-synced
-    // block layer applied on top of each feed filter's local mutedPubkeys.
-    private val syncedMutedPubkeysFlow: Flow<Set<String>> = userPreferences.getPublicKeyFlow()
+    // block layer applied on top of each feed filter's local mutes: people and hashtags at the
+    // query, words and threads (MuteList.hides) at the visibility pass below.
+    private val syncedMuteListFlow: SharedFlow<MuteList?> = userPreferences.getPublicKeyFlow()
         .map { it?.takeIf { key -> key.length == 64 }?.lowercase() }
         .distinctUntilChanged()
         .flatMapLatest { ownerPubkey ->
             if (ownerPubkey == null) flowOf(null) else muteListRepository.getMuteList(ownerPubkey)
         }
-        .map { it?.mutedPubkeys.orEmpty() }
+        .distinctUntilChanged()
+        .shareIn(scope, SharingStarted.WhileSubscribed(5_000), replay = 1)
+
+    private val syncedQueryMutesFlow: Flow<Pair<Set<String>, Set<String>>> = syncedMuteListFlow
+        .map { it?.mutedPubkeys.orEmpty() to it?.mutedHashtags.orEmpty() }
         .distinctUntilChanged()
 
     // The authors the active filters limit the feed to — the follow list and/or chosen follow
@@ -178,9 +184,9 @@ internal class FeedStateMergeCoordinator(
         displayLimit,
         userPreferences.getPublicKeyFlow(),
         activeFiltersFlow,
-        syncedMutedPubkeysFlow,
+        syncedQueryMutesFlow,
         combine(feedAuthorsFlow, followedHashtagsFlow.distinctUntilChanged(), ::Pair)
-    ) { limit, currentPubkeyRaw, activeFilters, syncedMutedPubkeys, (feedAuthors, followedHashtags) ->
+    ) { limit, currentPubkeyRaw, activeFilters, (syncedMutedPubkeys, syncedMutedHashtags), (feedAuthors, followedHashtags) ->
         val currentUserPubkey = currentPubkeyRaw?.takeIf { it.length == 64 }
         val currentNpub = currentUserPubkey?.let {
             runCatching { Bech32Encoder.encodeNpub(it).lowercase() }.getOrNull()
@@ -191,7 +197,7 @@ internal class FeedStateMergeCoordinator(
             limit = limit,
             authors = if (mergedFilter.isScoped) feedAuthors else emptySet(),
             mutedPubkeys = mergedFilter.mutedPubkeys + syncedMutedPubkeys,
-            excludedHashtagsLower = mergedFilter.excludedHashtags.map { it.lowercase() }.toSet(),
+            excludedHashtagsLower = mergedFilter.excludedHashtags.mapTo(HashSet()) { it.lowercase() } + syncedMutedHashtags,
             hideNsfw = mergedFilter.hideNsfw,
             currentNpub = currentNpub,
             currentUserPubkey = currentUserPubkey,
@@ -233,8 +239,10 @@ internal class FeedStateMergeCoordinator(
     private val computedFeedWithNotes = combine(
         notesFlow,
         activeFiltersFlow,
+        syncedMuteListFlow,
+        userPreferences.getPublicKeyFlow(),
         futureEventRecheckTicker()
-    ) { result, filters, _ ->
+    ) { result, filters, muteList, currentPubkey, _ ->
         // Zero active filters means nothing to filter *against*, not "hide everything" — notes
         // itself already reflects mergeFilters' own fallback (DefaultFeedFilters.DEFAULT) at the
         // query/relay-REQ level, so this stage should show what that fallback already fetched
@@ -253,7 +261,8 @@ internal class FeedStateMergeCoordinator(
             ) &&
                 !note.event.isFromFuture() &&
                 (note.repostedAt == null || !isTimestampFromFuture(note.repostedAt)) &&
-                (filters.isEmpty() || filters.any { filter -> matchesFilter(note.event, filter) })
+                (filters.isEmpty() || filters.any { filter -> matchesFilter(note.event, filter) }) &&
+                (muteList == null || note.event.pubkey.equals(currentPubkey, ignoreCase = true) || !muteList.hides(note.event))
         }
         val visiblePendingReposts = result.pendingReposts.filterNot { isTimestampFromFuture(it.repostedAt) }
 

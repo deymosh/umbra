@@ -123,8 +123,6 @@ class ProfileObserversCoordinatorTest {
         private val muteListFlow: Flow<MuteList?> = flowOf(null)
     ) : MuteListRepository {
         override fun getMuteList(pubkey: String): Flow<MuteList?> = muteListFlow
-        override suspend fun mute(pubkey: String): Result<Unit> = throw NotImplementedError()
-        override suspend fun unmute(pubkey: String): Result<Unit> = throw NotImplementedError()
         override suspend fun getCurrentMutedPubkeys(): Set<String> = throw NotImplementedError()
         override fun clearAll(): Unit = throw NotImplementedError()
     }

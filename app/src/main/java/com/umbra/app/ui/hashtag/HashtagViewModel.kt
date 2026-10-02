@@ -89,11 +89,10 @@ class HashtagViewModel @Inject constructor(
             listOf(EventFilter(kinds = setOf(Event.KIND_TEXT_NOTE), tagFilters = mapOf("t" to setOf(tag)), limit = FETCH_LIMIT))
         )
         val me = userPreferences.getPublicKey()
-        val mutes = if (me.isNullOrBlank()) flowOf(emptySet()) else muteListRepository.getMuteList(me)
-            .map { list -> list?.mutedPubkeys.orEmpty().map(String::lowercase).toSet() }
+        val mutes = if (me.isNullOrBlank()) flowOf(null) else muteListRepository.getMuteList(me)
         viewModelScope.launch {
-            combine(eventRepository.observeEventsWithTag("t", tag, setOf(Event.KIND_TEXT_NOTE)), mutes) { notes, muted ->
-                notes.filterNot { it.pubkey.lowercase() in muted || it.isFromFuture() }
+            combine(eventRepository.observeEventsWithTag("t", tag, setOf(Event.KIND_TEXT_NOTE)), mutes) { notes, muteList ->
+                notes.filterNot { it.isFromFuture() || muteList?.hides(it) == true }
             }.collect { notes ->
                 val authors = notes.map { it.pubkey.lowercase() }.toSet()
                 val profiles = userRepository.getProfilesByPubkey(authors)

@@ -1,10 +1,12 @@
 package com.umbra.app.ui.feedconfig
 
+import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.umbra.app.ui.components.ConfirmDialog
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import com.umbra.app.ui.components.MenuItemRow
 import com.umbra.app.ui.theme.UmbraTheme
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.AnimatedVisibility
@@ -122,6 +124,18 @@ fun FeedConfigScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // The NIP-51 mute list applies under every filter, so it sits above them.
+            item(key = "mute-list", contentType = "mute_list_entry") {
+                Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
+                    MenuItemRow(
+                        icon = Icons.AutoMirrored.Outlined.VolumeOff,
+                        title = stringResource(R.string.mutes_title),
+                        subtitle = stringResource(R.string.mutes_entry_body),
+                        onClick = { navController.navigate(Screen.MuteList.route) },
+                        showDivider = false
+                    )
+                }
+            }
             if (state.activeFilters.isNotEmpty()) {
                 stickySectionHeader(R.string.active_filters)
                 items(

@@ -1,24 +1,23 @@
 package com.umbra.app.ui.common
 
-import com.umbra.app.domain.feed.FeedFilter
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip55.AmberSignerGateway
 import com.umbra.app.domain.preferences.UserPreferences
-import com.umbra.app.domain.repository.FeedRepository
 import com.umbra.app.domain.repository.MuteListRepository
 import com.umbra.app.domain.repository.PinListRepository
 import com.umbra.app.domain.usecase.BuildEventShareUrlUseCase
 import com.umbra.app.domain.usecase.BuildOwnListEditUseCase
 import com.umbra.app.domain.nip51.ListEdit
+import com.umbra.app.domain.nip51.MuteItem
 import com.umbra.app.domain.usecase.DeleteNoteUseCase
 import com.umbra.app.domain.usecase.PublishSignedEventUseCase
 import com.umbra.app.domain.usecase.RemoveDeletedNoteFromCacheUseCase
 import com.umbra.app.domain.util.JsonUtils
-import com.umbra.app.util.coroutines.runCatchingCancellable
 import com.umbra.app.util.logging.LogScrubber.scrubThrowableMessageForLogs
 import com.umbra.app.util.logging.UmbraLog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -29,7 +28,7 @@ import javax.inject.Inject
  * instance of this class (never a singleton, never Hilt-injected).
  *
  * This class deliberately centralizes ONLY the plumbing that is genuinely identical between the
- * two callers: the Amber sign-then-publish round trip, the mute/pin repository calls, and
+ * two callers: the Amber sign-then-publish round trip, mute list edits, the pin repository calls, and
  * JSON/share-URL formatting. It never calls `canSignWithAmber()` itself — the two callers show
  * different error messages (or none at all) when a write is blocked, so that guard and its
  * UI-state side effect stay on each caller's own wrapper method, one guard per call path. It also
@@ -41,7 +40,6 @@ class InteractionActionsCoordinator(
     private val userPreferences: UserPreferences,
     private val muteListRepository: MuteListRepository,
     private val pinListRepository: PinListRepository,
-    private val feedRepository: FeedRepository,
     private val amberSignerGateway: AmberSignerGateway,
     private val publishSignedEventUseCase: PublishSignedEventUseCase,
     private val deleteNoteUseCase: DeleteNoteUseCase,
@@ -60,7 +58,6 @@ class InteractionActionsCoordinator(
         private val userPreferences: UserPreferences,
         private val muteListRepository: MuteListRepository,
         private val pinListRepository: PinListRepository,
-        private val feedRepository: FeedRepository,
         private val amberSignerGateway: AmberSignerGateway,
         private val publishSignedEventUseCase: PublishSignedEventUseCase,
         private val deleteNoteUseCase: DeleteNoteUseCase,
@@ -69,7 +66,7 @@ class InteractionActionsCoordinator(
         private val buildOwnListEdit: BuildOwnListEditUseCase
     ) {
         fun create(scope: CoroutineScope) = InteractionActionsCoordinator(
-            userPreferences, muteListRepository, pinListRepository, feedRepository, amberSignerGateway,
+            userPreferences, muteListRepository, pinListRepository, amberSignerGateway,
             publishSignedEventUseCase, deleteNoteUseCase, removeDeletedNoteFromCacheUseCase,
             buildEventShareUrlUseCase, buildOwnListEdit, scope
         )
@@ -159,34 +156,30 @@ class InteractionActionsCoordinator(
         }
     }
 
-    suspend fun applyMuteChange(target: String, mute: Boolean): Result<Unit> =
-        if (mute) muteListRepository.mute(target) else muteListRepository.unmute(target)
-
     /**
-     * Mirrors a mute/unmute into the caller-resolved, currently-active [FeedFilter]'s local
-     * `mutedPubkeys`, so the Room-backed feed query reflects it immediately (offline-safe) instead
-     * of waiting on the NIP-51 mute-list publish to round-trip.
-     *
-     * [resolveActiveFilter] is caller-supplied rather than a single fixed lookup here so this
-     * coordinator never has to decide what "active" means for a given screen — that stays the
-     * caller's call. Both current callers happen to supply the same resolution today (the first
-     * entry of the live active-filters list), but the parameter still exists to let a future
-     * caller resolve differently without changing this signature.
+     * Mutes [value] (a person, hashtag, word or thread) or takes it off the user's NIP-51 mute
+     * list. New mutes go into the list's encrypted private part when the user keeps mutes private;
+     * an unmute takes the item off both parts. The list is rebuilt at sign time from the latest
+     * published version, so mutes from other clients and back-to-back edits all survive.
      */
-    suspend fun mirrorMuteIntoActiveFilter(
-        target: String,
-        mute: Boolean,
-        resolveActiveFilter: suspend () -> FeedFilter?
-    ) {
-        runCatchingCancellable {
-            val currentFilter = resolveActiveFilter() ?: return@runCatchingCancellable
-            val updated = if (mute) {
-                currentFilter.mutedPubkeys + target
-            } else {
-                currentFilter.mutedPubkeys - target
-            }
-            feedRepository.updateMutedAuthors(currentFilter.id, updated)
-        }
+    fun editMuteList(kind: MuteItem.Kind, value: String, mute: Boolean, onSigned: suspend () -> Unit = {}) {
+        val owner = userPreferences.getPublicKey()?.takeIf { it.length == 64 }?.lowercase() ?: return
+        val privately = mute && userPreferences.getPrivateMutesFlow().value
+        requestSignAndPublish(
+            buildEventJson = {
+                val publicValues = muteListRepository.getMuteList(owner).first()?.items.orEmpty()
+                    .filter { it.kind == kind && !it.isPrivate }
+                    .mapTo(HashSet()) { it.value }
+                buildListEdit(
+                    Event.KIND_MUTED_USERS,
+                    if (mute) ListEdit(kind.tagName, add = setOf(value)) else ListEdit(kind.tagName, remove = setOf(value)),
+                    fallbackValues = publicValues,
+                    privately = privately
+                )
+            },
+            currentUserHex = owner,
+            onSigned = onSigned
+        )
     }
 
     suspend fun applyPinChange(eventId: String, pin: Boolean): Result<Unit> =

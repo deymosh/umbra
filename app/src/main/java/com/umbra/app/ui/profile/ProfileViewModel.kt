@@ -4,6 +4,7 @@ package com.umbra.app.ui.profile
 
 import com.umbra.app.R
 import com.umbra.app.domain.nip51.ListEdit
+import com.umbra.app.domain.nip51.MuteItem
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -655,46 +656,14 @@ class ProfileViewModel @Inject constructor(
 
     /**
      * Mute is a global, NIP-51-published action (kind 10000) so it's synced across the owner's
-     * clients and survives switching feed filters — unlike a per-filter local exclude. We also
-     * mirror it into the currently active feed filter's local mutedPubkeys, matching
-     * requestSignAndPublish's convention of committing state only after Amber confirms the
-     * signature (via its onSigned callback).
+     * clients and survives switching feed filters — unlike a per-filter local exclude.
      */
     private fun toggleMute(targetPubkey: String, mute: Boolean) {
         if (!userPreferences.canSignWithAmber()) {
             _state.update { it.copy(errorMessage = UiMessage.Res(R.string.error_anonymous_read_only_publish)) }
             return
         }
-
-        val target = targetPubkey.lowercase()
-        viewModelScope.launch {
-            interactionActionsCoordinator.requestSignAndPublish(
-                buildEventJson = {
-                    interactionActionsCoordinator.buildListEdit(
-                        Event.KIND_MUTED_USERS,
-                        if (mute) ListEdit("p", add = setOf(target)) else ListEdit("p", remove = setOf(target)),
-                        fallbackValues = muteListRepository.getCurrentMutedPubkeys()
-                    )
-                },
-                currentUserHex = userPreferences.getPublicKey(),
-                onSigned = {
-                    interactionActionsCoordinator.mirrorMuteIntoActiveFilter(target, mute) {
-                        feedRepository.getActiveFilters().first().firstOrNull()
-                    }
-                    val result = interactionActionsCoordinator.applyMuteChange(target, mute)
-                    if (!result.isSuccess) {
-                        _state.update { state ->
-                            state.copy(
-                                errorMessage = UiMessage.ResWithArgs(
-                                    if (mute) R.string.error_mute_author else R.string.error_unmute_author,
-                                    result.exceptionOrNull()?.message ?: ""
-                                )
-                            )
-                        }
-                    }
-                }
-            )
-        }
+        interactionActionsCoordinator.editMuteList(MuteItem.Kind.PERSON, targetPubkey.lowercase(), mute)
     }
 
     /**

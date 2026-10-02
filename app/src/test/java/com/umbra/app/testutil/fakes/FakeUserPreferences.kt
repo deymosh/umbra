@@ -21,6 +21,13 @@ internal class FakeUserPreferences(
     private val flow = MutableStateFlow(initialPubkey)
     var clearAllCalls: Int = 0
     private val relayAuthMode = MutableStateFlow(initialRelayAuthMode)
+    private val privateMutes = MutableStateFlow(true)
+
+    override fun getPrivateMutesFlow(): StateFlow<Boolean> = privateMutes
+
+    override fun setPrivateMutes(private: Boolean) {
+        privateMutes.value = private
+    }
 
     override fun savePublicKey(pubkey: String) {
         flow.value = pubkey

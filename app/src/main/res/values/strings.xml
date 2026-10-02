@@ -810,6 +810,20 @@
     <string name="follow_sets_private_locked">Private members are hidden until your signer opens them.</string>
     <string name="follow_sets_private_unreadable">Some private members can\'t be opened here. They stay on the list.</string>
     <string name="profile_add_to_list">Add to list…</string>
+    <string name="mutes_title">Mute list</string>
+    <string name="mutes_entry_body">People, hashtags, words and threads you muted, hidden in every feed and on your other clients.</string>
+    <string name="mutes_private_default">Keep new mutes private</string>
+    <string name="mutes_private_default_body">Encrypted so only you can read them. Relays still see that you keep a mute list.</string>
+    <string name="mutes_private_locked">Private mutes are hidden, and don\'t apply, until your signer opens them.</string>
+    <string name="mutes_private_unreadable">Some private mutes can\'t be opened here. They stay on your list.</string>
+    <string name="mutes_people">People</string>
+    <string name="mutes_people_empty">Mute someone from their profile or a note\'s menu.</string>
+    <string name="mutes_hashtags">Hashtags</string>
+    <string name="mutes_words">Words and phrases</string>
+    <string name="mutes_words_hint">Hides notes that contain it as a whole word, in any case.</string>
+    <string name="mutes_add_word_placeholder">word or phrase</string>
+    <string name="mutes_threads">Threads</string>
+    <string name="mutes_thread_label">Thread %1$s</string>
     <string name="profile_tab_pictures">Pictures</string>
     <string name="event_kind_picture">Picture</string>
 </resources>

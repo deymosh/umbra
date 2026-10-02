@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.umbra.app.R
 import com.umbra.app.domain.nip42.ThrowawayAuthSigner
 import com.umbra.app.domain.nip51.ListEdit
+import com.umbra.app.domain.nip51.MuteItem
 import com.umbra.app.domain.nip55.AmberSignerGateway
 import com.umbra.app.domain.media.VideoCacheDataSourceProvider
 import com.umbra.app.domain.nip01.Event
@@ -148,18 +149,6 @@ data class FeedState(
 internal fun shouldShowFeedInitialLoading(uiState: FeedState, computedEvents: List<Event>): Boolean {
     return uiState.isLoading && computedEvents.isEmpty()
 }
-
-/**
- * Maps the local mute-list write's [result] to what the feed shows the user, matching
- * ProfileViewModel.toggleMute's error vocabulary exactly — muteUser only ever mutes, so
- * there is no unmute branch here.
- */
-internal fun muteWriteResultMessage(result: Result<Unit>): UiMessage =
-    if (result.isSuccess) {
-        UiMessage.Res(R.string.user_muted_success)
-    } else {
-        UiMessage.ResWithArgs(R.string.error_mute_author, result.exceptionOrNull()?.message ?: "")
-    }
 
 /**
  * Maps the local pin-list write's [result] to what the feed shows the user, branching on
@@ -827,9 +816,7 @@ class FeedViewModel @Inject constructor(
     /**
      * Mute is a global, NIP-51-published action (kind 10000) so it's synced across the owner's
      * clients and applied to the feed regardless of which filter is active (see
-     * syncedMutedPubkeysFlow). We also mirror it into the active filter's local mutedPubkeys,
-     * matching requestSignAndPublish's convention of committing state only after Amber confirms
-     * the signature (via its onSigned callback).
+     * syncedMutedPubkeysFlow).
      */
     fun muteUser(pubkey: String) {
         if (!userPreferences.canSignWithAmber()) {
@@ -841,26 +828,9 @@ class FeedViewModel @Inject constructor(
         val target = pubkey.lowercase()
         viewModelScope.launch {
             if (target in muteListRepository.getCurrentMutedPubkeys()) return@launch
-
-            interactionActionsCoordinator.requestSignAndPublish(
-                buildEventJson = {
-                    interactionActionsCoordinator.buildListEdit(
-                        Event.KIND_MUTED_USERS,
-                        ListEdit("p", add = setOf(target)),
-                        fallbackValues = muteListRepository.getCurrentMutedPubkeys()
-                    )
-                },
-                currentUserHex = userPreferences.getPublicKey(),
-                onSigned = {
-                    val result = interactionActionsCoordinator.applyMuteChange(target, mute = true)
-                    interactionActionsCoordinator.mirrorMuteIntoActiveFilter(target, mute = true) {
-                        feedRepository.getActiveFilters().first().firstOrNull()
-                    }
-                    _uiState.update {
-                        it.copy(errorMessage = muteWriteResultMessage(result), errorRelayId = null)
-                    }
-                }
-            )
+            interactionActionsCoordinator.editMuteList(MuteItem.Kind.PERSON, target, mute = true, onSigned = {
+                _uiState.update { it.copy(errorMessage = UiMessage.Res(R.string.user_muted_success), errorRelayId = null) }
+            })
         }
     }
 

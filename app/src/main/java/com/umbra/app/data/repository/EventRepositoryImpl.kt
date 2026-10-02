@@ -1995,11 +1995,27 @@ class EventRepositoryImpl @Inject constructor(
 
             val targetRelays = writeRelays + inboxRelays
             nostrClient.publishEventToRelays(event, targetRelays.toList())
+            storeOwnPublishedEvent(event)
             Result.success(targetRelays)
         } catch (e: Exception) {
             logger.e(e) { "Failed to publish event" }
             Result.failure(e)
         }
+    }
+
+    /**
+     * The signed-in user's own event goes into their archive as soon as it is sent, so a list,
+     * mute or note they just changed shows at once instead of after a relay echoes it back over
+     * Tor. Verified first like anything else that is stored; the echo, when it comes, is the same
+     * id and changes nothing.
+     */
+    private suspend fun storeOwnPublishedEvent(event: Event) {
+        if (!isCurrentUserPubkey(event.pubkey)) return
+        if (!withContext(Dispatchers.Default) { EventCrypto.verifyEvent(event) }) return
+        verifiedEventIds.add(event.id)
+        if (event.kind == Event.KIND_EVENT_DELETION) eventIngestCache.applyIncomingDeletion(event)
+        if (!eventIngestCache.shouldPersistEvent(event)) return
+        eventIngestCache.scheduleInsert(event.toEntity(), event.toTagEntities(), event.replaceableKey())
     }
 
     override suspend fun publishAuthEvent(relayUrl: String, event: Event): Result<Unit> {

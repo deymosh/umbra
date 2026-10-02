@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -32,7 +33,9 @@ fun ChipBadge(
     // A chevron implies "tap to go somewhere" (RelayTelemetryCard's subscriptions chip, the
     // collapse controls above) — wrong affordance for a chip whose tap actually deletes it (e.g.
     // an excluded-tag/hashtag chip in the feed filter editor). removable swaps in an X instead.
-    removable: Boolean = false
+    removable: Boolean = false,
+    // A small marker before the text, e.g. a lock on a private list entry.
+    leadingIcon: ImageVector? = null
 ) {
     Surface(
         modifier = modifier.then(
@@ -50,6 +53,7 @@ fun ChipBadge(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(start = 10.dp, end = 6.dp, top = 4.dp, bottom = 4.dp)
             ) {
+                ChipLeadingIcon(leadingIcon, textColor)
                 Text(
                     text = text,
                     style = MaterialTheme.typography.labelSmall,
@@ -67,12 +71,23 @@ fun ChipBadge(
                 )
             }
         } else {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelSmall,
-                color = textColor,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-            )
+            ) {
+                ChipLeadingIcon(leadingIcon, textColor)
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = textColor
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun ChipLeadingIcon(icon: ImageVector?, tint: Color) {
+    if (icon == null) return
+    Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.padding(end = 4.dp).size(12.dp))
 }

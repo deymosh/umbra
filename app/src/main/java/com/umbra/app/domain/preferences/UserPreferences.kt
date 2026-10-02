@@ -78,4 +78,9 @@ interface UserPreferences {
     fun getPrivateBookmarksFlow(): StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(true)
 
     fun setPrivateBookmarks(private: Boolean) {}
+
+    /** Whether new mutes go into the mute list's encrypted private part. On by default. */
+    fun getPrivateMutesFlow(): StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(true)
+
+    fun setPrivateMutes(private: Boolean) {}
 }

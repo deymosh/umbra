@@ -1,6 +1,7 @@
 package com.umbra.app.domain.usecase
 
 import com.umbra.app.domain.crypto.EventCrypto
+import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.notifications.NotificationGroup
 import com.umbra.app.domain.notifications.groupNotifications
 import com.umbra.app.domain.repository.EventRepository
@@ -37,11 +38,13 @@ class ObserveNotificationsUseCase @Inject constructor(
 ) {
     operator fun invoke(pubkey: String?): Flow<List<NotificationGroup>> {
         if (pubkey.isNullOrBlank()) return flowOf(emptyList())
-        val mutes = muteListRepository.getMuteList(pubkey).map { it?.mutedPubkeys.orEmpty().map(String::lowercase).toSet() }
-        return combine(eventRepository.observeInbox(pubkey), mutes, receiptSigner(pubkey)) { events, muted, signer ->
+        return combine(eventRepository.observeInbox(pubkey), muteListRepository.getMuteList(pubkey), receiptSigner(pubkey)) { events, muteList, signer ->
+            // Replies and mentions also go when they carry a muted hashtag or word or sit in a
+            // muted thread; muted people are handled per notification type by groupNotifications.
+            val shown = if (muteList == null) events else events.filterNot { it.kind in TEXT_KINDS && muteList.hides(it) }
             groupNotifications(
-                events,
-                muted,
+                shown,
+                muteList?.mutedPubkeys.orEmpty(),
                 verifyEventSignature = EventCrypto::verifySignature,
                 expectedReceiptSigner = signer
             )
@@ -64,4 +67,8 @@ class ObserveNotificationsUseCase @Inject constructor(
             // observeProfile may stay silent until the profile is cached; never hold back the inbox.
             .onStart { emit(null) }
             .distinctUntilChanged()
+
+    private companion object {
+        val TEXT_KINDS = setOf(Event.KIND_TEXT_NOTE, Event.KIND_COMMENT)
+    }
 }

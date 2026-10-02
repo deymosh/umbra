@@ -9,8 +9,6 @@ import kotlinx.coroutines.flow.flowOf
 internal class FakeMuteListRepository : MuteListRepository {
     var clearAllCalls: Int = 0
     override fun getMuteList(pubkey: String): Flow<MuteList?> = flowOf(null)
-    override suspend fun mute(pubkey: String): Result<Unit> = Result.success(Unit)
-    override suspend fun unmute(pubkey: String): Result<Unit> = Result.success(Unit)
     override suspend fun getCurrentMutedPubkeys(): Set<String> = emptySet()
     override fun clearAll() {
         clearAllCalls += 1

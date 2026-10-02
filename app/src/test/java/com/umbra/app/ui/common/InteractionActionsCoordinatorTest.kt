@@ -2,12 +2,10 @@ package com.umbra.app.ui.common
 
 import android.content.Intent
 import com.umbra.app.domain.broadcast.BroadcastEvent
-import com.umbra.app.domain.feed.FeedFilter
 import com.umbra.app.domain.logging.NoOpUmbraLogger
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip55.AmberSignerGateway
 import com.umbra.app.domain.repository.BroadcastRepository
-import com.umbra.app.domain.repository.FeedRepository
 import com.umbra.app.domain.repository.MuteListRepository
 import com.umbra.app.domain.repository.PinListRepository
 import com.umbra.app.domain.usecase.BuildEventShareUrlUseCase
@@ -15,6 +13,7 @@ import com.umbra.app.domain.usecase.BuildOwnListEditUseCase
 import com.umbra.app.domain.usecase.DeleteNoteUseCase
 import com.umbra.app.domain.usecase.PublishSignedEventUseCase
 import com.umbra.app.domain.usecase.RemoveDeletedNoteFromCacheUseCase
+import com.umbra.app.domain.nip51.MuteItem
 import com.umbra.app.domain.nip51.MuteList
 import com.umbra.app.domain.nip51.PinList
 import com.umbra.app.domain.usecase.DecryptOwnListItemsUseCase
@@ -77,7 +76,6 @@ class InteractionActionsCoordinatorTest {
         userPreferences: FakeUserPreferences = FakeUserPreferences(initialPubkey = "a".repeat(64)),
         muteListRepository: RecordingMuteListRepository = RecordingMuteListRepository(),
         pinListRepository: RecordingPinListRepository = RecordingPinListRepository(),
-        feedRepository: RecordingFeedRepository = RecordingFeedRepository(),
         amberSignerGateway: FakeAmberSignerGateway = FakeAmberSignerGateway(fakeSignedEventJson),
         broadcastRepository: RecordingBroadcastRepository = RecordingBroadcastRepository(),
         deleteNoteUseCase: DeleteNoteUseCase = DeleteNoteUseCase(),
@@ -86,7 +84,6 @@ class InteractionActionsCoordinatorTest {
         userPreferences = userPreferences,
         muteListRepository = muteListRepository,
         pinListRepository = pinListRepository,
-        feedRepository = feedRepository,
         amberSignerGateway = amberSignerGateway,
         publishSignedEventUseCase = PublishSignedEventUseCase(eventRepository, broadcastRepository, NoOpUmbraLogger),
         deleteNoteUseCase = deleteNoteUseCase,
@@ -131,17 +128,7 @@ class InteractionActionsCoordinatorTest {
     }
 
     private class RecordingMuteListRepository : MuteListRepository {
-        val muteCalls = mutableListOf<String>()
-        val unmuteCalls = mutableListOf<String>()
         override fun getMuteList(pubkey: String): Flow<MuteList?> = flowOf(null)
-        override suspend fun mute(pubkey: String): Result<Unit> {
-            muteCalls += pubkey
-            return Result.success(Unit)
-        }
-        override suspend fun unmute(pubkey: String): Result<Unit> {
-            unmuteCalls += pubkey
-            return Result.success(Unit)
-        }
         override suspend fun getCurrentMutedPubkeys(): Set<String> = emptySet()
         override fun clearAll() = Unit
     }
@@ -161,24 +148,6 @@ class InteractionActionsCoordinatorTest {
         override suspend fun isPinned(eventId: String): Boolean = false
         override suspend fun getCurrentPinnedEventIds(): Set<String> = emptySet()
         override fun clearAll() = Unit
-    }
-
-    private class RecordingFeedRepository : FeedRepository {
-        val updateMutedAuthorsCalls = mutableListOf<Pair<String, Set<String>>>()
-        override fun getAllFilters(): Flow<List<FeedFilter>> = flowOf(emptyList())
-        override fun getActiveFilters(): Flow<List<FeedFilter>> = flowOf(emptyList())
-        override suspend fun getFilterById(id: String): FeedFilter? = null
-        override suspend fun addFilter(filter: FeedFilter) = Unit
-        override suspend fun updateFilter(filter: FeedFilter) = Unit
-        override suspend fun removeFilter(id: String) = Unit
-        override suspend fun setFilterActive(id: String, active: Boolean) = Unit
-        override suspend fun addMutedAuthor(filterId: String, pubkey: String) = Unit
-        override suspend fun removeMutedAuthor(filterId: String, pubkey: String) = Unit
-        override suspend fun updateMutedAuthors(filterId: String, mutedPubkeys: Set<String>) {
-            updateMutedAuthorsCalls += filterId to mutedPubkeys
-        }
-        override suspend fun resetToDefaults() = Unit
-        override suspend fun ensureDefaultFiltersSeeded() = Unit
     }
 
     // ── Test 1/2: requestSignAndPublish ──
@@ -226,69 +195,35 @@ class InteractionActionsCoordinatorTest {
         assertEquals(0, broadcastRepository.trackPublishCalls)
     }
 
-    // ── Test 3: applyMuteChange ──
+    // ── Test 3/4: editMuteList ──
 
     @Test
-    fun `given mute is true when applyMuteChange runs then muteListRepository mute is called`() = runTest {
-        val muteListRepository = RecordingMuteListRepository()
-        val coordinator = subject(scope = this, muteListRepository = muteListRepository)
+    fun `given private mutes when muting a word then it goes into the encrypted part, never the public tags`() = runTest {
+        val gateway = FakeAmberSignerGateway(fakeSignedEventJson)
+        val coordinator = subject(scope = this, amberSignerGateway = gateway)
 
-        val result = coordinator.applyMuteChange("target1", mute = true)
+        coordinator.editMuteList(MuteItem.Kind.WORD, "giveaway", mute = true)
+        advanceUntilIdle()
+        awaitRealDispatch()
+        advanceUntilIdle()
 
-        assertTrue(result.isSuccess)
-        assertEquals(listOf("target1"), muteListRepository.muteCalls)
-        assertTrue(muteListRepository.unmuteCalls.isEmpty())
+        val json = gateway.signEventCalls.single().first
+        assertFalse(json.contains("giveaway"))
+        assertTrue(json.contains("\"kind\":${Event.KIND_MUTED_USERS}"))
     }
 
     @Test
-    fun `given mute is false when applyMuteChange runs then muteListRepository unmute is called`() = runTest {
-        val muteListRepository = RecordingMuteListRepository()
-        val coordinator = subject(scope = this, muteListRepository = muteListRepository)
+    fun `given public mutes when muting a hashtag then it is a public t tag`() = runTest {
+        val gateway = FakeAmberSignerGateway(fakeSignedEventJson)
+        val prefs = FakeUserPreferences(initialPubkey = "a".repeat(64)).apply { setPrivateMutes(false) }
+        val coordinator = subject(scope = this, userPreferences = prefs, amberSignerGateway = gateway)
 
-        val result = coordinator.applyMuteChange("target1", mute = false)
+        coordinator.editMuteList(MuteItem.Kind.HASHTAG, "spam", mute = true)
+        advanceUntilIdle()
+        awaitRealDispatch()
+        advanceUntilIdle()
 
-        assertTrue(result.isSuccess)
-        assertEquals(listOf("target1"), muteListRepository.unmuteCalls)
-        assertTrue(muteListRepository.muteCalls.isEmpty())
-    }
-
-    // ── Test 4: mirrorMuteIntoActiveFilter ──
-
-    @Test
-    fun `given mute is true when mirrorMuteIntoActiveFilter runs then the target is added to the resolved filter's mutedPubkeys`() = runTest {
-        val feedRepository = RecordingFeedRepository()
-        val coordinator = subject(scope = this, feedRepository = feedRepository)
-        val resolvedFilter = FeedFilter(id = "filter1", name = "F", mutedPubkeys = setOf("existing"))
-
-        coordinator.mirrorMuteIntoActiveFilter(target = "newTarget", mute = true) { resolvedFilter }
-
-        assertEquals(1, feedRepository.updateMutedAuthorsCalls.size)
-        val (filterId, mutedPubkeys) = feedRepository.updateMutedAuthorsCalls.single()
-        assertEquals("filter1", filterId)
-        assertEquals(setOf("existing", "newTarget"), mutedPubkeys)
-    }
-
-    @Test
-    fun `given mute is false when mirrorMuteIntoActiveFilter runs then the target is removed from the resolved filter's mutedPubkeys`() = runTest {
-        val feedRepository = RecordingFeedRepository()
-        val coordinator = subject(scope = this, feedRepository = feedRepository)
-        val resolvedFilter = FeedFilter(id = "filter1", name = "F", mutedPubkeys = setOf("existing", "toRemove"))
-
-        coordinator.mirrorMuteIntoActiveFilter(target = "toRemove", mute = false) { resolvedFilter }
-
-        val (filterId, mutedPubkeys) = feedRepository.updateMutedAuthorsCalls.single()
-        assertEquals("filter1", filterId)
-        assertEquals(setOf("existing"), mutedPubkeys)
-    }
-
-    @Test
-    fun `given resolveActiveFilter returns null when mirrorMuteIntoActiveFilter runs then updateMutedAuthors is never called`() = runTest {
-        val feedRepository = RecordingFeedRepository()
-        val coordinator = subject(scope = this, feedRepository = feedRepository)
-
-        coordinator.mirrorMuteIntoActiveFilter(target = "target1", mute = true) { null }
-
-        assertTrue(feedRepository.updateMutedAuthorsCalls.isEmpty())
+        assertTrue(gateway.signEventCalls.single().first.contains("[\"t\",\"spam\"]"))
     }
 
     // ── Test 5: applyPinChange ──

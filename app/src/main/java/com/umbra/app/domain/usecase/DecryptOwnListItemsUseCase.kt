@@ -8,6 +8,10 @@ import com.umbra.app.domain.preferences.UserPreferences
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /**
  * The private items (NIP-51) of one of the signed-in user's lists, decrypted by the external
@@ -24,6 +28,10 @@ class DecryptOwnListItemsUseCase @Inject constructor(
     private val userPreferences: UserPreferences
 ) {
     private val decrypted = ConcurrentHashMap<String, List<List<String>>>()
+    private val _unlocks = MutableStateFlow(0)
+
+    /** Bumped whenever the signer opens private items on the user's request, so readers can re-read. */
+    val unlocks: StateFlow<Int> = _unlocks.asStateFlow()
 
     suspend operator fun invoke(content: String, interactive: Boolean): List<List<String>>? {
         if (content.isBlank()) return emptyList()
@@ -38,6 +46,7 @@ class DecryptOwnListItemsUseCase @Inject constructor(
         val tags = parsePrivateTags(plaintext) ?: return null
         if (decrypted.size >= MAX_REMEMBERED) decrypted.clear()
         decrypted[content] = tags
+        if (interactive) _unlocks.update { it + 1 }
         return tags
     }
 

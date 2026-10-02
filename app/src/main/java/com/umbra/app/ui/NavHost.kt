@@ -60,6 +60,8 @@ import com.umbra.app.ui.bookmarks.LocalBookmarks
 import com.umbra.app.ui.lists.FollowSetsScreen
 import com.umbra.app.ui.lists.FollowSetsViewModel
 import com.umbra.app.ui.lists.LocalPeopleLists
+import com.umbra.app.ui.mutes.MuteListScreen
+import com.umbra.app.ui.mutes.MuteListViewModel
 import com.umbra.app.ui.emoji.EmojiPacksScreen
 import com.umbra.app.ui.emoji.EmojiPacksViewModel
 import com.umbra.app.ui.readlater.ReadLaterActions
@@ -121,6 +123,7 @@ sealed class Screen(val route: String) {
     object ReadLater     : Screen("read_later")
     object Bookmarks     : Screen("bookmarks")
     object FollowSets    : Screen("follow-sets")
+    object MuteList      : Screen("mute-list")
     object EmojiPacks    : Screen("emoji_packs")
     object Hashtag       : Screen("tag/{tag}") {
         fun forTag(tag: String) = "tag/${Uri.encode(tag.removePrefix("#").lowercase())}"
@@ -488,6 +491,14 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
                 viewModel = followSetsViewModel,
                 onNavigateBack = { navController.popBackStack() },
                 onOpenProfile = { navController.navigate(Screen.Profile.forPubkey(it)) }
+            )
+        }
+        composable(Screen.MuteList.route) {
+            MuteListScreen(
+                viewModel = hiltViewModel<MuteListViewModel>(),
+                onNavigateBack = { navController.popBackStack() },
+                onOpenProfile = { navController.navigate(Screen.Profile.forPubkey(it)) },
+                onOpenThread = { navController.navigate(Screen.Thread.forEvent(it)) }
             )
         }
         composable(Screen.EmojiPacks.route) {

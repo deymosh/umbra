@@ -1,6 +1,5 @@
 package com.umbra.app.ui.bookmarks
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,14 +11,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,9 +27,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import com.umbra.app.ui.components.ConfirmDialog
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.datasource.DataSource
@@ -44,6 +39,7 @@ import com.umbra.app.ui.components.ListNameDialog
 import com.umbra.app.ui.components.ListPrivateNotice
 import com.umbra.app.ui.components.ListSetChips
 import com.umbra.app.ui.components.ListSetMenu
+import com.umbra.app.ui.components.PrivateByDefaultRow
 import com.umbra.app.ui.components.UmbraTopAppBar
 import com.umbra.app.ui.components.UmbraTopAppBarDefaults
 import com.umbra.app.ui.feed.EventCard
@@ -160,7 +156,12 @@ internal fun BookmarksContent(
                 )
             }
             item(key = "private-default", contentType = "header") {
-                NewBookmarksPrivateRow(state.newBookmarksPrivate, onNewBookmarksPrivateChange)
+                PrivateByDefaultRow(
+                    title = stringResource(R.string.bookmarks_private_default),
+                    body = stringResource(R.string.bookmarks_private_default_body),
+                    checked = state.newBookmarksPrivate,
+                    onCheckedChange = onNewBookmarksPrivateChange
+                )
             }
             when (state.privateState) {
                 PrivateBookmarksState.LOCKED -> item(key = "private-locked", contentType = "header") {
@@ -214,31 +215,6 @@ private sealed interface SetDialog {
     data object Create : SetDialog
     data class Rename(val identifier: String, val title: String) : SetDialog
     data class Delete(val identifier: String, val title: String) : SetDialog
-}
-
-@Composable
-private fun NewBookmarksPrivateRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.large)
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(stringResource(R.string.bookmarks_private_default), style = MaterialTheme.typography.bodyLarge)
-            Text(
-                stringResource(R.string.bookmarks_private_default_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Switch(checked = checked, onCheckedChange = null)
-    }
 }
 
 @Composable

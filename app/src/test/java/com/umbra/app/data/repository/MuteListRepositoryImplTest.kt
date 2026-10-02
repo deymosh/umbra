@@ -1,7 +1,10 @@
 package com.umbra.app.data.repository
 
 import com.umbra.app.domain.nip01.Event
+import com.umbra.app.domain.nip51.encodePrivateTags
+import com.umbra.app.domain.usecase.DecryptOwnListItemsUseCase
 import com.umbra.app.testutil.fakes.FakeEventRepository
+import com.umbra.app.testutil.fakes.FakeNip44Gateway
 import com.umbra.app.testutil.fakes.FakeUserPreferences
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -12,6 +15,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MuteListRepositoryImplTest {
+
+    private val nip44 = FakeNip44Gateway()
 
     private fun muteListEvent(
         id: String,
@@ -36,7 +41,7 @@ class MuteListRepositoryImplTest {
         val repo = FakeEventRepository(recentEvents = listOf(stale, fresh))
         val prefs = FakeUserPreferences(initialPubkey = owner)
 
-        val muteListRepository = MuteListRepositoryImpl(prefs, repo)
+        val muteListRepository = MuteListRepositoryImpl(prefs, repo, DecryptOwnListItemsUseCase(nip44, prefs))
 
         val list = muteListRepository.getMuteList(owner).first { it != null }
         assertEquals(setOf("c".repeat(64), "d".repeat(64)), list?.mutedPubkeys)
@@ -62,7 +67,7 @@ class MuteListRepositoryImplTest {
         )
         val prefs = FakeUserPreferences(initialPubkey = currentUser)
 
-        val muteListRepository = MuteListRepositoryImpl(prefs, repo)
+        val muteListRepository = MuteListRepositoryImpl(prefs, repo, DecryptOwnListItemsUseCase(nip44, prefs))
 
         // .first{it != null} alone would race the second (stale) batch: it returns — and cancels
         // upstream collection — as soon as the first non-null value (fresh) appears, whether or not
@@ -78,42 +83,30 @@ class MuteListRepositoryImplTest {
     }
 
     @Test
-    fun `given no prior mutes when muting then adds pubkey to current set`() = runBlocking {
+    fun `given the user's own list when reading then hashtags, words, threads and private items all count`() = runBlocking {
         val owner = "a".repeat(64)
-        val target = "b".repeat(64)
-        val repo = FakeEventRepository(recentEvents = emptyList())
+        val privatePerson = "b".repeat(64)
+        val publicPerson = "c".repeat(64)
+        val thread = "d".repeat(64)
+        val event = Event(
+            id = "e1".padEnd(64, '0'),
+            pubkey = owner,
+            createdAt = 10L,
+            kind = Event.KIND_MUTED_USERS,
+            tags = listOf(listOf("p", publicPerson), listOf("t", "Spam"), listOf("word", "Giveaway"), listOf("e", thread)),
+            content = nip44.encode(encodePrivateTags(listOf(listOf("p", privatePerson), listOf("word", "airdrop")))),
+            sig = "s".repeat(128)
+        )
         val prefs = FakeUserPreferences(initialPubkey = owner)
-        val muteListRepository = MuteListRepositoryImpl(prefs, repo)
+        val muteListRepository = MuteListRepositoryImpl(prefs, FakeEventRepository(recentEvents = listOf(event)), DecryptOwnListItemsUseCase(nip44, prefs))
 
-        val result = muteListRepository.mute(target)
+        val list = muteListRepository.getMuteList(owner).first { it != null }!!
 
-        assertTrue(result.isSuccess)
-        assertEquals(setOf(target), muteListRepository.getCurrentMutedPubkeys())
-    }
-
-    @Test
-    fun `given muted pubkey when unmuting then removes it from current set`() = runBlocking {
-        val owner = "a".repeat(64)
-        val target = "b".repeat(64)
-        val repo = FakeEventRepository(recentEvents = emptyList())
-        val prefs = FakeUserPreferences(initialPubkey = owner)
-        val muteListRepository = MuteListRepositoryImpl(prefs, repo)
-
-        muteListRepository.mute(target)
-        val result = muteListRepository.unmute(target)
-
-        assertTrue(result.isSuccess)
-        assertEquals(emptySet<String>(), muteListRepository.getCurrentMutedPubkeys())
-    }
-
-    @Test
-    fun `given no authenticated user when muting then fails`() = runBlocking {
-        val repo = FakeEventRepository(recentEvents = emptyList())
-        val prefs = FakeUserPreferences(initialPubkey = null)
-        val muteListRepository = MuteListRepositoryImpl(prefs, repo)
-
-        val result = muteListRepository.mute("b".repeat(64))
-
-        assertTrue(result.isFailure)
+        assertEquals(setOf(privatePerson, publicPerson), list.mutedPubkeys)
+        assertEquals(setOf("spam"), list.mutedHashtags)
+        assertEquals(setOf("giveaway", "airdrop"), list.mutedWords)
+        assertEquals(setOf(thread), list.mutedThreads)
+        assertTrue(list.items.single { it.value == privatePerson }.isPrivate)
+        assertEquals(setOf(privatePerson, publicPerson), muteListRepository.getCurrentMutedPubkeys())
     }
 }
