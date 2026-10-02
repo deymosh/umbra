@@ -12,14 +12,11 @@ import com.umbra.app.domain.relay.normalizeRelayUrl
  * relay pool's job, and duplicating it across every discovered relay is exactly the kind of
  * avoidable request volume that gets a client rate-limited or blocked.
  *
- * Inbox (#p-tag "mentions me") channels DO include discovered relays, unlike outbox-sweep — by
- * strict NIP-65 gossip-model protocol, mentions of you belong on your own configured read/inbox
- * relays, not a followed author's outbox, but in practice plenty of clients aren't outbox-aware
- * and just publish a reply to whatever relays they already have open (often that author's own
- * outbox, which is exactly what a discovered relay is). The inbox filter itself stays narrow
- * (`#p == me`, server-side filtered) regardless of how many relays it's sent to, so this is a
- * coverage win against non-compliant repliers, not a broadcast-volume concern the way an
- * unscoped author-list REQ would be.
+ * Inbox (#p-tag "mentions me") channels go to the user's own inbox (read) relays only — NIP-65
+ * says that is where anyone addressing them publishes, and asking every followed author's outbox
+ * relay "what mentions me" tells each of those operators who the user is. Discovered relays get
+ * the inbox REQ only while [hasOwnInboxRelay] is false (a fresh account with no kind:10002 yet),
+ * so a new user still sees replies before publishing a relay list.
  *
  * [Relay.isReadActive]/[Relay.isWriteActive] now exclusively reflect a genuine kind:10002 (own
  * NIP-65) declaration — see UserRepositoryImpl.applyRelayListToLocalConfig's doc comment. A relay
@@ -53,7 +50,8 @@ internal fun canApplyChannelToRelay(
     isInboxChannel: Boolean,
     isOutboxChannel: Boolean,
     isFeedChannel: Boolean,
-    isOutboxSweepChannel: Boolean = false
+    isOutboxSweepChannel: Boolean = false,
+    hasOwnInboxRelay: Boolean = true
 ): Boolean = when {
     // Feed is a read operation, same as inbox — a write-only relay is one the user
     // explicitly opted out of reading from, so it shouldn't get feed REQs either. NIP-65
@@ -61,7 +59,7 @@ internal fun canApplyChannelToRelay(
     // query sent to the same read-enabled pool inbox queries go to. Unlike inbox, feed
     // still applies to discovered relays — that's their entire purpose — and to search/index-
     // active relays, for the same "still a real relay" reasoning.
-    isInboxChannel -> relay.isReadActive || relay.isDiscovered
+    isInboxChannel -> relay.isReadActive || (!hasOwnInboxRelay && relay.isDiscovered)
     isOutboxChannel -> relay.isWriteActive
     isOutboxSweepChannel -> relay.isReadActive && !relay.isDiscovered
     isFeedChannel -> relay.isReadActive || relay.isDiscovered || relay.isSearchActive || relay.isIndexActive

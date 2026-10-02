@@ -725,16 +725,32 @@ class RepositoryPolicySuiteTest {
     }
 
     @Test
-    fun `given discovered relay with read inactive when checking inbox channel then still applies`() {
-        // isReadEnabled/isReadActive now exclusively reflect a genuine kind:10002 declaration
-        // (see UserRepositoryImpl.applyRelayListToLocalConfig) — a discovered relay never carries
-        // a real one of its own, so isDiscovered alone must keep it eligible here, or the earlier
-        // "read active" coverage-win test above would regress the moment that flag correctly
-        // stops being force-true for discovered relays.
+    fun `given the user has an inbox relay when checking inbox channel on a discovered relay then it does not apply`() {
+        val discovered = relay(isReadActive = false, isWriteActive = false, isDiscovered = true)
+
+        assertFalse(
+            canApplyChannelToRelay(
+                discovered,
+                isInboxChannel = true,
+                isOutboxChannel = false,
+                isFeedChannel = false,
+                hasOwnInboxRelay = true
+            )
+        )
+    }
+
+    @Test
+    fun `given the user has no inbox relay yet when checking inbox channel on a discovered relay then it applies`() {
         val discovered = relay(isReadActive = false, isWriteActive = false, isDiscovered = true)
 
         assertTrue(
-            canApplyChannelToRelay(discovered, isInboxChannel = true, isOutboxChannel = false, isFeedChannel = false)
+            canApplyChannelToRelay(
+                discovered,
+                isInboxChannel = true,
+                isOutboxChannel = false,
+                isFeedChannel = false,
+                hasOwnInboxRelay = false
+            )
         )
     }
 

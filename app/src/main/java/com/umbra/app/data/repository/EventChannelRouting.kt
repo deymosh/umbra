@@ -98,7 +98,8 @@ internal class EventChannelRouting(
             isInboxChannel = isInboxChannel(channelId),
             isOutboxChannel = isOutboxChannel(channelId),
             isFeedChannel = isFeedChannel(channelId),
-            isOutboxSweepChannel = channelId == NostrChannels.FEED_OUTBOX_SWEEP
+            isOutboxSweepChannel = channelId == NostrChannels.FEED_OUTBOX_SWEEP,
+            hasOwnInboxRelay = connectedRelays.values.any { it.isReadActive }
         )
     }
 
