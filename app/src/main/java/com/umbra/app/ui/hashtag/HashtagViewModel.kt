@@ -112,21 +112,32 @@ class HashtagViewModel @Inject constructor(
     }
 
     private var requestedOlderAnchor: Long? = null
+    private var emptyPagesAtAnchor = 0
     private var olderPageTimeout: Job? = null
 
-    /** Asks relays for the page of `#tag` notes just older than the oldest one shown. */
+    /**
+     * Asks relays for the page of `#tag` notes just older than the oldest one shown. A page that
+     * brings nothing older (common over Tor: a slow relay, a partial answer) doesn't end paging:
+     * the next try from the same note looks twice as far back, and only after
+     * [MAX_EMPTY_PAGES] such tries is the tag taken to have nothing older.
+     */
     fun loadOlder() {
         val current = _state.value
         if (current.isLoading || current.isLoadingMore || current.olderExhausted) return
         val oldest = current.notes.minOfOrNull { it.createdAt } ?: return
         if (oldest == requestedOlderAnchor) {
-            // The previous page for this same anchor brought nothing older.
-            _state.update { it.copy(olderExhausted = true) }
-            return
+            emptyPagesAtAnchor++
+            if (emptyPagesAtAnchor >= MAX_EMPTY_PAGES) {
+                _state.update { it.copy(olderExhausted = true) }
+                return
+            }
+        } else {
+            emptyPagesAtAnchor = 0
         }
         requestedOlderAnchor = oldest
         _state.update { it.copy(isLoadingMore = true) }
-        eventRepository.loadOlderEvents(channelId, oldest, windowSeconds = OLDER_PAGE_WINDOW_SECS, limit = FETCH_LIMIT)
+        val window = OLDER_PAGE_WINDOW_SECS shl emptyPagesAtAnchor
+        eventRepository.loadOlderEvents(channelId, oldest, windowSeconds = window, limit = FETCH_LIMIT)
         olderPageTimeout?.cancel()
         olderPageTimeout = viewModelScope.launch {
             delay(OLDER_PAGE_TIMEOUT_MS)
@@ -189,6 +200,8 @@ class HashtagViewModel @Inject constructor(
         const val FETCH_LIMIT = 200
         // Hashtags are sparse compared to a follow feed, so each page looks back a long way.
         const val OLDER_PAGE_WINDOW_SECS = 90L * 24 * 60 * 60
+        // Empty tries from one note before giving up: windows of 90, 180, 360 and 720 days.
+        const val MAX_EMPTY_PAGES = 4
         // A page retries once after 15 s (EventRepositoryImpl), so give it both attempts.
         const val OLDER_PAGE_TIMEOUT_MS = 32_000L
     }
