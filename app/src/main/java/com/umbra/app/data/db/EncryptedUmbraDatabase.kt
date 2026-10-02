@@ -6,12 +6,14 @@ import androidx.room.TypeConverters
 import com.umbra.app.data.db.dao.EventDao
 import com.umbra.app.data.db.dao.EventTagDao
 import com.umbra.app.data.db.dao.FeedFilterDao
+import com.umbra.app.data.db.dao.LocalEmojiPackDao
 import com.umbra.app.data.db.dao.ReactionEmojiDao
 import com.umbra.app.data.db.dao.RelayDao
 import com.umbra.app.data.db.dao.UserProfileDao
 import com.umbra.app.data.db.entities.EventEntity
 import com.umbra.app.data.db.entities.EventTagEntity
 import com.umbra.app.data.db.entities.FeedFilterEntity
+import com.umbra.app.data.db.entities.LocalEmojiPackEntity
 import com.umbra.app.data.db.entities.ReactionEmojiEntity
 import com.umbra.app.data.db.entities.RelayEntity
 import com.umbra.app.data.db.entities.UserProfileEntity
@@ -23,7 +25,8 @@ import com.umbra.app.data.db.entities.UserProfileEntity
         EventTagEntity::class,
         RelayEntity::class,
         FeedFilterEntity::class,
-        ReactionEmojiEntity::class
+        ReactionEmojiEntity::class,
+        LocalEmojiPackEntity::class
     ],
     // Beta policy: schema changes keep version 1 and need a reinstall; no migrations yet.
     version = 1,
@@ -41,4 +44,5 @@ abstract class EncryptedUmbraDatabase : RoomDatabase() {
     abstract fun relayDao(): RelayDao
     abstract fun feedFilterDao(): FeedFilterDao
     abstract fun reactionEmojiDao(): ReactionEmojiDao
+    abstract fun localEmojiPackDao(): LocalEmojiPackDao
 }

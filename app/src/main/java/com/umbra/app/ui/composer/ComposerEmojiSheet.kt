@@ -24,48 +24,38 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.painter.ColorPainter
 import coil3.compose.AsyncImage
 import com.umbra.app.R
 import com.umbra.app.domain.nip30.CustomEmoji
 import com.umbra.app.domain.nip30.EmojiGroup
+import androidx.compose.ui.text.style.TextAlign
 import com.umbra.app.ui.components.LocalCustomEmojiGroups
 
 /**
- * Frequent Unicode emoji the composer's picker leads with. Deliberately a small, shared list —
- * the user's own NIP-30 catalog gets its own named sections below it.
- */
-private val COMMON_EMOJIS = listOf(
-    "😀", "😂", "😊", "😍", "🤔", "🙃", "😴", "😭",
-    "🤝", "👍", "👎", "👏", "🙏", "💪", "😎", "🤗",
-    "❤️", "🔥", "✨", "⭐", "🎉", "😉", "😮", "😅",
-    "🚀", "🛠️", "📌", "✅", "❌", "💡", "⚡", "🌈"
-)
-
-/**
- * Emoji picker for the composer: a searchable "Common" Unicode section plus the user's own
- * NIP-30 groups, read from [LocalCustomEmojiGroups]. Tapping inserts into the note and the
- * sheet stays open for repeated picks; dismissing is swipe or back.
+ * The composer's custom emoji picker: the user's NIP-30 emoji, one section per pack, searchable
+ * by shortcode. Ordinary emoji come from the keyboard, so they aren't repeated here. Tapping
+ * inserts the emoji (shown as its image in the editor) and the sheet stays open for more picks.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ComposerEmojiSheet(
-    onInsertUnicode: (String) -> Unit,
-    onInsertCustom: (CustomEmoji) -> Unit,
+    onInsert: (CustomEmoji) -> Unit,
+    onManagePacks: () -> Unit,
     onDismissRequest: () -> Unit
 ) {
     ModalBottomSheet(
@@ -74,8 +64,8 @@ fun ComposerEmojiSheet(
     ) {
         ComposerEmojiContent(
             groups = LocalCustomEmojiGroups.current,
-            onInsertUnicode = onInsertUnicode,
-            onInsertCustom = onInsertCustom
+            onInsert = onInsert,
+            onManagePacks = onManagePacks
         )
     }
 }
@@ -84,17 +74,47 @@ fun ComposerEmojiSheet(
 @Composable
 internal fun ComposerEmojiContent(
     groups: List<EmojiGroup>,
-    onInsertUnicode: (String) -> Unit,
-    onInsertCustom: (CustomEmoji) -> Unit
+    onInsert: (CustomEmoji) -> Unit,
+    onManagePacks: () -> Unit
 ) {
     var query by rememberSaveable { mutableStateOf("") }
 
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text(
-            text = stringResource(R.string.composer_emoji_title),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.composer_emoji_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onManagePacks) {
+                Text(stringResource(R.string.composer_emoji_manage_packs))
+            }
+        }
+
+        if (groups.none { it.emojis.isNotEmpty() }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.composer_emoji_empty_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = stringResource(R.string.composer_emoji_empty_message),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+            return@Column
+        }
+
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
@@ -106,22 +126,13 @@ internal fun ComposerEmojiContent(
                 .padding(top = 8.dp, bottom = 12.dp)
         )
 
-        val trimmedQuery = query.trim()
-        val commonTitle = stringResource(R.string.composer_emoji_common)
+        val trimmedQuery = query.trim().trim(':')
         val yourEmojiTitle = stringResource(R.string.composer_emoji_yours)
-        val sections = buildList {
-            val common = matchingCommonEmojis(trimmedQuery)
-            if (common.isNotEmpty() || trimmedQuery.isEmpty()) {
-                add(EmojiSection(title = commonTitle, emojis = common.map { EmojiEntry.Uni(it) }))
+        val sections = groups.mapNotNull { group ->
+            val emojis = group.emojis.filter {
+                trimmedQuery.isEmpty() || it.shortcode.contains(trimmedQuery, ignoreCase = true)
             }
-            groups.forEach { group ->
-                val emojis = group.emojis
-                    .filter { trimmedQuery.isEmpty() || it.shortcode.contains(trimmedQuery, ignoreCase = true) }
-                    .map { EmojiEntry.CustomGlyph(it) }
-                if (emojis.isNotEmpty()) {
-                    add(EmojiSection(title = group.title ?: yourEmojiTitle, emojis = emojis))
-                }
-            }
+            if (emojis.isEmpty()) null else (group.title ?: yourEmojiTitle) to emojis
         }
         // Cap the grid at 60% of the window height so a large catalog never pushes the sheet
         // off-screen. Window size (LocalWindowInfo), not display size (Configuration), bounds it.
@@ -137,47 +148,28 @@ internal fun ComposerEmojiContent(
                 .fillMaxWidth()
                 .heightIn(max = maxGridHeight)
         ) {
-            sections.forEach { section ->
-                // Full-span header row so the section title sits above its whole tile block.
-                item(span = { GridItemSpan(maxLineSpan) }, key = "header:${section.title}") {
+            // Keys by section position: two packs may share a title, and a shortcode may appear
+            // in more than one pack.
+            sections.forEachIndexed { sectionIndex, (title, emojis) ->
+                item(span = { GridItemSpan(maxLineSpan) }, key = "header:$sectionIndex") {
                     Text(
-                        text = section.title,
+                        text = title,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 6.dp)
                     )
                 }
-                items(section.emojis, key = { it.key }) { emoji ->
-                    val onClick = when (emoji) {
-                        is EmojiEntry.Uni -> ({ onInsertUnicode(emoji.glyph) })
-                        is EmojiEntry.CustomGlyph -> ({ onInsertCustom(emoji.emoji) })
-                    }
-                    EmojiTile(onClick = onClick) { EmojiTileEmoji(emoji) }
+                items(emojis, key = { "$sectionIndex:${it.shortcode}" }) { emoji ->
+                    EmojiTile(emoji = emoji, onClick = { onInsert(emoji) })
                 }
             }
         }
     }
 }
 
-// Search applies only while the user has typed something: a non-empty query keeps common
-// Unicode entries only on an exact glyph match, custom emoji on a substring shortcode match.
-private fun matchingCommonEmojis(query: String): List<String> =
-    if (query.isEmpty()) COMMON_EMOJIS else COMMON_EMOJIS.filter { it == query }
-
-private sealed interface EmojiEntry {
-    data class Uni(val glyph: String) : EmojiEntry
-    data class CustomGlyph(val emoji: CustomEmoji) : EmojiEntry
-
-    val key: String
-        get() = when (this) {
-            is Uni -> "u:$glyph"
-            is CustomGlyph -> "c:${emoji.shortcode}"
-        }
-}
-
-/** One emoji tile: the same 48dp round target every picker section uses. */
+/** One emoji tile: the same round target every picker section uses. */
 @Composable
-private fun EmojiTile(onClick: () -> Unit, content: @Composable () -> Unit) {
+private fun EmojiTile(emoji: CustomEmoji, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .aspectRatio(1f)
@@ -185,30 +177,15 @@ private fun EmojiTile(onClick: () -> Unit, content: @Composable () -> Unit) {
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        content()
-    }
-}
-
-// Custom and Unicode emoji render at the same visual size so the grid stays even.
-@Composable
-private fun EmojiTileEmoji(emoji: EmojiEntry) {
-    when (emoji) {
-        is EmojiEntry.Uni -> Text(
-            text = emoji.glyph,
-            fontSize = 28.sp
-        )
-        is EmojiEntry.CustomGlyph -> AsyncImage(
-            model = emoji.emoji.url,
-            contentDescription = emoji.emoji.shortcode,
+        AsyncImage(
+            model = emoji.url,
+            contentDescription = emoji.shortcode,
             contentScale = ContentScale.Fit,
             placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceContainerHighest),
             error = ColorPainter(MaterialTheme.colorScheme.surfaceContainerHighest),
             modifier = Modifier
                 .size(32.dp)
-                .aspectRatio(1f)
                 .clip(MaterialTheme.shapes.small)
         )
     }
 }
-
-private data class EmojiSection(val title: String, val emojis: List<EmojiEntry>)

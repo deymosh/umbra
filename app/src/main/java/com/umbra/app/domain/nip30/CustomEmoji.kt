@@ -5,7 +5,9 @@ package com.umbra.app.domain.nip30
  */
 data class CustomEmoji(
     val shortcode: String,
-    val url: String
+    val url: String,
+    /** The `30030:<pubkey>:<d>` set this emoji came from, when known — NIP-30's optional 4th tag element. */
+    val setCoordinate: String? = null
 )
 
 /**
@@ -35,6 +37,18 @@ const val KIND_EMOJI_SET = 30030
 
 private val SHORTCODE_REGEX = Regex("^[A-Za-z0-9_-]+$")
 
+/** NIP-30: a shortcode is only alphanumerics, hyphens and underscores. */
+fun isValidShortcode(shortcode: String): Boolean = SHORTCODE_REGEX.matches(shortcode)
+
+/** Parses a `30030:<64-hex pubkey>:<d>` coordinate, or null when it isn't one. */
+fun parseEmojiSetCoordinate(coordinate: String): EmojiSetAddress? {
+    val parts = coordinate.split(":", limit = 3)
+    if (parts.size != 3 || parts[0] != KIND_EMOJI_SET.toString()) return null
+    val pubkey = parts[1].lowercase()
+    if (pubkey.length != 64 || pubkey.any { it !in '0'..'9' && it !in 'a'..'f' }) return null
+    return EmojiSetAddress(pubkey, parts[2])
+}
+
 /** Coordinates of a `30030` emoji set referenced by an `a` tag. */
 data class EmojiSetAddress(val pubkey: String, val identifier: String)
 
@@ -46,13 +60,7 @@ fun parseUserEmojiList(tags: List<List<String>>): Pair<List<CustomEmoji>, List<E
     val inline = extractCustomEmojis(tags).values.filter { SHORTCODE_REGEX.matches(it.shortcode) }
     val sets = tags.asSequence()
         .filter { it.getOrNull(0) == "a" }
-        .mapNotNull { tag ->
-            val parts = tag.getOrNull(1)?.split(":", limit = 3) ?: return@mapNotNull null
-            if (parts.size != 3 || parts[0] != KIND_EMOJI_SET.toString()) return@mapNotNull null
-            val pubkey = parts[1].lowercase()
-            if (pubkey.length != 64 || pubkey.any { it !in '0'..'9' && it !in 'a'..'f' }) return@mapNotNull null
-            EmojiSetAddress(pubkey, parts[2])
-        }
+        .mapNotNull { tag -> tag.getOrNull(1)?.let(::parseEmojiSetCoordinate) }
         .distinct()
         .toList()
     return inline to sets
@@ -67,7 +75,7 @@ fun emojiTagsFor(content: String, available: List<CustomEmoji>): List<List<Strin
     return available.asSequence()
         .distinctBy { it.shortcode }
         .filter { content.contains(":${it.shortcode}:") }
-        .map { listOf("emoji", it.shortcode, it.url) }
+        .map { listOfNotNull("emoji", it.shortcode, it.url, it.setCoordinate) }
         .toList()
 }
 

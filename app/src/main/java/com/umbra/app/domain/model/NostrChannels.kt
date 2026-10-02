@@ -125,6 +125,8 @@ object NostrChannels {
     fun paymentTargets(pubkey: String): String = "$PAYMENT_TARGETS_PREFIX-${pubkey.take(16)}"
     fun emojiList(pubkey: String): String = "$EMOJI_PREFIX-list-${pubkey.take(16)}"
     fun emojiSets(pubkey: String): String = "$EMOJI_PREFIX-sets-${pubkey.take(16)}"
+    // Recent emoji packs from anyone, while the emoji pack browser is open.
+    const val EMOJI_PACK_BROWSE = "$EMOJI_PREFIX-browse"
     // The d identifier is free text, so it's folded to a hash rather than embedded verbatim.
     fun addressLookup(kind: Int, pubkey: String, identifier: String): String =
         "$ADDRESS_LOOKUP_PREFIX-$kind-${pubkey.take(16)}-${identifier.hashCode().toUInt().toString(16)}"

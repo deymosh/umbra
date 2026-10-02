@@ -6,6 +6,7 @@ import com.umbra.app.data.nostr.NostrClient
 import com.umbra.app.data.preferences.AppearancePreferencesImpl
 import com.umbra.app.data.preferences.DeveloperPreferencesImpl
 import com.umbra.app.data.preferences.SyncPreferencesImpl
+import com.umbra.app.data.repository.LocalEmojiPackRepositoryImpl
 import com.umbra.app.data.preferences.UserPreferencesImpl
 import com.umbra.app.data.nostr.UmbraNostrClient
 import com.umbra.app.data.repository.BroadcastRepositoryImpl
@@ -33,6 +34,7 @@ import com.umbra.app.data.repository.Nip05RepositoryImpl
 import com.umbra.app.domain.preferences.AppearancePreferences
 import com.umbra.app.domain.preferences.DeveloperPreferences
 import com.umbra.app.domain.preferences.SyncPreferences
+import com.umbra.app.domain.repository.LocalEmojiPackRepository
 import com.umbra.app.domain.preferences.UserPreferences
 import com.umbra.app.domain.repository.BroadcastRepository
 import com.umbra.app.domain.repository.DbInspectorRepository
@@ -161,6 +163,10 @@ abstract class RepositoryModule {
     @Singleton
     @Binds
     abstract fun bindSyncPreferences(impl: SyncPreferencesImpl): SyncPreferences
+
+    @Singleton
+    @Binds
+    abstract fun bindLocalEmojiPackRepository(impl: LocalEmojiPackRepositoryImpl): LocalEmojiPackRepository
 
     @Singleton
     @Binds

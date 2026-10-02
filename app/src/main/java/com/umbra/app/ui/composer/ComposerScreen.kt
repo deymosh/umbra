@@ -90,9 +90,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.graphics.painter.ColorPainter
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -107,9 +112,7 @@ import com.umbra.app.ui.common.resolve
 import com.umbra.app.ui.components.LoadingSpinner
 import com.umbra.app.ui.components.LocalCustomEmojiGroups
 import com.umbra.app.domain.nip30.allEmojis
-import com.umbra.app.ui.components.MENTION_URI_REGEX
 import com.umbra.app.ui.components.MediaUploadDialog
-import com.umbra.app.ui.components.MentionVisualTransformation
 import com.umbra.app.ui.components.NoteAuthorLine
 import com.umbra.app.ui.components.TopBarPrimaryAction
 import com.umbra.app.ui.components.UmbraIcons
@@ -147,6 +150,7 @@ private const val BLURHASH_DECODE_TARGET_PX = 128
 @Composable
 fun ComposerScreen(
     onNavigateBack: () -> Unit,
+    onManageEmojiPacks: () -> Unit,
     viewModel: ComposerViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -170,8 +174,11 @@ fun ComposerScreen(
 
     if (showEmojiSheet) {
         ComposerEmojiSheet(
-            onInsertUnicode = viewModel::insertAtCursor,
-            onInsertCustom = { emoji -> viewModel.insertAtCursor(":${emoji.shortcode}: ") },
+            onInsert = viewModel::insertCustomEmoji,
+            onManagePacks = {
+                showEmojiSheet = false
+                onManageEmojiPacks()
+            },
             onDismissRequest = { showEmojiSheet = false }
         )
     }
@@ -404,6 +411,7 @@ internal fun ComposerLayout(
                         isReplyMode = state.isReplyMode,
                         quotedAuthorProfiles = state.quotedAuthorProfiles,
                         displayNameForPubkey = displayNameForPubkey,
+                        customEmojis = state.customEmojis,
                         modifier = editorModifier
                     )
 
@@ -541,8 +549,10 @@ private fun ReplyContext(
 
 /**
  * Bare writing surface: no box around the text, the page is the field. The raw text keeps
- * `nostr:` mention URIs; a transparent field is overlaid on the same text rendered with mentions
- * shown as highlighted "@name" labels.
+ * `nostr:` mention URIs and `:shortcode:` emoji; a transparent field sits over the same text
+ * drawn with mentions as highlighted "@name" labels and each known custom emoji as its image.
+ * Both layers come from one [composerTokens] pass, so the caret always lines up with what's drawn
+ * and a token is stepped over, and deleted, as one unit.
  */
 @Composable
 private fun ComposerEditor(
@@ -550,28 +560,22 @@ private fun ComposerEditor(
     isReplyMode: Boolean,
     quotedAuthorProfiles: Map<String, UserProfile>,
     displayNameForPubkey: (String) -> String?,
+    customEmojis: List<CustomEmoji>,
     modifier: Modifier = Modifier
 ) {
     val mentionColor = MaterialTheme.colorScheme.primary
     val interactionSource = remember { MutableInteractionSource() }
     val textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp, lineHeight = 25.sp)
+    val emojiByShortcode = remember(customEmojis) { customEmojis.associateBy { it.shortcode } }
+    val mentionLabel: (String) -> String = { uri -> mentionLabelFor(uri, displayNameForPubkey) }
 
-    val outputTransformation = remember(quotedAuthorProfiles) {
+    val outputTransformation = remember(quotedAuthorProfiles, emojiByShortcode) {
         OutputTransformation {
-            val originalText = toString()
-            val matches = MENTION_URI_REGEX.findAll(originalText).toList()
-            if (matches.isEmpty()) return@OutputTransformation
-
+            val tokens = composerTokens(toString(), mentionLabel, emojiByShortcode)
             var offsetDelta = 0
-            for (match in matches) {
-                val start = match.range.first + offsetDelta
-                val endExclusive = match.range.last + 1 + offsetDelta
-                val label = mentionLabelFor(match.value, displayNameForPubkey)
-
-                delete(start, endExclusive)
-                insert(start, label)
-
-                offsetDelta += label.length - (match.range.last + 1 - match.range.first)
+            tokens.forEach { token ->
+                replace(token.start + offsetDelta, token.endExclusive + offsetDelta, token.display)
+                offsetDelta += token.display.length - (token.endExclusive - token.start)
             }
         }
     }
@@ -587,12 +591,6 @@ private fun ComposerEditor(
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         textStyle = textStyle.copy(color = Color.Transparent),
         decorator = { innerTextField ->
-            val transformedText = remember(textState.text, quotedAuthorProfiles) {
-                val visualTransformation = MentionVisualTransformation(mentionColor) { pubkey ->
-                    displayNameForPubkey(pubkey)
-                }
-                visualTransformation.filter(AnnotatedString(textState.text.toString())).text
-            }
             Box(modifier = Modifier.padding(top = 8.dp)) {
                 if (textState.text.isEmpty()) {
                     Text(
@@ -603,11 +601,80 @@ private fun ComposerEditor(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
-                Text(text = transformedText, style = textStyle.copy(color = MaterialTheme.colorScheme.onSurface))
+                ComposerOverlayText(
+                    text = textState.text.toString(),
+                    tokens = composerTokens(textState.text.toString(), mentionLabel, emojiByShortcode),
+                    mentionColor = mentionColor,
+                    style = textStyle.copy(color = MaterialTheme.colorScheme.onSurface)
+                )
                 innerTextField()
             }
         }
     )
+}
+
+/**
+ * The visible layer under the transparent field: the same display text, mentions coloured, and
+ * each emoji image drawn over the placeholder character the field lays out in its place.
+ */
+@Composable
+private fun ComposerOverlayText(
+    text: String,
+    tokens: List<ComposerToken>,
+    mentionColor: Color,
+    style: TextStyle
+) {
+    val annotated = remember(text, tokens, mentionColor) {
+        buildAnnotatedString {
+            var cursor = 0
+            tokens.forEach { token ->
+                append(text.substring(cursor, token.start))
+                when (token) {
+                    is ComposerToken.Mention -> withStyle(SpanStyle(color = mentionColor)) { append(token.display) }
+                    is ComposerToken.Emoji -> append(token.display)
+                }
+                cursor = token.endExclusive
+            }
+            append(text.substring(cursor))
+        }
+    }
+    // Where each emoji's placeholder sits in the display text.
+    val emojiOffsets = remember(tokens) {
+        var displayLength = 0
+        var rawCursor = 0
+        buildList {
+            tokens.forEach { token ->
+                displayLength += token.start - rawCursor
+                if (token is ComposerToken.Emoji) add(displayLength to token.emoji)
+                displayLength += token.display.length
+                rawCursor = token.endExclusive
+            }
+        }
+    }
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val density = LocalDensity.current
+    val placeholderColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    Box {
+        Text(text = annotated, style = style, onTextLayout = { layout = it })
+        val currentLayout = layout
+        if (currentLayout != null && currentLayout.layoutInput.text == annotated) {
+            emojiOffsets.forEach { (offset, emoji) ->
+                val box = currentLayout.getBoundingBox(offset)
+                val sizePx = minOf(box.width, box.height)
+                AsyncImage(
+                    model = emoji.url,
+                    contentDescription = emoji.shortcode,
+                    placeholder = ColorPainter(placeholderColor),
+                    error = ColorPainter(placeholderColor),
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .offset { IntOffset(box.left.toInt(), (box.top + (box.height - sizePx) / 2).toInt()) }
+                        .size(with(density) { sizePx.toDp() })
+                        .clip(RoundedCornerShape(20))
+                )
+            }
+        }
+    }
 }
 
 @Composable

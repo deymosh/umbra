@@ -65,7 +65,7 @@ internal data class MentionQuery(val startIndex: Int, val query: String)
  * the text or follow whitespace (so an email-like "user@host" mid-word never triggers this), and
  * the run between "@" and the caret must contain no whitespace. Returns null when the caret isn't
  * inside such a run — including right after an already-inserted `nostr:npub1…/nprofile1…` URI,
- * since those never contain a bare "@" in the raw text (only [MentionVisualTransformation]'s
+ * since those never contain a bare "@" in the raw text (only the composer token pass's
  * rendering shows them as "@name").
  */
 internal fun detectMentionQuery(text: String, caret: Int): MentionQuery? {
@@ -318,11 +318,19 @@ class ComposerViewModel @Inject constructor(
         }
     }
 
-    /** Inserts [text] at the caret (replacing any selection) and leaves the caret after it. */
-    fun insertAtCursor(text: String) {
+    /**
+     * Inserts [emoji] as its `:shortcode:` at the caret (replacing any selection) and leaves the
+     * caret after it. The range is read before the edit: replace() already moves the selection
+     * past the inserted text, so reading it afterwards double-counts the insertion and lands
+     * outside the text.
+     */
+    fun insertCustomEmoji(emoji: CustomEmoji) {
+        val token = ":${emoji.shortcode}:"
         textState.edit {
-            replace(selection.start, selection.end, text)
-            selection = TextRange(selection.start + text.length)
+            val start = minOf(selection.start, selection.end)
+            val end = maxOf(selection.start, selection.end)
+            replace(start, end, token)
+            selection = TextRange(start + token.length)
         }
     }
 

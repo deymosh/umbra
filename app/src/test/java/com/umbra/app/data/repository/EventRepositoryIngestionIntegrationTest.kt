@@ -7,6 +7,7 @@ import com.umbra.app.data.db.EncryptedUmbraDatabase
 import com.umbra.app.data.db.dao.EventDao
 import com.umbra.app.data.db.dao.EventTagDao
 import com.umbra.app.data.db.dao.FeedFilterDao
+import com.umbra.app.data.db.dao.LocalEmojiPackDao
 import com.umbra.app.data.db.dao.ReactionEmojiDao
 import com.umbra.app.data.db.dao.RelayDao
 import com.umbra.app.data.db.dao.UserProfileDao
@@ -248,6 +249,7 @@ class EventRepositoryIngestionIntegrationTest {
         override fun relayDao(): RelayDao = throw NotImplementedError()
         override fun feedFilterDao(): FeedFilterDao = throw NotImplementedError()
         override fun reactionEmojiDao(): ReactionEmojiDao = throw NotImplementedError()
+        override fun localEmojiPackDao(): LocalEmojiPackDao = throw NotImplementedError()
         @Deprecated("Room's own createOpenHelper is deprecated; this test double never uses it.")
         override fun createOpenHelper(config: DatabaseConfiguration): SupportSQLiteOpenHelper =
             throw NotImplementedError()

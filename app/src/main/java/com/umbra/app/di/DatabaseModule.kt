@@ -7,6 +7,7 @@ import com.umbra.app.data.db.EncryptedDatabasePassphraseProvider
 import com.umbra.app.data.db.EncryptedUmbraDatabase
 import com.umbra.app.data.db.dao.EventDao
 import com.umbra.app.data.db.dao.EventTagDao
+import com.umbra.app.data.db.dao.LocalEmojiPackDao
 import com.umbra.app.data.db.dao.ReactionEmojiDao
 import com.umbra.app.data.db.dao.UserProfileDao
 import com.umbra.app.data.db.dao.RelayDao
@@ -79,4 +80,9 @@ object DatabaseModule {
     @Singleton
     @Named("encrypted")
     fun provideEncryptedReactionEmojiDao(@Named("encrypted") db: EncryptedUmbraDatabase): ReactionEmojiDao = db.reactionEmojiDao()
+
+    @Provides
+    @Singleton
+    @Named("encrypted")
+    fun provideEncryptedLocalEmojiPackDao(@Named("encrypted") db: EncryptedUmbraDatabase): LocalEmojiPackDao = db.localEmojiPackDao()
 }

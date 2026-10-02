@@ -55,6 +55,8 @@ import com.umbra.app.ui.bookmarks.BookmarkActions
 import com.umbra.app.ui.bookmarks.BookmarksScreen
 import com.umbra.app.ui.bookmarks.BookmarksViewModel
 import com.umbra.app.ui.bookmarks.LocalBookmarks
+import com.umbra.app.ui.emoji.EmojiPacksScreen
+import com.umbra.app.ui.emoji.EmojiPacksViewModel
 import com.umbra.app.ui.readlater.ReadLaterActions
 import com.umbra.app.ui.readlater.ReadLaterScreen
 import com.umbra.app.ui.readlater.ReadLaterViewModel
@@ -113,6 +115,7 @@ sealed class Screen(val route: String) {
     object NetworkUsage  : Screen("network_usage")
     object ReadLater     : Screen("read_later")
     object Bookmarks     : Screen("bookmarks")
+    object EmojiPacks    : Screen("emoji_packs")
     object Hashtag       : Screen("tag/{tag}") {
         fun forTag(tag: String) = "tag/${Uri.encode(tag.removePrefix("#").lowercase())}"
     }
@@ -445,6 +448,12 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
                 onOpenProfile = { navController.navigate(Screen.Profile.forPubkey(it)) }
             )
         }
+        composable(Screen.EmojiPacks.route) {
+            EmojiPacksScreen(
+                viewModel = hiltViewModel<EmojiPacksViewModel>(),
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
         composable(Screen.ReadLater.route) {
             ReadLaterScreen(
                 viewModel = readLaterViewModel,
@@ -586,6 +595,7 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
             val composerViewModel: ComposerViewModel = hiltViewModel()
             ComposerScreen(
                 onNavigateBack = { navController.popBackStack() },
+                onManageEmojiPacks = { navController.navigate(Screen.EmojiPacks.route) },
                 viewModel = composerViewModel
             )
         }

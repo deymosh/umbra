@@ -68,9 +68,16 @@ class EmojiPickerSnapshotTest {
         Box(Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow).padding(top = 16.dp)) {
             ComposerEmojiContent(
                 groups = groups,
-                onInsertUnicode = {},
-                onInsertCustom = {}
+                onInsert = {},
+                onManagePacks = {}
             )
+        }
+    }
+
+    @Test
+    fun composerEmojiSheetEmpty() = snapshot("EmojiPicker_composer_empty") {
+        Box(Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow).padding(top = 16.dp)) {
+            ComposerEmojiContent(groups = emptyList(), onInsert = {}, onManagePacks = {})
         }
     }
 }

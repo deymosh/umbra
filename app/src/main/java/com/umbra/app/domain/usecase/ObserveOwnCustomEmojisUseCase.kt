@@ -8,8 +8,10 @@ import com.umbra.app.domain.nip30.EmojiGroup
 import com.umbra.app.domain.nip30.EmojiSetAddress
 import com.umbra.app.domain.nip30.KIND_EMOJI_SET
 import com.umbra.app.domain.nip30.KIND_USER_EMOJI_LIST
+import com.umbra.app.domain.nip30.coordinate
 import com.umbra.app.domain.nip30.extractCustomEmojis
 import com.umbra.app.domain.nip30.parseUserEmojiList
+import com.umbra.app.domain.repository.LocalEmojiPackRepository
 import com.umbra.app.domain.repository.EventRepository
 import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -32,11 +34,15 @@ data class EmojiSetContent(
 
 /**
  * The signed-in user's NIP-30 emoji catalog grouped by source: the inline emoji of their
- * kind-10030 list first (untitled group), then one titled group per kind-30030 set it
- * references, in list order. Shortcodes are deduplicated across groups, first occurrence wins.
- * Both the list and the referenced sets are requested from relays while collected.
+ * kind-10030 list first (untitled group), then one titled group per kind-30030 set — the sets
+ * their published list references, then the ones they keep only on this device
+ * ([LocalEmojiPackRepository]). Shortcodes are deduplicated across groups, first occurrence wins.
+ * The list and every set are requested from relays while collected.
  */
-class ObserveOwnCustomEmojisUseCase @Inject constructor(private val eventRepository: EventRepository) {
+class ObserveOwnCustomEmojisUseCase @Inject constructor(
+    private val eventRepository: EventRepository,
+    private val localEmojiPacks: LocalEmojiPackRepository
+) {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     operator fun invoke(pubkey: String): Flow<List<EmojiGroup>> = channelFlow {
@@ -48,8 +54,11 @@ class ObserveOwnCustomEmojisUseCase @Inject constructor(private val eventReposit
         )
 
         launch {
-            eventRepository.observeEventsByPubkeyAndKind(pubkey, KIND_USER_EMOJI_LIST, 1)
-                .map { events -> parseUserEmojiList(events.maxByOrNull { it.createdAt }?.tags.orEmpty()) }
+            combine(
+                eventRepository.observeEventsByPubkeyAndKind(pubkey, KIND_USER_EMOJI_LIST, 1)
+                    .map { events -> parseUserEmojiList(events.maxByOrNull { it.createdAt }?.tags.orEmpty()) },
+                localEmojiPacks.observeLocalPacks(pubkey)
+            ) { (inline, published), local -> inline to (published + local).distinct() }
                 .distinctUntilChanged()
                 .flatMapLatest { (inline, sets) ->
                     if (sets.isEmpty()) {
@@ -89,7 +98,8 @@ class ObserveOwnCustomEmojisUseCase @Inject constructor(private val eventReposit
                     .maxByOrNull { it.createdAt }
                 EmojiSetContent(
                     address = address,
-                    emojis = event?.let { extractCustomEmojis(it.tags).values.toList() }.orEmpty(),
+                    emojis = event?.let { extractCustomEmojis(it.tags).values.toList() }.orEmpty()
+                        .map { it.copy(setCoordinate = address.coordinate()) },
                     title = event?.getTagValue("title") ?: address.identifier
                 )
             }

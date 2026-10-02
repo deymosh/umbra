@@ -566,6 +566,7 @@ class EventRepositoryImpl @Inject constructor(
                 encryptedDatabase.userProfileDao().deleteAll()
                 encryptedDatabase.relayDao().deleteAll()
                 encryptedDatabase.feedFilterDao().deleteAll()
+                encryptedDatabase.localEmojiPackDao().deleteAll()
             }
 
             // Clear in-memory caches
