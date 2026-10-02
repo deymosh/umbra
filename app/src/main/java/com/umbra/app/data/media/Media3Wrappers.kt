@@ -32,6 +32,8 @@ import javax.inject.Singleton
  */
 
 object VideoCacheProvider {
+    // Volatile: read outside the lock (double-checked), and first built off the main thread.
+    @Volatile
     private var cache: Cache? = null
     private const val CACHE_SIZE_BYTES = 256L * 1024L * 1024L // 256 MB
     private const val CACHE_DIR = "video_cache"
