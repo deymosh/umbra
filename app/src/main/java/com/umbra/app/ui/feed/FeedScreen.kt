@@ -310,6 +310,12 @@ fun FeedScreen(
                         scope.launch { drawerState.close() }
                     }
                 },
+                onPeopleLists = if (currentPubkey.isNullOrBlank() || !viewModel.canSignEvents()) null else {
+                    {
+                        navController.navigate(Screen.FollowSets.route)
+                        scope.launch { drawerState.close() }
+                    }
+                },
                 onReadLater = {
                     navController.navigate(Screen.ReadLater.route)
                     scope.launch { drawerState.close() }

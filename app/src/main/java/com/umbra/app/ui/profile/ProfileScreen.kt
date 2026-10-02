@@ -24,17 +24,15 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Verified
@@ -57,8 +55,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -94,6 +92,8 @@ import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.ui.Screen
 import com.umbra.app.ui.common.resolve
 import com.umbra.app.ui.components.CustomEmojiText
+import com.umbra.app.ui.components.PersonRow
+import com.umbra.app.ui.lists.LocalPeopleLists
 import com.umbra.app.ui.components.EmptyState
 import com.umbra.app.ui.components.ErrorBanner
 import com.umbra.app.ui.components.ExternalUrlWarningDialog
@@ -456,7 +456,7 @@ fun ProfileScreen(
                             contentType = { "follow_row" }
                         ) { followedPubkey ->
                             val followedProfile = state.followedProfiles[followedPubkey]
-                            FollowListRow(
+                            PersonRow(
                                 pubkey = followedPubkey,
                                 profile = followedProfile,
                                 userRepository = viewModel.userRepositoryPublic,
@@ -842,6 +842,22 @@ internal fun ProfileHero(
                                 imageVector = Icons.Outlined.Bolt,
                                 contentDescription = stringResource(R.string.zap_cd),
                                 tint = UmbraTheme.colors.zap,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    val peopleLists = LocalPeopleLists.current
+                    if (canSign && peopleLists != null) {
+                        IconButton(
+                            onClick = { peopleLists(pubkey) },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
+                                contentDescription = stringResource(R.string.profile_add_to_list),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -1256,53 +1272,6 @@ private fun RelaySummaryRow(relay: Relay) {
         }
     }
     HorizontalDivider(modifier = Modifier.padding(start = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
-}
-
-@Composable
-private fun FollowListRow(
-    pubkey: String,
-    profile: UserProfile?,
-    onClick: () -> Unit,
-    userRepository: UserRepository? = null
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        UserAvatar(
-            userProfile = profile,
-            pubkey = pubkey,
-            size = 44.dp,
-            shape = CircleShape,
-            authorPubkey = pubkey,
-            userRepository = userRepository
-        )
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            CustomEmojiText(
-                text = profile?.getUserDisplayName() ?: pubkey.truncatePublicKey(8, 8),
-                customEmojis = profile?.customEmojis.orEmpty(),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            val about = profile?.about?.trim()?.lineSequence()?.firstOrNull { it.isNotBlank() }
-            Text(
-                text = about ?: Bech32Encoder.encodeNpub(pubkey).truncatePublicKey(10, 8),
-                style = if (about != null) MaterialTheme.typography.bodySmall else MonoStyle,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
 }
 
 @Composable

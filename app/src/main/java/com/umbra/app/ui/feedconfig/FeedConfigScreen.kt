@@ -47,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -358,6 +359,13 @@ private fun FilterSummaryChips(filter: FeedFilter) {
         if (filter.scopeToFollows) {
             ChipBadge(
                 text = stringResource(R.string.filter_follows_only_chip),
+                backgroundColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                textColor = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        if (filter.followSets.isNotEmpty()) {
+            ChipBadge(
+                text = pluralStringResource(R.plurals.filter_lists_chip, filter.followSets.size, filter.followSets.size),
                 backgroundColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                 textColor = MaterialTheme.colorScheme.onSurface
             )

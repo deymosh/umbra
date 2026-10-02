@@ -13,6 +13,9 @@ import com.umbra.app.domain.usecase.SetFilterActiveUseCase
 import com.umbra.app.domain.usecase.AddMutedAuthorUseCase
 import com.umbra.app.domain.usecase.RemoveMutedAuthorUseCase
 import com.umbra.app.domain.usecase.ResetFeedFiltersUseCase
+import com.umbra.app.domain.usecase.ObserveOwnListSetsUseCase
+import com.umbra.app.domain.nip01.Event
+import com.umbra.app.ui.components.ListSetChip
 import com.umbra.app.ui.common.UiMessage
 import androidx.compose.runtime.Immutable
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -35,7 +38,9 @@ data class FeedConfigState(
     val selectedFilter: FeedFilter? = null,
     val errorMessage: UiMessage? = null,
     val showAddDialog: Boolean = false,
-    val editingFilter: FeedFilter? = null
+    val editingFilter: FeedFilter? = null,
+    /** The user's follow sets a filter can show notes from, by address. */
+    val followSets: List<ListSetChip> = emptyList()
 )
 
 /**
@@ -52,7 +57,8 @@ class FeedConfigViewModel @Inject constructor(
     private val setFilterActiveUseCase: SetFilterActiveUseCase,
     private val addMutedAuthorUseCase: AddMutedAuthorUseCase,
     private val removeMutedAuthorUseCase: RemoveMutedAuthorUseCase,
-    private val resetFeedFiltersUseCase: ResetFeedFiltersUseCase
+    private val resetFeedFiltersUseCase: ResetFeedFiltersUseCase,
+    private val observeOwnListSets: ObserveOwnListSetsUseCase
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(FeedConfigState())
@@ -60,6 +66,11 @@ class FeedConfigViewModel @Inject constructor(
 
     init {
         observeFilters()
+        viewModelScope.launch {
+            observeOwnListSets(Event.KIND_FOLLOW_SET).collect { sets ->
+                _state.update { it.copy(followSets = sets.map { set -> ListSetChip(set.coordinate.toString(), set.title) }) }
+            }
+        }
     }
 
     private fun observeFilters() {

@@ -8,11 +8,9 @@ import com.umbra.app.domain.model.FeedNotesResult
 import com.umbra.app.domain.model.NoteView
 import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.profile.UserProfile
-import com.umbra.app.domain.repository.ContactListRepository
 import com.umbra.app.domain.repository.EventRepository
 import com.umbra.app.domain.repository.FeedRepository
 import com.umbra.app.domain.repository.MuteListRepository
-import com.umbra.app.testutil.fakes.FakeContactListRepository
 import com.umbra.app.testutil.fakes.FakeEventRepository
 import com.umbra.app.testutil.fakes.FakeMuteListRepository
 import com.umbra.app.testutil.fakes.FakeUserPreferences
@@ -42,8 +40,8 @@ class FeedStateMergeCoordinatorTest {
     private val ownerPubkey = "a".repeat(64)
 
     /** Delegates every [FeedRepository] method to sensible no-op defaults except
-     * [getActiveFilters], overridable per test — mirrors [FakeMuteListRepository]/
-     * [FakeContactListRepository]'s shape (no shared fake exists yet for this small interface). */
+     * [getActiveFilters], overridable per test — mirrors [FakeMuteListRepository]'s shape (no
+     * shared fake exists yet for this small interface). */
     private class FakeFeedRepository(
         private val activeFilters: Flow<List<FeedFilter>> = flowOf(emptyList())
     ) : FeedRepository {
@@ -86,7 +84,7 @@ class FeedStateMergeCoordinatorTest {
         eventRepository: EventRepository = FakeEventRepository(),
         feedRepository: FeedRepository = FakeFeedRepository(),
         muteListRepository: MuteListRepository = FakeMuteListRepository(),
-        contactListRepository: ContactListRepository = FakeContactListRepository(),
+        feedAuthors: Set<String> = emptySet(),
         userPreferences: FakeUserPreferences = FakeUserPreferences(initialPubkey = ownerPubkey),
         followedHashtags: Flow<Set<String>> = flowOf(emptySet()),
         displayLimit: MutableStateFlow<Int> = MutableStateFlow(300),
@@ -96,7 +94,7 @@ class FeedStateMergeCoordinatorTest {
         eventRepository = eventRepository,
         feedRepository = feedRepository,
         muteListRepository = muteListRepository,
-        contactListRepository = contactListRepository,
+        observeFeedAuthors = { flowOf(feedAuthors) },
         userPreferences = userPreferences,
         followedHashtagsFlow = followedHashtags,
         scope = scope,

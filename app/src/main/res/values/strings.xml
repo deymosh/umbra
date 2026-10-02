@@ -106,8 +106,16 @@
     <string name="add_tag_placeholder">Tag or prefix (without #)</string>
     <string name="add_content_prefix_placeholder">Content prefix (e.g. nlogpost:)</string>
     <string name="hide_nsfw">Hide NSFW (#nsfw)</string>
-    <string name="filter_follows_only">Only show notes from people I follow</string>
     <string name="filter_follows_only_chip">Follows only</string>
+    <string name="filter_source_header">Show notes from</string>
+    <string name="filter_source_follows">People you follow</string>
+    <string name="filter_source_missing">Deleted list</string>
+    <string name="filter_source_everyone_hint">With nothing chosen, the feed shows everyone on your relays. Make people lists from the menu.</string>
+    <string name="filter_source_scoped_hint">Only notes from the people chosen here.</string>
+    <plurals name="filter_lists_chip">
+        <item quantity="one">%d list</item>
+        <item quantity="other">%d lists</item>
+    </plurals>
 
     <string name="relay_config_title">Relays</string>
     <string name="relay_publish_lists_action">Publish changes</string>
@@ -778,19 +786,30 @@
     <string name="bookmarks_private_label">Private</string>
     <string name="bookmark_add_to_list">Add to list…</string>
     <string name="bookmark_sets_all">All bookmarks</string>
-    <string name="bookmark_sets_new">New list</string>
-    <string name="bookmark_sets_create">Create</string>
-    <string name="bookmark_sets_name_hint">List name</string>
-    <string name="bookmark_sets_rename">Rename list</string>
-    <string name="bookmark_sets_rename_confirm">Rename</string>
-    <string name="bookmark_sets_delete">Delete list</string>
-    <string name="bookmark_sets_delete_title">Delete “%1$s”?</string>
+    <string name="list_sets_new">New list</string>
+    <string name="list_sets_create">Create</string>
+    <string name="list_sets_name_hint">List name</string>
+    <string name="list_sets_rename">Rename list</string>
+    <string name="list_sets_rename_confirm">Rename</string>
+    <string name="list_sets_delete">Delete list</string>
+    <string name="list_sets_delete_title">Delete “%1$s”?</string>
     <string name="bookmark_sets_delete_message">Your signer asks relays to delete this list. The notes in it aren\'t touched.</string>
-    <string name="bookmark_sets_menu_cd">List options</string>
-    <string name="bookmark_sets_add_title">Add to list</string>
+    <string name="list_sets_menu_cd">List options</string>
+    <string name="list_sets_add_title">Add to list</string>
     <string name="bookmark_sets_none">No lists yet. Start one to group bookmarks by topic.</string>
     <string name="bookmark_sets_empty">This list is empty</string>
     <string name="bookmark_sets_empty_message">Add notes and articles to it from their menu with Add to list.</string>
+    <string name="follow_sets_title">People lists</string>
+    <string name="follow_sets_none">No lists yet</string>
+    <string name="follow_sets_none_message">Group people into lists, then show a list as its own feed from Feed filters.</string>
+    <string name="follow_sets_none_picker">No lists yet. Start one to group people you want to read together.</string>
+    <string name="follow_sets_empty">This list is empty</string>
+    <string name="follow_sets_empty_message">Add people from their profile with Add to list.</string>
+    <string name="follow_sets_delete_message">Your signer asks relays to delete this list. Nobody in it is unfollowed.</string>
+    <string name="follow_sets_remove_cd">Remove from list</string>
+    <string name="follow_sets_private_locked">Private members are hidden until your signer opens them.</string>
+    <string name="follow_sets_private_unreadable">Some private members can\'t be opened here. They stay on the list.</string>
+    <string name="profile_add_to_list">Add to list…</string>
     <string name="profile_tab_pictures">Pictures</string>
     <string name="event_kind_picture">Picture</string>
 </resources>

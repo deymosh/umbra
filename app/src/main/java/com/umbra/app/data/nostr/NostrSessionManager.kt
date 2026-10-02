@@ -2,7 +2,6 @@
 
 package com.umbra.app.data.nostr
 
-import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.feed.FeedFilter
 import com.umbra.app.domain.feed.mergeActiveFeedFilters
 import com.umbra.app.domain.model.NostrChannels
@@ -12,7 +11,6 @@ import com.umbra.app.domain.relay.RelayIssueKind
 import com.umbra.app.domain.relay.normalizeRelayUrl
 import com.umbra.app.data.tor.TorRuntimeManager
 import com.umbra.app.domain.preferences.UserPreferences
-import com.umbra.app.domain.repository.ContactListRepository
 import com.umbra.app.domain.repository.EventRepository
 import com.umbra.app.domain.repository.FeedRepository
 import com.umbra.app.domain.repository.RelayInfoRepository
@@ -20,6 +18,7 @@ import com.umbra.app.data.repository.RelayListDecryptionCoordinator
 import com.umbra.app.domain.repository.RelayRepository
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.usecase.BootstrapOwnProfileUseCase
+import com.umbra.app.domain.usecase.ObserveFeedAuthorsUseCase
 import com.umbra.app.domain.usecase.ObserveFollowedHashtagsUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,7 +30,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -55,14 +53,14 @@ class NostrSessionManager @Inject constructor(
     private val relayRepository: RelayRepository,
     private val feedRepository: FeedRepository,
     private val userRepository: UserRepository,
-    private val contactListRepository: ContactListRepository,
     private val userPreferences: UserPreferences,
     private val torRuntimeManager: TorRuntimeManager,
     private val relayInfoRepository: RelayInfoRepository,
     private val backfillAnchorStore: BackfillAnchorStore,
     private val bootstrapOwnProfileUseCase: BootstrapOwnProfileUseCase,
     private val relayListDecryptionCoordinator: RelayListDecryptionCoordinator,
-    private val observeFollowedHashtags: ObserveFollowedHashtagsUseCase
+    private val observeFollowedHashtags: ObserveFollowedHashtagsUseCase,
+    private val observeFeedAuthors: ObserveFeedAuthorsUseCase
 ) : NostrSessionController {
     companion object {
         private const val TAG = "UmbraNostrSession"
@@ -279,20 +277,16 @@ class NostrSessionManager @Inject constructor(
                 // FeedViewModel's own (correct) activateUserSession() call would silently widen a
                 // scoped feed back to unscoped, or drop a second active filter's excludes/mutes.
                 //
-                // authors is a plain suspend lookup rather than its own combined Flow: wiring a
+                // authors is a one-shot lookup rather than its own combined Flow: wiring a
                 // reactive contact-list Flow in here previously added a second hydration-driven
                 // re-emission source feeding straight into RELAY_SET_DEBOUNCE_MS below, which
                 // reset that debounce's timer on every contact-list load — delaying first relay
                 // connect (and therefore maybeBootstrapOwnProfile) for every session, including
-                // the common case (DefaultFeedFilters.DEFAULT) where scopeToFollows is false and
-                // authors is never even used. getCurrentFollowedPubkeys() only pays a real lookup
-                // cost when a scoped filter is actually active, and doesn't re-trigger this combine.
+                // the common case (DefaultFeedFilters.DEFAULT) that isn't scoped and never uses
+                // authors at all (the use case returns at once then). FeedViewModel follows later
+                // changes to the follow list and sets.
                 val mergedFilter = mergeActiveFeedFilters(activeFilters)
-                val authors = if (mergedFilter.scopeToFollows) {
-                    contactListRepository.getCurrentFollowedPubkeys()
-                } else {
-                    emptySet()
-                }
+                val authors = observeFeedAuthors(mergedFilter).first()
                 OrchestratorSnapshot(
                     relays = relays,
                     feedFilter = mergedFilter,

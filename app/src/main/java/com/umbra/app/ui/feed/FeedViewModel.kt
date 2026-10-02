@@ -24,7 +24,6 @@ import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.TorProxyConfig
 import com.umbra.app.domain.nip25.ReactionEmoji
 import com.umbra.app.domain.nip30.CustomEmoji
-import com.umbra.app.domain.repository.ContactListRepository
 import com.umbra.app.domain.repository.EventRepository
 import com.umbra.app.domain.repository.FeedRepository
 import com.umbra.app.domain.repository.MuteListRepository
@@ -39,6 +38,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import com.umbra.app.domain.nip01.NostrEventBuilder
+import com.umbra.app.domain.usecase.ObserveFeedAuthorsUseCase
 import com.umbra.app.domain.usecase.ObserveFollowedHashtagsUseCase
 import com.umbra.app.domain.usecase.TrackReferencedAuthorUseCase
 import com.umbra.app.domain.usecase.CheckTorStatusUseCase
@@ -241,7 +241,6 @@ class FeedViewModel @Inject constructor(
     private val eventRepository: EventRepository,
     private val feedRepository: FeedRepository,
     private val reactionEmojiRepository: ReactionEmojiRepository,
-    private val contactListRepository: ContactListRepository,
     private val muteListRepository: MuteListRepository,
     private val pinListRepository: PinListRepository,
     private val relayRepository: RelayRepository,
@@ -264,6 +263,7 @@ class FeedViewModel @Inject constructor(
     private val trackReferencedAuthorUseCase: TrackReferencedAuthorUseCase,
     private val throwawayAuthSigner: ThrowawayAuthSigner,
     observeFollowedHashtags: ObserveFollowedHashtagsUseCase,
+    observeFeedAuthors: ObserveFeedAuthorsUseCase,
 ) : ViewModel() {
     val mediaCacheDataSourceFactory get() = videoCacheDataSourceProvider.getCacheDataSourceFactory()
 
@@ -326,6 +326,9 @@ class FeedViewModel @Inject constructor(
     // FeedEngagementSchedulingCoordinator — each is read/written only inside the
     // 7 functions that moved with them.
     private var activeFeedFilter: FeedFilter = DefaultFeedFilters.DEFAULT
+    // What activeFeedFilter resolved to (feedAuthorsFlow), so every activateUserSession call
+    // keeps a scoped feed scoped instead of briefly asking relays for everyone.
+    private var activeFeedAuthors: Set<String> = emptySet()
     // outboxSweepCursor/outboxSweepStartedAtMs/recentlyVisibleAuthors moved to
     // FeedEngagementSchedulingCoordinator as `internal var` properties — they are
     // genuinely written by both the coordinator's moved functions and this facade's
@@ -387,8 +390,8 @@ class FeedViewModel @Inject constructor(
         eventRepository = eventRepository,
         feedRepository = feedRepository,
         muteListRepository = muteListRepository,
-        contactListRepository = contactListRepository,
         userPreferences = userPreferences,
+        observeFeedAuthors = observeFeedAuthors::invoke,
         followedHashtagsFlow = observeFollowedHashtags(),
         scope = viewModelScope,
         displayLimit = _displayLimit,
@@ -470,7 +473,7 @@ class FeedViewModel @Inject constructor(
      */
     private fun observeFollowedAuthorOutboxDiscovery() {
         viewModelScope.launch {
-            feedStateMergeCoordinator.followedPubkeysFlow
+            feedStateMergeCoordinator.feedAuthorsFlow
                 .debounce(5_000L)
                 .collect { followedPubkeys ->
                     // Kick off hydration for the first batch immediately — no reason to wait a
@@ -481,13 +484,13 @@ class FeedViewModel @Inject constructor(
         viewModelScope.launch {
             while (true) {
                 delay(OUTBOX_DISCOVERY_RETRY_INTERVAL_MS)
-                sweepFollowedAuthorProfilesForDiscovery(feedStateMergeCoordinator.followedPubkeysFlow.first())
+                sweepFollowedAuthorProfilesForDiscovery(feedStateMergeCoordinator.feedAuthorsFlow.first())
             }
         }
     }
 
     private suspend fun sweepFollowedAuthorProfilesForDiscovery(followedPubkeys: Set<String>) {
-        if (!activeFeedFilter.scopeToFollows) return
+        if (!activeFeedFilter.isScoped) return
         val remaining = followedPubkeys - feedEngagementSchedulingCoordinator.outboxSweepCursor
         if (remaining.isEmpty()) return
 
@@ -549,7 +552,7 @@ class FeedViewModel @Inject constructor(
                     // once currentUserPubkey below changes — this only needs to set the pubkey.
                     _uiState.update { it.copy(currentUserPubkey = normalizedPubkey) }
 
-                    eventRepository.activateUserSession(normalizedPubkey, activeFeedFilter)
+                    eventRepository.activateUserSession(normalizedPubkey, activeFeedFilter, activeFeedAuthors)
                 }
         }
     }
@@ -618,7 +621,7 @@ class FeedViewModel @Inject constructor(
                 activeFeedFilter = merged
 
                 // Hand off channel management to the data layer
-                eventRepository.activateUserSession(_uiState.value.currentUserPubkey, merged)
+                eventRepository.activateUserSession(_uiState.value.currentUserPubkey, merged, activeFeedAuthors)
                 observeActiveFeedFilterChanges()
 
                 // Subscribe to events (all kinds — ViewModel filters what it stores). .conflate()
@@ -678,20 +681,21 @@ class FeedViewModel @Inject constructor(
     private fun observeActiveFeedFilterChanges() {
         activeFilterJob?.cancel()
         activeFilterJob = viewModelScope.launch {
-            // Re-run whenever the active filters change OR the follow list changes — both can
-            // affect which authors the follows-scoped relay REQ should ask for.
+            // Re-run whenever the active filters change OR the authors they resolve to (follow
+            // list, follow sets) change — both affect which authors the scoped relay REQ asks for.
             combine(
                 feedRepository.getActiveFilters().distinctUntilChanged(),
-                feedStateMergeCoordinator.followedPubkeysFlow
-            ) { filters, followedPubkeys -> filters to followedPubkeys }
-                .collect { (filters, followedPubkeys) ->
+                feedStateMergeCoordinator.feedAuthorsFlow
+            ) { filters, feedAuthors -> filters to feedAuthors }
+                .collect { (filters, feedAuthors) ->
                     val merged = feedStateMergeCoordinator.mergeFilters(filters)
                     // A deep window loaded under the old filters holds rows the user never saw
                     // under the new ones; start over from the newest page.
                     if (merged != activeFeedFilter) resetDisplayWindow()
                     activeFeedFilter = merged
                     feedEngagementSchedulingCoordinator.resetRequestedProfileAuthors()
-                    configureReqChannels(merged, followedPubkeys)
+                    activeFeedAuthors = feedAuthors
+                    configureReqChannels(merged, feedAuthors)
                 }
         }
     }
@@ -700,9 +704,9 @@ class FeedViewModel @Inject constructor(
     // mergeFilters is exposed there as an internal method this facade still calls directly (see
     // above and initializeEventStream()).
 
-    private fun configureReqChannels(feedFilter: FeedFilter, followedPubkeys: Set<String> = emptySet()) {
+    private fun configureReqChannels(feedFilter: FeedFilter, feedAuthors: Set<String>) {
         val pubkey = userPreferences.getPublicKey()
-        val authors = if (feedFilter.scopeToFollows) followedPubkeys else emptySet()
+        val authors = if (feedFilter.isScoped) feedAuthors else emptySet()
         eventRepository.activateUserSession(pubkey, feedFilter, authors)
     }
 

@@ -239,7 +239,7 @@ internal class FeedEngagementSchedulingCoordinator(
      * re-request them later.
      */
     private fun scheduleOutboxDiscoveryAcceleration(notes: List<NoteView>) {
-        if (!activeFeedFilter().scopeToFollows) return
+        if (!activeFeedFilter().isScoped) return
         // Compute-and-record the cursor update in one go, before any suspension: splitting the
         // "which candidates need accelerating" read and the "fold them into the cursor" write
         // across a suspension point could double-record or drop candidates when a second

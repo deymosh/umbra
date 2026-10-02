@@ -10,7 +10,6 @@ import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip01.isTimestampFromFuture
 import com.umbra.app.domain.nip19.Bech32Encoder
 import com.umbra.app.domain.profile.UserProfile
-import com.umbra.app.domain.repository.ContactListRepository
 import com.umbra.app.domain.repository.EventRepository
 import com.umbra.app.domain.repository.FeedRepository
 import com.umbra.app.domain.repository.MuteListRepository
@@ -124,7 +123,7 @@ private fun ComputedFeedSnapshot.stableFingerprint(): Int {
  * `visibleNotesChannel`, drained on this coordinator's (main-thread) scope, because the
  * callback's recipient mutates plain vars that must stay confined to that scope.
  *
- * [followedPubkeysFlow] is `internal`, not `private` — three facade functions
+ * [feedAuthorsFlow] is `internal`, not `private` — three facade functions
  * (`observeFollowedAuthorOutboxDiscovery` x2, `observeActiveFeedFilterChanges`) read it directly
  * outside this cluster's own combine chain, a cross-boundary dependency worth calling out
  * explicitly since it isn't obvious from this coordinator's public surface alone.
@@ -133,8 +132,9 @@ internal class FeedStateMergeCoordinator(
     private val eventRepository: EventRepository,
     private val feedRepository: FeedRepository,
     private val muteListRepository: MuteListRepository,
-    private val contactListRepository: ContactListRepository,
     private val userPreferences: UserPreferences,
+    /** The authors a filter limits the feed to (ObserveFeedAuthorsUseCase); empty when unscoped. */
+    private val observeFeedAuthors: (FeedFilter) -> Flow<Set<String>>,
     /** Hashtags the user follows (NIP-51 interests): a follows-scoped feed also shows posts carrying them. */
     private val followedHashtagsFlow: Flow<Set<String>>,
     private val scope: CoroutineScope,
@@ -160,16 +160,14 @@ internal class FeedStateMergeCoordinator(
         .map { it?.mutedPubkeys.orEmpty() }
         .distinctUntilChanged()
 
-    // NIP-02 published contact list (kind 3) for the logged-in user — the authors set that
-    // any scopeToFollows filter restricts both the Room query and the relay REQ to.
-    internal val followedPubkeysFlow: Flow<Set<String>> = userPreferences.getPublicKeyFlow()
-        .map { it?.takeIf { key -> key.length == 64 }?.lowercase() }
+    // The authors the active filters limit the feed to — the follow list and/or chosen follow
+    // sets — which both the feed query and the relay REQ restrict to. Empty when unscoped.
+    internal val feedAuthorsFlow: Flow<Set<String>> = activeFiltersFlow
+        .map { mergeFilters(it) }
         .distinctUntilChanged()
-        .flatMapLatest { ownerPubkey ->
-            if (ownerPubkey == null) flowOf(null) else contactListRepository.getContactList(ownerPubkey)
-        }
-        .map { it?.followedPubkeys.orEmpty() }
+        .flatMapLatest { observeFeedAuthors(it) }
         .distinctUntilChanged()
+        .shareIn(scope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
     /**
      * Live Room flow: kind-1 notes joined with author profiles and engagement counts.
@@ -181,8 +179,8 @@ internal class FeedStateMergeCoordinator(
         userPreferences.getPublicKeyFlow(),
         activeFiltersFlow,
         syncedMutedPubkeysFlow,
-        combine(followedPubkeysFlow, followedHashtagsFlow.distinctUntilChanged(), ::Pair)
-    ) { limit, currentPubkeyRaw, activeFilters, syncedMutedPubkeys, (followedPubkeys, followedHashtags) ->
+        combine(feedAuthorsFlow, followedHashtagsFlow.distinctUntilChanged(), ::Pair)
+    ) { limit, currentPubkeyRaw, activeFilters, syncedMutedPubkeys, (feedAuthors, followedHashtags) ->
         val currentUserPubkey = currentPubkeyRaw?.takeIf { it.length == 64 }
         val currentNpub = currentUserPubkey?.let {
             runCatching { Bech32Encoder.encodeNpub(it).lowercase() }.getOrNull()
@@ -191,7 +189,7 @@ internal class FeedStateMergeCoordinator(
         eventRepository.observeFeedNotes(
             since = 0L,
             limit = limit,
-            authors = if (mergedFilter.scopeToFollows) followedPubkeys else emptySet(),
+            authors = if (mergedFilter.isScoped) feedAuthors else emptySet(),
             mutedPubkeys = mergedFilter.mutedPubkeys + syncedMutedPubkeys,
             excludedHashtagsLower = mergedFilter.excludedHashtags.map { it.lowercase() }.toSet(),
             hideNsfw = mergedFilter.hideNsfw,

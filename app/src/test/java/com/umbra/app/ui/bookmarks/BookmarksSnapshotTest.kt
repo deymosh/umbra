@@ -3,6 +3,9 @@ package com.umbra.app.ui.bookmarks
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import com.umbra.app.ui.components.AddToListContent
+import com.umbra.app.ui.components.ListSetChip
+import com.umbra.app.ui.components.ListSetChoice
 import com.umbra.app.ui.snapshot.PHONE
 import com.umbra.app.ui.snapshot.SNAPSHOT_SDK
 import com.umbra.app.ui.snapshot.SnapshotFixtures
@@ -19,9 +22,9 @@ import org.robolectric.annotation.GraphicsMode
 class BookmarksSnapshotTest {
 
     private val sets = listOf(
-        BookmarkSetChip("a", "Eclipse photos"),
-        BookmarkSetChip("b", "Relay operators worth following for setup tips"),
-        BookmarkSetChip("c", "Recipes")
+        ListSetChip("a", "Eclipse photos"),
+        ListSetChip("b", "Relay operators worth following for setup tips"),
+        ListSetChip("c", "Recipes")
     )
 
     @Test
@@ -79,10 +82,11 @@ class BookmarksSnapshotTest {
     fun addToList() = snapshot("Bookmarks_add_to_list") {
         Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
             AddToListContent(
+                emptyMessage = "",
                 choices = listOf(
-                    BookmarkSetChoice("a", "Eclipse photos", contains = true),
-                    BookmarkSetChoice("b", "Relay operators worth following for setup tips", contains = false),
-                    BookmarkSetChoice("c", "Recipes", contains = false)
+                    ListSetChoice("a", "Eclipse photos", contains = true),
+                    ListSetChoice("b", "Relay operators worth following for setup tips", contains = false),
+                    ListSetChoice("c", "Recipes", contains = false)
                 ),
                 onToggle = {},
                 onNewList = {}

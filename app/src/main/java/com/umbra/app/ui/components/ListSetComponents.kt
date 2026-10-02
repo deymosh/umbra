@@ -1,28 +1,41 @@
-package com.umbra.app.ui.bookmarks
+package com.umbra.app.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,7 +67,7 @@ internal fun ListNameDialog(
                 value = name,
                 onValueChange = { name = it.take(MAX_NAME_LENGTH) },
                 singleLine = true,
-                placeholder = { Text(stringResource(R.string.bookmark_sets_name_hint)) },
+                placeholder = { Text(stringResource(R.string.list_sets_name_hint)) },
                 modifier = Modifier.fillMaxWidth()
             )
         },
@@ -67,14 +80,24 @@ internal fun ListNameDialog(
 
 private const val MAX_NAME_LENGTH = 80
 
+/** One of the user's NIP-51 sets as a chip. */
+@Immutable
+data class ListSetChip(val identifier: String, val title: String)
+
+/** One of the user's NIP-51 sets, offered in [AddToListSheet], and whether the item is in it. */
+@Immutable
+data class ListSetChoice(val identifier: String, val title: String, val contains: Boolean)
+
 /**
- * "Add to list": every bookmark set with a checkbox for whether the note is in it, plus a way
- * to start a new list holding it.
+ * "Add to list": every set of one kind (bookmark sets, follow sets) with a checkbox for whether
+ * the item is in it, plus a way to start a new list holding it. [emptyMessage] shows when there
+ * are none yet.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AddToListSheet(
-    choices: List<BookmarkSetChoice>,
+    choices: List<ListSetChoice>,
+    emptyMessage: String,
     onToggle: (String) -> Unit,
     onCreate: (String) -> Unit,
     onDismiss: () -> Unit
@@ -82,8 +105,8 @@ internal fun AddToListSheet(
     var creating by remember { mutableStateOf(false) }
     if (creating) {
         ListNameDialog(
-            title = stringResource(R.string.bookmark_sets_new),
-            confirmLabel = stringResource(R.string.bookmark_sets_create),
+            title = stringResource(R.string.list_sets_new),
+            confirmLabel = stringResource(R.string.list_sets_create),
             onConfirm = { name ->
                 creating = false
                 onCreate(name)
@@ -96,25 +119,26 @@ internal fun AddToListSheet(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         dragHandle = { BottomSheetDefaults.DragHandle(color = MaterialTheme.colorScheme.outline) }
     ) {
-        AddToListContent(choices = choices, onToggle = onToggle, onNewList = { creating = true })
+        AddToListContent(choices = choices, emptyMessage = emptyMessage, onToggle = onToggle, onNewList = { creating = true })
     }
 }
 
 @Composable
 internal fun AddToListContent(
-    choices: List<BookmarkSetChoice>,
+    choices: List<ListSetChoice>,
+    emptyMessage: String,
     onToggle: (String) -> Unit,
     onNewList: () -> Unit
 ) {
     Column(modifier = Modifier.padding(bottom = 12.dp)) {
         Text(
-            stringResource(R.string.bookmark_sets_add_title),
+            stringResource(R.string.list_sets_add_title),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
         )
         if (choices.isEmpty()) {
             Text(
-                stringResource(R.string.bookmark_sets_none),
+                emptyMessage,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
@@ -150,7 +174,90 @@ internal fun AddToListContent(
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Text(stringResource(R.string.bookmark_sets_new), color = MaterialTheme.colorScheme.primary)
+            Text(stringResource(R.string.list_sets_new), color = MaterialTheme.colorScheme.primary)
         }
+    }
+}
+
+/** [allLabel]'s chip (when given) for everything, then each set, then a chip to start a new one. */
+@Composable
+internal fun ListSetChips(
+    sets: List<ListSetChip>,
+    selected: String?,
+    allLabel: String?,
+    onSelect: (String?) -> Unit,
+    onNewList: () -> Unit
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(top = 4.dp)
+    ) {
+        if (allLabel != null) {
+            item(key = "all") {
+                FilterChip(
+                    selected = selected == null,
+                    onClick = { onSelect(null) },
+                    label = { Text(allLabel) }
+                )
+            }
+        }
+        items(sets, key = { it.identifier }) { set ->
+            FilterChip(
+                selected = selected == set.identifier,
+                onClick = { onSelect(set.identifier) },
+                label = { Text(set.title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 180.dp)) }
+            )
+        }
+        item(key = "new") {
+            AssistChip(
+                onClick = onNewList,
+                label = { Text(stringResource(R.string.list_sets_new)) },
+                leadingIcon = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp)) }
+            )
+        }
+    }
+}
+
+@Composable
+internal fun ListSetMenu(onRename: () -> Unit, onDelete: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.list_sets_menu_cd))
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.list_sets_rename)) },
+                onClick = { open = false; onRename() }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.list_sets_delete), color = MaterialTheme.colorScheme.error) },
+                onClick = { open = false; onDelete() }
+            )
+        }
+    }
+}
+
+@Composable
+internal fun ListPrivateNotice(text: String, action: String? = null, onAction: () -> Unit = {}) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            Icons.Outlined.Lock,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        if (action != null) TextButton(onClick = onAction) { Text(action) }
     }
 }

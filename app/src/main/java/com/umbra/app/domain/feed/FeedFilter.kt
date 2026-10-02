@@ -19,9 +19,15 @@ data class FeedFilter(
     // (both the Room-query and the relay REQ authors are scoped) instead of showing
     // notes from every connected relay.
     val scopeToFollows: Boolean = false,
+    // NIP-51 follow sets (kind 30000) of the user's, by address: their members are feed authors
+    // too, alone or alongside the follow list.
+    val followSets: Set<String> = emptySet(),
     val createdAtMillis: Long = System.currentTimeMillis(),
     val updatedAtMillis: Long = System.currentTimeMillis()
-)
+) {
+    /** The feed is limited to chosen people (follows and/or follow sets) rather than every relay's notes. */
+    val isScoped: Boolean get() = scopeToFollows || followSets.isNotEmpty()
+}
 
 object DefaultFeedFilters {
     // The sole filter seeded for a new install — unscoped (every connected relay, not just
@@ -78,6 +84,7 @@ fun mergeActiveFeedFilters(filters: List<FeedFilter>): FeedFilter {
         // OR, not AND: any active filter can opt into follows-scoping independently of the
         // others, so requiring every active filter to agree would make a single
         // scopeToFollows filter unreachable whenever it's active alongside an unscoped one.
-        scopeToFollows = filters.any { it.scopeToFollows }
+        scopeToFollows = filters.any { it.scopeToFollows },
+        followSets = filters.flatMapTo(HashSet()) { it.followSets }
     )
 }

@@ -17,6 +17,8 @@ import com.umbra.app.domain.repository.EventRepository
 import com.umbra.app.domain.repository.UserRepository
 import com.umbra.app.domain.usecase.DecryptOwnListItemsUseCase
 import com.umbra.app.ui.common.InteractionActionsCoordinator
+import com.umbra.app.ui.components.ListSetChip
+import com.umbra.app.ui.components.ListSetChoice
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.UUID
 import javax.inject.Inject
@@ -51,14 +53,6 @@ enum class PrivateBookmarksState {
     UNREADABLE
 }
 
-/** A bookmark set as a chip on the Bookmarks screen. */
-@Immutable
-data class BookmarkSetChip(val identifier: String, val title: String)
-
-/** A set in the "Add to list" sheet, with whether the note is already in it. */
-@Immutable
-data class BookmarkSetChoice(val identifier: String, val title: String, val contains: Boolean)
-
 @Immutable
 data class BookmarksState(
     val items: List<BookmarkedEvent> = emptyList(),
@@ -66,7 +60,7 @@ data class BookmarksState(
     val privateState: PrivateBookmarksState = PrivateBookmarksState.READ,
     val newBookmarksPrivate: Boolean = true,
     val isLoading: Boolean = false,
-    val sets: List<BookmarkSetChip> = emptyList(),
+    val sets: List<ListSetChip> = emptyList(),
     /** The set shown, or null for the main bookmark list. */
     val selectedSet: String? = null
 ) {
@@ -129,13 +123,13 @@ class BookmarksViewModel @Inject constructor(
     val pickerTarget: StateFlow<Event?> = _pickerTarget.asStateFlow()
 
     /** Every bookmark set, marked by whether [pickerTarget] is in it. */
-    val pickerChoices: StateFlow<List<BookmarkSetChoice>> = combine(sets, _pickerTarget, unlocks) { sets, target, _ -> sets to target }
+    val pickerChoices: StateFlow<List<ListSetChoice>> = combine(sets, _pickerTarget, unlocks) { sets, target, _ -> sets to target }
         .mapLatest { (sets, target) ->
             if (target == null) {
                 emptyList()
             } else {
                 sets.map { set ->
-                    BookmarkSetChoice(set.identifier, set.title, contains = savedTargetIn(itemsOf(set.event), target) != null)
+                    ListSetChoice(set.identifier, set.title, contains = savedTargetIn(itemsOf(set.event), target) != null)
                 }
             }
         }
@@ -172,7 +166,7 @@ class BookmarksViewModel @Inject constructor(
                 knownIds = ids
                 _state.update { state ->
                     state.copy(
-                        sets = sets.map { BookmarkSetChip(it.identifier, it.title) },
+                        sets = sets.map { ListSetChip(it.identifier, it.title) },
                         selectedSet = selectedSet.value
                     )
                 }

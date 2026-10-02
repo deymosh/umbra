@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.compose.ui.platform.LocalContext
@@ -44,6 +45,7 @@ import com.umbra.app.R
 import com.umbra.app.domain.nip21.NostrUriEntity
 import com.umbra.app.domain.nip21.resolveNostrUri
 import com.umbra.app.ui.broadcast.BroadcastViewModel
+import com.umbra.app.ui.components.AddToListSheet
 import com.umbra.app.ui.components.BroadcastBanner
 import com.umbra.app.ui.components.CustomEmojiCatalogViewModel
 import com.umbra.app.ui.components.LocalCustomEmojiGroups
@@ -51,11 +53,13 @@ import com.umbra.app.ui.composer.ComposerScreen
 import com.umbra.app.ui.composer.ComposerViewModel
 import com.umbra.app.ui.zap.ZapHost
 import com.umbra.app.ui.readlater.LocalReadLater
-import com.umbra.app.ui.bookmarks.AddToListSheet
 import com.umbra.app.ui.bookmarks.BookmarkActions
 import com.umbra.app.ui.bookmarks.BookmarksScreen
 import com.umbra.app.ui.bookmarks.BookmarksViewModel
 import com.umbra.app.ui.bookmarks.LocalBookmarks
+import com.umbra.app.ui.lists.FollowSetsScreen
+import com.umbra.app.ui.lists.FollowSetsViewModel
+import com.umbra.app.ui.lists.LocalPeopleLists
 import com.umbra.app.ui.emoji.EmojiPacksScreen
 import com.umbra.app.ui.emoji.EmojiPacksViewModel
 import com.umbra.app.ui.readlater.ReadLaterActions
@@ -116,6 +120,7 @@ sealed class Screen(val route: String) {
     object NetworkUsage  : Screen("network_usage")
     object ReadLater     : Screen("read_later")
     object Bookmarks     : Screen("bookmarks")
+    object FollowSets    : Screen("follow-sets")
     object EmojiPacks    : Screen("emoji_packs")
     object Hashtag       : Screen("tag/{tag}") {
         fun forTag(tag: String) = "tag/${Uri.encode(tag.removePrefix("#").lowercase())}"
@@ -385,9 +390,23 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
         val choices by bookmarksViewModel.pickerChoices.collectAsStateWithLifecycle()
         AddToListSheet(
             choices = choices,
+            emptyMessage = stringResource(R.string.bookmark_sets_none),
             onToggle = { identifier -> bookmarksViewModel.toggleInSet(target, identifier) },
             onCreate = { title -> bookmarksViewModel.createSet(title, initial = target) },
             onDismiss = bookmarksViewModel::closePicker
+        )
+    }
+    // One app-wide instance too: the profile's "Add to list" and the People lists screen share it.
+    val followSetsViewModel: FollowSetsViewModel = hiltViewModel()
+    val peopleListTarget by followSetsViewModel.pickerTarget.collectAsStateWithLifecycle()
+    peopleListTarget?.let { target ->
+        val choices by followSetsViewModel.pickerChoices.collectAsStateWithLifecycle()
+        AddToListSheet(
+            choices = choices,
+            emptyMessage = stringResource(R.string.follow_sets_none_picker),
+            onToggle = { identifier -> followSetsViewModel.togglePerson(target, identifier) },
+            onCreate = { title -> followSetsViewModel.createSet(title, initial = target) },
+            onDismiss = followSetsViewModel::closePicker
         )
     }
     // The single collector of the user's NIP-30 emoji catalog (see LocalCustomEmojiGroups): one
@@ -398,6 +417,7 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
     CompositionLocalProvider(
         LocalCustomEmojiGroups provides customEmojiGroups,
         LocalBookmarks provides bookmarkActions,
+        LocalPeopleLists provides if (followSetsViewModel.canEdit) followSetsViewModel::openPicker else null,
         LocalHashtagNavigator provides { tag -> navController.navigate(Screen.Hashtag.forTag(tag)) },
         LocalReadLater provides readLaterActions
     ) {
@@ -460,6 +480,13 @@ fun UmbraNavHost(deepLinkUri: String? = null) {
                 viewModel = bookmarksViewModel,
                 onNavigateBack = { navController.popBackStack() },
                 onOpenThread = { navController.navigate(Screen.Thread.forEvent(it)) },
+                onOpenProfile = { navController.navigate(Screen.Profile.forPubkey(it)) }
+            )
+        }
+        composable(Screen.FollowSets.route) {
+            FollowSetsScreen(
+                viewModel = followSetsViewModel,
+                onNavigateBack = { navController.popBackStack() },
                 onOpenProfile = { navController.navigate(Screen.Profile.forPubkey(it)) }
             )
         }

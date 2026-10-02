@@ -52,6 +52,7 @@ import com.umbra.app.domain.feed.DefaultFeedFilters
 import com.umbra.app.domain.feed.FeedFilter
 import com.umbra.app.ui.components.ChipBadge
 import com.umbra.app.ui.components.InlineAddField
+import com.umbra.app.ui.components.ListSetChip
 import com.umbra.app.ui.components.SettingsGroup
 import com.umbra.app.ui.components.TopBarPrimaryAction
 import com.umbra.app.ui.components.UmbraTopAppBar
@@ -104,6 +105,7 @@ fun FeedFilterEditScreen(
     FeedFilterEditContent(
         isNew = filter == null,
         draft = draft,
+        followSets = state.followSets,
         onCancel = viewModel::closeAddDialog,
         onSave = {
             if (draft.name.isNotBlank()) {
@@ -123,7 +125,8 @@ internal class FeedFilterDraft(
     scopeToFollows: Boolean,
     tags: Collection<String>,
     hashtags: Collection<String>,
-    prefixes: Collection<String>
+    prefixes: Collection<String>,
+    followSets: Collection<String> = emptyList()
 ) {
     var name by mutableStateOf(name)
     var hideNsfw by mutableStateOf(hideNsfw)
@@ -131,6 +134,8 @@ internal class FeedFilterDraft(
     val tags = mutableStateListOf<String>().apply { addAll(tags) }
     val hashtags = mutableStateListOf<String>().apply { addAll(hashtags) }
     val prefixes = mutableStateListOf<String>().apply { addAll(prefixes) }
+    /** Addresses of the follow sets the feed shows notes from. */
+    val followSets = mutableStateListOf<String>().apply { addAll(followSets) }
     var tagInput by mutableStateOf("")
     var hashtagInput by mutableStateOf("")
     var prefixInput by mutableStateOf("")
@@ -139,6 +144,7 @@ internal class FeedFilterDraft(
         name = name.trim(),
         hideNsfw = hideNsfw,
         scopeToFollows = scopeToFollows,
+        followSets = followSets.toSet(),
         excludedTags = tags.toSet(),
         excludedHashtags = hashtags.toSet(),
         excludedContentPrefixes = prefixes.toSet(),
@@ -152,7 +158,8 @@ internal class FeedFilterDraft(
             scopeToFollows = filter?.scopeToFollows ?: false,
             tags = filter?.excludedTags.orEmpty(),
             hashtags = filter?.excludedHashtags.orEmpty(),
-            prefixes = filter?.excludedContentPrefixes.orEmpty()
+            prefixes = filter?.excludedContentPrefixes.orEmpty(),
+            followSets = filter?.followSets.orEmpty()
         )
     }
 }
@@ -169,6 +176,7 @@ internal fun FeedFilterEditContent(
     draft: FeedFilterDraft,
     onCancel: () -> Unit,
     onSave: () -> Unit,
+    followSets: List<ListSetChip> = emptyList(),
     nameFocusRequester: FocusRequester? = null
 ) {
     Scaffold(
@@ -231,17 +239,13 @@ internal fun FeedFilterEditContent(
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
 
+            SourceGroup(draft = draft, followSets = followSets)
+
             SettingsGroup(title = stringResource(R.string.filter_edit_rules_header)) {
                 FilterToggleRow(
                     title = stringResource(R.string.hide_nsfw),
                     checked = draft.hideNsfw,
                     onCheckedChange = { draft.hideNsfw = it },
-                    showDivider = true
-                )
-                FilterToggleRow(
-                    title = stringResource(R.string.filter_follows_only),
-                    checked = draft.scopeToFollows,
-                    onCheckedChange = { draft.scopeToFollows = it },
                     showDivider = false
                 )
             }
@@ -287,6 +291,43 @@ internal fun FeedFilterEditContent(
             Spacer(Modifier.height(32.dp))
         }
     }
+}
+
+/**
+ * Whose notes the feed shows: people the user follows and/or any of their follow sets. With
+ * nothing chosen it shows everyone on their relays. A set the filter names that no longer exists
+ * is listed so it can be turned off.
+ */
+@Composable
+private fun SourceGroup(draft: FeedFilterDraft, followSets: List<ListSetChip>) {
+    val known = followSets.mapTo(HashSet()) { it.identifier }
+    val missing = draft.followSets.filterNot { it in known }
+    val rows = followSets.map { it.identifier to it.title } +
+        missing.map { it to stringResource(R.string.filter_source_missing) }
+    SettingsGroup(title = stringResource(R.string.filter_source_header)) {
+        FilterToggleRow(
+            title = stringResource(R.string.filter_source_follows),
+            checked = draft.scopeToFollows,
+            onCheckedChange = { draft.scopeToFollows = it },
+            showDivider = rows.isNotEmpty()
+        )
+        rows.forEachIndexed { index, (address, title) ->
+            FilterToggleRow(
+                title = title,
+                checked = address in draft.followSets,
+                onCheckedChange = { on -> if (on) draft.followSets.add(address) else draft.followSets.remove(address) },
+                showDivider = index < rows.lastIndex
+            )
+        }
+    }
+    Text(
+        text = stringResource(
+            if (draft.scopeToFollows || draft.followSets.isNotEmpty()) R.string.filter_source_scoped_hint else R.string.filter_source_everyone_hint
+        ),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+    )
 }
 
 @Composable

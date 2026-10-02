@@ -23,6 +23,7 @@ data class FeedFilterEntity(
     val excludedContentPrefixesJson: String = "[]",
     val isActive: Boolean = false,
     val scopeToFollows: Boolean = false,
+    val followSetsJson: String = "[]",
     val createdAtMillis: Long = System.currentTimeMillis(),
     val updatedAtMillis: Long = System.currentTimeMillis()
 )

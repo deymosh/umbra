@@ -17,6 +17,7 @@ fun FeedFilterEntity.toDomain(): FeedFilter {
         excludedContentPrefixes = decodeStringSet(excludedContentPrefixesJson),
         isActive = isActive,
         scopeToFollows = scopeToFollows,
+        followSets = decodeStringSet(followSetsJson),
         createdAtMillis = createdAtMillis,
         updatedAtMillis = updatedAtMillis
     )
@@ -33,6 +34,7 @@ fun FeedFilter.toEntity(): FeedFilterEntity {
         excludedContentPrefixesJson = encodeStringSet(excludedContentPrefixes),
         isActive = isActive,
         scopeToFollows = scopeToFollows,
+        followSetsJson = encodeStringSet(followSets),
         createdAtMillis = createdAtMillis,
         updatedAtMillis = updatedAtMillis
     )

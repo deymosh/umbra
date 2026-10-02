@@ -51,6 +51,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Bookmarks
+import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
@@ -252,7 +253,8 @@ internal fun FeedDrawerContent(
     onLogout: () -> Unit,
     userRepository: UserRepository? = null,
     onReadLater: (() -> Unit)? = null,
-    onBookmarks: (() -> Unit)? = null
+    onBookmarks: (() -> Unit)? = null,
+    onPeopleLists: (() -> Unit)? = null
 ) {
     ModalDrawerSheet(
         drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -298,6 +300,7 @@ internal fun FeedDrawerContent(
                 DrawerItem(Icons.Outlined.Person, stringResource(R.string.menu_profile), onProfile)
             }
             onBookmarks?.let { DrawerItem(Icons.Outlined.Bookmarks, stringResource(R.string.bookmarks_title), it) }
+            onPeopleLists?.let { DrawerItem(Icons.Outlined.Groups, stringResource(R.string.follow_sets_title), it) }
             onReadLater?.let { DrawerItem(Icons.Outlined.BookmarkBorder, stringResource(R.string.read_later_title), it) }
             DrawerItem(Icons.Outlined.Hub, stringResource(R.string.menu_relays), onRelays)
             DrawerItem(Icons.Outlined.Tune, stringResource(R.string.menu_feed_filters), onFilters)
