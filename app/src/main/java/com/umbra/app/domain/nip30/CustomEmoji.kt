@@ -1,5 +1,7 @@
 package com.umbra.app.domain.nip30
 
+import com.umbra.app.domain.nip01.Event
+
 /**
  * NIP-30 custom emoji tag representation: ["emoji", shortcode, url].
  */
@@ -29,12 +31,6 @@ fun extractCustomEmojis(tags: List<List<String>>): Map<String, CustomEmoji> {
         .toMap()
 }
 
-/** NIP-51 user emoji list: the emoji a user has picked, inline or by reference to sets. */
-const val KIND_USER_EMOJI_LIST = 10030
-
-/** NIP-51 emoji set: a named, addressable collection of custom emoji. */
-const val KIND_EMOJI_SET = 30030
-
 private val SHORTCODE_REGEX = Regex("^[A-Za-z0-9_-]+$")
 
 /** NIP-30: a shortcode is only alphanumerics, hyphens and underscores. */
@@ -43,7 +39,7 @@ fun isValidShortcode(shortcode: String): Boolean = SHORTCODE_REGEX.matches(short
 /** Parses a `30030:<64-hex pubkey>:<d>` coordinate, or null when it isn't one. */
 fun parseEmojiSetCoordinate(coordinate: String): EmojiSetAddress? {
     val parts = coordinate.split(":", limit = 3)
-    if (parts.size != 3 || parts[0] != KIND_EMOJI_SET.toString()) return null
+    if (parts.size != 3 || parts[0] != Event.KIND_EMOJI_SET.toString()) return null
     val pubkey = parts[1].lowercase()
     if (pubkey.length != 64 || pubkey.any { it !in '0'..'9' && it !in 'a'..'f' }) return null
     return EmojiSetAddress(pubkey, parts[2])

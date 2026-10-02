@@ -2,9 +2,6 @@ package com.umbra.app.domain.nipa3
 
 import com.umbra.app.domain.nip01.Event
 
-/** NIP-A3 replaceable event listing where a user accepts payments. */
-const val KIND_PAYMENT_TARGETS = 10133
-
 /** One `["payto", type, address]` entry. [type] is always lowercase per spec. */
 data class PaymentTarget(val type: String, val address: String) {
     /**
@@ -44,7 +41,7 @@ data class PaymentTarget(val type: String, val address: String) {
 
 /** Parses the `payto` tags of a kind-10133 event; anything else yields an empty list. */
 fun parsePaymentTargets(event: Event): List<PaymentTarget> {
-    if (event.kind != KIND_PAYMENT_TARGETS) return emptyList()
+    if (event.kind != Event.KIND_PAYMENT_TARGETS) return emptyList()
     return event.tags.asSequence()
         .filter { it.size >= 3 && it[0] == "payto" }
         .mapNotNull { tag ->

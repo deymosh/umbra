@@ -5,7 +5,8 @@ package com.umbra.app.domain.nip01
  * [Event.Companion]'s KIND_* constants) rather than porting a full protocol-wide kind registry —
  * a kind Umbra doesn't have a constant for is one it never sends in a filter, so it only ever
  * needs the numeric fallback: a label per kind number, "Kind <n>" for anything unlisted, used by
- * the Relay Details / Active Subscriptions screens to render filter kind chips.
+ * the Relay Details / Active Subscriptions screens to render filter kind chips. Every constant
+ * has a label here (KindNamesTest).
  */
 private data class KindName(val label: String, val nip: String?)
 
@@ -48,6 +49,13 @@ object KindNames {
         Event.KIND_BLOCKED_RELAYS to KindName("Blocked Relays", "51"),
         Event.KIND_SEARCH_RELAYS to KindName("Search Relays", "51"),
         Event.KIND_INTERESTS_LIST to KindName("Interests List", "51"),
+        Event.KIND_FOLLOW_SET to KindName("Follow Set", "51"),
+        Event.KIND_BOOKMARK_SET to KindName("Bookmark Set", "51"),
+        Event.KIND_INTEREST_SET to KindName("Interest Set", "51"),
+        Event.KIND_USER_EMOJI_LIST to KindName("Emoji List", "51"),
+        Event.KIND_EMOJI_SET to KindName("Emoji Set", "51"),
+        Event.KIND_PAYMENT_TARGETS to KindName("Payment Targets", "A3"),
+        Event.KIND_HTTP_AUTH to KindName("HTTP Auth", "98"),
         // Not in a ratified NIP yet — see Event.KIND_INDEX_RELAYS.
         Event.KIND_INDEX_RELAYS to KindName("Index Relays", null),
         Event.KIND_BLOSSOM_AUTH to KindName("Blossom Auth", null),

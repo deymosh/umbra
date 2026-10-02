@@ -671,7 +671,7 @@ object NostrEventBuilder {
                 })
             }
         }
-        return buildUnsignedEvent(kind = com.umbra.app.domain.nipa3.KIND_PAYMENT_TARGETS, content = "", tags = tags)
+        return buildUnsignedEvent(kind = Event.KIND_PAYMENT_TARGETS, content = "", tags = tags)
     }
 
     /** An unsigned list event of [kind] with exactly [tags] and [content] (see applyListEdit). */

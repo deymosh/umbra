@@ -4,11 +4,10 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.umbra.app.domain.model.NostrChannels
+import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip01.EventFilter
 import com.umbra.app.domain.nip30.EmojiPack
 import com.umbra.app.domain.nip30.EmojiSetAddress
-import com.umbra.app.domain.nip30.KIND_EMOJI_SET
-import com.umbra.app.domain.nip30.KIND_USER_EMOJI_LIST
 import com.umbra.app.domain.nip30.coordinate
 import com.umbra.app.domain.nip30.latestEmojiPacks
 import com.umbra.app.domain.nip30.parseUserEmojiList
@@ -94,7 +93,7 @@ class EmojiPacksViewModel @Inject constructor(
             NostrChannels.EMOJI_PACK_BROWSE,
             listOf(
                 EventFilter(
-                    kinds = setOf(KIND_EMOJI_SET),
+                    kinds = setOf(Event.KIND_EMOJI_SET),
                     since = System.currentTimeMillis() / 1000 - BROWSE_WINDOW_SECS,
                     limit = BROWSE_LIMIT
                 )
@@ -144,7 +143,7 @@ class EmojiPacksViewModel @Inject constructor(
     private fun publishListEdit(edit: ListEdit, onSigned: suspend () -> Unit = {}) {
         if (!actions.canSignEvents()) return
         actions.requestSignAndPublish(
-            buildEventJson = { actions.buildListEdit(KIND_USER_EMOJI_LIST, edit, fallbackValues = publishedCoordinates) },
+            buildEventJson = { actions.buildListEdit(Event.KIND_USER_EMOJI_LIST, edit, fallbackValues = publishedCoordinates) },
             currentUserHex = owner,
             onSigned = onSigned
         )
@@ -153,7 +152,7 @@ class EmojiPacksViewModel @Inject constructor(
     private fun observeDiscover() {
         viewModelScope.launch {
             eventRepository.getCachedEvents()
-                .map { events -> latestEmojiPacks(events.filter { it.kind == KIND_EMOJI_SET }) }
+                .map { events -> latestEmojiPacks(events.filter { it.kind == Event.KIND_EMOJI_SET }) }
                 .distinctUntilChanged()
                 .collect { packs ->
                     val authors = userRepository.getProfilesByPubkey(packs.map { it.address.pubkey }.toSet())
@@ -167,7 +166,7 @@ class EmojiPacksViewModel @Inject constructor(
         val me = owner ?: return
         viewModelScope.launch {
             val published: Flow<List<EmojiSetAddress>> =
-                eventRepository.observeEventsByPubkeyAndKind(me, KIND_USER_EMOJI_LIST, 1)
+                eventRepository.observeEventsByPubkeyAndKind(me, Event.KIND_USER_EMOJI_LIST, 1)
                     .map { events -> parseUserEmojiList(events.maxByOrNull { it.createdAt }?.tags.orEmpty()).second }
             combine(published, localEmojiPacks.observeLocalPacks(me)) { public, local ->
                 publishedCoordinates = public.mapTo(HashSet()) { it.coordinate() }
@@ -191,7 +190,7 @@ class EmojiPacksViewModel @Inject constructor(
     // Own packs come from the archive, everyone else's from the cache; the app-wide catalog keeps
     // every picked set requested from relays.
     private fun observePack(address: EmojiSetAddress): Flow<EmojiPack?> =
-        eventRepository.observeEventsByPubkeyAndKind(address.pubkey, KIND_EMOJI_SET, PACK_SCAN_LIMIT)
+        eventRepository.observeEventsByPubkeyAndKind(address.pubkey, Event.KIND_EMOJI_SET, PACK_SCAN_LIMIT)
             .map { events -> latestEmojiPacks(events).firstOrNull { it.address == address } }
             .distinctUntilChanged()
 

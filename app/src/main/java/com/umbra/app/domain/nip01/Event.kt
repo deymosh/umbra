@@ -111,6 +111,10 @@ data class Event(
         const val KIND_INTEREST_SET = 30015        // NIP-51 — named groups of hashtags
         const val KIND_BLOSSOM_AUTH = 24242        // Blossom (BUD-01) — HTTP upload/list/delete authorization
         const val KIND_BLOSSOM_SERVER_LIST = 10063 // Blossom (BUD-03) — user's Blossom server list
+        const val KIND_USER_EMOJI_LIST = 10030     // NIP-51 / NIP-30 — emoji the user picked, inline or by set
+        const val KIND_EMOJI_SET = 30030           // NIP-51 / NIP-30 — named collection of custom emoji
+        const val KIND_PAYMENT_TARGETS = 10133     // NIP-A3 — where a user accepts payments
+        const val KIND_HTTP_AUTH = 27235           // NIP-98 — HTTP request authorization
         // Deprecated: moved to FilterDefaults to centralize defaults
 
         fun createTag(tagName: String, tagValue: String, relayUrl: String? = null): List<String> {

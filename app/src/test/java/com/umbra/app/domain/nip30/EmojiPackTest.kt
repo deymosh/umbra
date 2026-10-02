@@ -13,7 +13,7 @@ class EmojiPackTest {
         id = "$d$createdAt".padEnd(64, '0'),
         pubkey = author,
         createdAt = createdAt,
-        kind = KIND_EMOJI_SET,
+        kind = Event.KIND_EMOJI_SET,
         tags = listOf(listOf("d", d), listOf("emoji", "frog", "https://img.example/frog.png")) + extra,
         content = "",
         sig = "s".repeat(128)

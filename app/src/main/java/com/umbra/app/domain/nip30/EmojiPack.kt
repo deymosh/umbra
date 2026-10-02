@@ -16,7 +16,7 @@ data class EmojiPack(
 )
 
 /** The `30030:<pubkey>:<d>` coordinate an `a` tag uses to point at this set. */
-fun EmojiSetAddress.coordinate(): String = "$KIND_EMOJI_SET:$pubkey:$identifier"
+fun EmojiSetAddress.coordinate(): String = "${Event.KIND_EMOJI_SET}:$pubkey:$identifier"
 
 /**
  * Parses a kind-30030 [event] into an [EmojiPack], or null when it isn't one or has no usable
@@ -24,7 +24,7 @@ fun EmojiSetAddress.coordinate(): String = "$KIND_EMOJI_SET:$pubkey:$identifier"
  * identifier, and only an http(s) cover image is kept (it feeds an image loader).
  */
 fun parseEmojiPack(event: Event): EmojiPack? {
-    if (event.kind != KIND_EMOJI_SET) return null
+    if (event.kind != Event.KIND_EMOJI_SET) return null
     val identifier = event.getTagValue("d") ?: return null
     val emojis = extractCustomEmojis(event.tags).values.filter { isValidShortcode(it.shortcode) }
     if (emojis.isEmpty()) return null

@@ -6,8 +6,6 @@ import com.umbra.app.domain.nip01.EventFilter
 import com.umbra.app.domain.nip30.CustomEmoji
 import com.umbra.app.domain.nip30.EmojiGroup
 import com.umbra.app.domain.nip30.EmojiSetAddress
-import com.umbra.app.domain.nip30.KIND_EMOJI_SET
-import com.umbra.app.domain.nip30.KIND_USER_EMOJI_LIST
 import com.umbra.app.domain.nip30.coordinate
 import com.umbra.app.domain.nip30.extractCustomEmojis
 import com.umbra.app.domain.nip30.parseUserEmojiList
@@ -50,12 +48,12 @@ class ObserveOwnCustomEmojisUseCase @Inject constructor(
         val setsChannel = NostrChannels.emojiSets(pubkey)
         eventRepository.subscribeChannel(
             listChannel,
-            listOf(EventFilter(authors = setOf(pubkey), kinds = setOf(KIND_USER_EMOJI_LIST), limit = 1))
+            listOf(EventFilter(authors = setOf(pubkey), kinds = setOf(Event.KIND_USER_EMOJI_LIST), limit = 1))
         )
 
         launch {
             combine(
-                eventRepository.observeEventsByPubkeyAndKind(pubkey, KIND_USER_EMOJI_LIST, 1)
+                eventRepository.observeEventsByPubkeyAndKind(pubkey, Event.KIND_USER_EMOJI_LIST, 1)
                     .map { events -> parseUserEmojiList(events.maxByOrNull { it.createdAt }?.tags.orEmpty()) },
                 localEmojiPacks.observeLocalPacks(pubkey)
             ) { (inline, published), local -> inline to (published + local).distinct() }
@@ -70,7 +68,7 @@ class ObserveOwnCustomEmojisUseCase @Inject constructor(
                             listOf(
                                 EventFilter(
                                     authors = sets.mapTo(HashSet()) { it.pubkey },
-                                    kinds = setOf(KIND_EMOJI_SET),
+                                    kinds = setOf(Event.KIND_EMOJI_SET),
                                     tagFilters = mapOf("d" to sets.mapTo(HashSet()) { it.identifier })
                                 )
                             )
@@ -91,7 +89,7 @@ class ObserveOwnCustomEmojisUseCase @Inject constructor(
     }
 
     private fun observeSet(address: EmojiSetAddress): Flow<EmojiSetContent> =
-        eventRepository.observeEventsByPubkeyAndKind(address.pubkey, KIND_EMOJI_SET, SET_SCAN_LIMIT)
+        eventRepository.observeEventsByPubkeyAndKind(address.pubkey, Event.KIND_EMOJI_SET, SET_SCAN_LIMIT)
             .map { events ->
                 val event = events.asSequence()
                     .filter { it.getTagValue("d") == address.identifier }

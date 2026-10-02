@@ -14,7 +14,7 @@ class PaymentTargetTest {
     fun `given payto tags when parsing then valid targets are kept, lowercased and deduplicated`() {
         val targets = parsePaymentTargets(
             event(
-                KIND_PAYMENT_TARGETS,
+                Event.KIND_PAYMENT_TARGETS,
                 listOf("payto", "Bitcoin", "bc1qxyz"),
                 listOf("payto", "bitcoin", "bc1qxyz"),
                 listOf("payto", "nano", "nano_1abc"),

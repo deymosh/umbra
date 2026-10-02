@@ -8,7 +8,6 @@ import com.umbra.app.domain.nip01.Event
 import com.umbra.app.domain.nip01.EventFilter
 import com.umbra.app.domain.nip57.DEFAULT_ZAP_AMOUNTS_SATS
 import com.umbra.app.domain.nip57.LnurlPayInfo
-import com.umbra.app.domain.nipa3.KIND_PAYMENT_TARGETS
 import com.umbra.app.domain.nipa3.PaymentTarget
 import com.umbra.app.domain.nipa3.parsePaymentTargets
 import com.umbra.app.domain.profile.UserProfile
@@ -88,9 +87,9 @@ class ZapViewModel @Inject constructor(
         targetsJob = viewModelScope.launch {
             eventRepository.subscribeChannel(
                 channel,
-                listOf(EventFilter(authors = setOf(target.recipientPubkey), kinds = setOf(KIND_PAYMENT_TARGETS), limit = 1))
+                listOf(EventFilter(authors = setOf(target.recipientPubkey), kinds = setOf(Event.KIND_PAYMENT_TARGETS), limit = 1))
             )
-            eventRepository.observeEventsByPubkeyAndKind(target.recipientPubkey, KIND_PAYMENT_TARGETS, 1)
+            eventRepository.observeEventsByPubkeyAndKind(target.recipientPubkey, Event.KIND_PAYMENT_TARGETS, 1)
                 .collect { events ->
                     val targets = events.firstOrNull()?.let(::parsePaymentTargets).orEmpty()
                     _state.update { it.copy(paymentTargets = targets, targetsLoaded = true) }

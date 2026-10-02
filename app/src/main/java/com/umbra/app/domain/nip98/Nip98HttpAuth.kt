@@ -22,9 +22,6 @@ import kotlinx.serialization.json.put
  */
 object Nip98HttpAuth {
 
-    /** NIP-98 http auth event kind. */
-    const val KIND_HTTP_AUTH = 27235
-
     /** Header scheme: `Authorization: Nostr <base64(utf8(signed event json))>`. */
     private const val HEADER_SCHEME = "Nostr"
 
@@ -48,7 +45,7 @@ object Nip98HttpAuth {
             put("id", "")
             put("pubkey", "")
             put("created_at", nowEpochSeconds)
-            put("kind", KIND_HTTP_AUTH)
+            put("kind", Event.KIND_HTTP_AUTH)
             put("tags", tags)
             put("content", "")
             put("sig", "")
