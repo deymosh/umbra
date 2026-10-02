@@ -81,6 +81,7 @@ class NotificationsViewModel @Inject constructor(
                         .mapNotNull { id -> eventRepository.getEventById(id)?.let { id to it } }
                     _state.update { it.copy(groups = groups, profiles = profiles, targets = targets, isLoading = false) }
                     groups.firstOrNull()?.let { userPreferences.markNotificationsSeen(it.latestAt) }
+                    finishOlderPageIfArrived()
                 }
         }
     }
@@ -106,7 +107,21 @@ class NotificationsViewModel @Inject constructor(
             }
             requestedOlderAnchor = oldest
             eventRepository.loadOlderEvents(NostrChannels.INBOX_NOTES, oldest)
+            // Backstop only: the spinner normally clears as soon as older rows land (see
+            // finishOlderPageIfArrived); this covers a page that brings nothing.
             delay(OLDER_PAGE_TIMEOUT_MS)
+            _state.update { it.copy(isLoadingMore = false) }
+        }
+    }
+
+    /** Clears the paging spinner once the inbox holds something older than the requested anchor. */
+    private suspend fun finishOlderPageIfArrived() {
+        val anchor = requestedOlderAnchor ?: return
+        if (!_state.value.isLoadingMore) return
+        val pubkey = userPreferences.getPublicKey() ?: return
+        val oldest = eventRepository.getOldestInboxNoteTimestamp(pubkey) ?: return
+        if (oldest < anchor) {
+            olderPageJob?.cancel()
             _state.update { it.copy(isLoadingMore = false) }
         }
     }
