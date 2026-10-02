@@ -113,6 +113,7 @@ import com.umbra.app.ui.components.media.UserAvatar
 import com.umbra.app.ui.components.media.rememberRetryingAsyncImagePainter
 import com.umbra.app.ui.components.truncatePublicKey
 import com.umbra.app.ui.common.awaitViewportPrefetchQuietWindow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.conflate
@@ -185,14 +186,22 @@ fun ProfileScreen(
         }
     }
     val pagerState = rememberPagerState(initialPage = tabs.indexOf(selectedTab).coerceAtLeast(0)) { tabs.size }
+    // The tab on screen. selectedTab can name one that isn't there yet — Pictures restored after
+    // process death before the author's pictures load again — and is kept until it appears.
+    val shownTab = selectedTab.takeIf { it in tabs } ?: tabs[pagerState.currentPage.coerceIn(0, tabs.lastIndex)]
     LaunchedEffect(pagerState, tabs) {
-        snapshotFlow { pagerState.currentPage }.collect { page -> selectedTab = tabs[page] }
+        // Tabs come and go by index (Pictures is inserted second once pictures load): put the
+        // pager back on the tab the user is on rather than whatever moved into its position.
+        val wanted = tabs.indexOf(selectedTab)
+        if (wanted >= 0 && wanted != pagerState.currentPage) pagerState.scrollToPage(wanted)
+        // Only the user's own swipes change selectedTab, not the pager settling on a new list.
+        snapshotFlow { pagerState.currentPage }.drop(1).collect { page -> selectedTab = tabs[page] }
     }
     // One list per tab so each keeps its own scroll position while swiping between them.
     // Keyed per tab: tabs can appear (Pictures), so positional remember would shift scroll states.
     val listStates = tabs.associateWith { tab -> key(tab) { rememberLazyListState() } }
-    val listState = listStates.getValue(selectedTab)
-    LaunchedEffect(listState, selectedTab) {
+    val listState = listStates.getValue(shownTab)
+    LaunchedEffect(listState, shownTab) {
         snapshotFlow {
             val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             val total = listState.layoutInfo.totalItemsCount
@@ -201,7 +210,7 @@ fun ProfileScreen(
             .conflate()
             .distinctUntilChanged()
             .collectLatest { nearBottom ->
-                if (selectedTab != ProfileTab.NOTES && selectedTab != ProfileTab.REPLIES) return@collectLatest
+                if (shownTab != ProfileTab.NOTES && shownTab != ProfileTab.REPLIES) return@collectLatest
                 if (!nearBottom) return@collectLatest
                 viewModel.loadMoreNotes()
             }
@@ -271,7 +280,7 @@ fun ProfileScreen(
         ProfileTab.PICTURES -> state.pictures
         else -> emptyList()
     }
-    val visibleNotes = notesFor(selectedTab)
+    val visibleNotes = notesFor(shownTab)
     val pinnedEventIds = remember(state.pinnedNotes) { state.pinnedNotes.mapTo(HashSet()) { it.id } }
     // pinnedEventIds is a plain remember(key) val, not a State-delegate read — rememberUpdatedState
     // gives the permanently-stable lambda below a way to always see the latest set without being
@@ -290,8 +299,8 @@ fun ProfileScreen(
         else -> noNotesTitle
     }
 
-    LaunchedEffect(listState, selectedTab, notesSectionStartIndex) {
-        if (selectedTab != ProfileTab.NOTES && selectedTab != ProfileTab.REPLIES) return@LaunchedEffect
+    LaunchedEffect(listState, shownTab, notesSectionStartIndex) {
+        if (shownTab != ProfileTab.NOTES && shownTab != ProfileTab.REPLIES) return@LaunchedEffect
 
         snapshotFlow {
             val visibleItems = listState.layoutInfo.visibleItemsInfo
